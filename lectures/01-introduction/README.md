@@ -1,18 +1,18 @@
-<h2 align=center>Week 01</h2>
+<h2 align=center>第01周</h2>
 
-<h1 align=center>Hello, Raylib!</h1>
+<h1 align=center>你好，Raylib！</h1>
 
-<h3 align=center>V Horsebow Moon, Imperial Year MMXXV</h3>
+<h3 align=center>V 弓月，帝国年 MMXXV</h3>
 
-<p align=center><strong><em>Song of the day</strong>: <a href="https://youtu.be/Soy4jGPHr3g?si=3OzzGXAaF8yi1u8q"><strong><u>テトリス (Tetris feat. 重音テト [Kasane Teto])</u></strong></a> by 柊マグネタイト (Hiiragi Magnetite) (2024).</em></p>
+<p align=center><strong><em>每日之歌</strong>: <a href="https://youtu.be/Soy4jGPHr3g?si=3OzzGXAaF8yi1u8q"><strong><u>テトリス (Tetris feat. 重音テト [Kasane Teto])</u></strong></a> by 柊マグネタイト (Hiiragi Magnetite) (2024).</em></p>
 
 ---
 
-## Sections
+## 章节
 
-1. [**What Is Game Programming?**](#1)
-2. [**Why raylib?**](#2)
-3. [**Hello, Raylib!**](#3)
+1. [**什么是游戏编程？**](#1)
+2. [**为什么选择raylib？**](#2)
+3. [**你好，Raylib！**](#3)
     1. [**`main`**](#3-1)
     2. [**`initialise`**](#3-2)
     3. [**`processInput`**](#3-3)
@@ -24,48 +24,48 @@
 
 <a id="1"></a>
 
-## What Is Game Programming?
+## 什么是游戏编程？
 
-Let's start by addressing _the_ single most common question I get whenever anybody asks me about this class: why aren't we using Unity / Unreal / literally any other industry-standard game engine that's freely-available to us? Wouldn't _that_ be the best way to jump start a career in games?
+让我们首先解决一个我在任何人问我关于这门课时最常得到的问题：为什么我们不使用Unity / Unreal / 字面上任何其他免费提供给我们的行业标准游戏引擎？那不是启动游戏职业生涯的最佳方式吗？
 
-Yes and no. It is true that a lot of video game developers get their careers started with pre-built engines. The whole appeal of using them is that you don't have to worry about the minutiae that comes with rendering pixels on the screen and making them interactive. At the risk of sounding a little patronising (this isn't my intention—I've programmed a lot in Unity), you could call this way of learning "game dev with training wheels". And there's nothing wrong with that! A lot of the times, developers have a strong vision and whichever tool help them achieve that goal most efficiently is going to be the most obvious choice. Honestly, as long as we're getting good games out of it, who cares? 
+是也不是。确实，很多视频游戏开发者通过预构建引擎开始他们的职业生涯。使用它们的全部吸引力在于您不必担心在屏幕上渲染像素并使其交互的细节。冒着听起来有点居高临下的风险（这不是我的本意——我在Unity中编程过很多），您可以称这种学习方式为"带训练轮的游戏开发"。这没有什么错！很多时候，开发者有强烈的愿景，无论哪种工具能帮助他们最有效地实现那个目标，都将是最明显的选择。老实说，只要我们能从中得到好游戏，谁在乎呢？
 
-So, why aren't _we_ doing that?
+那么，为什么_我们_不那样做呢？
 
-Consider the name of this course: "Introduction to Game Programming." How would you define game programming? Or, put another way, what is a game developer responsible for? It's not a straightforward question with a straightforward answer, especially with tools like Unity and Unreal. If I were to hazard an answer, it would be the following:
+考虑这门课程的名称："游戏编程入门"。您如何定义游戏编程？或者，换个说法，游戏开发者负责什么？这不是一个有直接答案的直接问题，特别是对于Unity和Unreal这样的工具。如果我要冒险给出一个答案，那将是以下内容：
 
-1. The implementation of the game's interactivity.
-2. The implementation of the game's graphics.
-3. The implementation of the game's physics, if any.
+1. 游戏交互性的实现。
+2. 游戏图形的实现。
+3. 游戏物理的实现（如果有的话）。
 
-The last two of these are especially important, in my opinion, and a lot more complex than you may think. We tend to take graphics for granted as citizens of the 21st century, since we see them everywhere, all the time. We're used a drag-and-drop model of interacting with images where we don't really need to even think about the resources necessary for the liquid crystals under our screens to show us what we want where we want. Taking into account that, under the hood, all of this ends up being broken into machine code anyway, there's quite a bit to this process that we're (by design) simply not thinking about.
+在我看来，后两者特别重要，而且比您想象的要复杂得多。作为21世纪的公民，我们往往认为图形是理所当然的，因为我们随时随地都能看到它们。我们习惯了与图像交互的拖放模型，在这种模型中，我们甚至不需要考虑我们屏幕下的液晶所需的资源，就能在我们想要的地方显示我们想要的内容。考虑到在幕后，所有这些最终都会被分解为机器代码，这个过程中有相当多我们（有意地）根本没有考虑的内容。
 
-Physics, too, is a more loaded topic than meets the eye. When we say that a game has very immersive movement or control, what _exactly_ are we saying? Generally speaking, we say this when something feels _realistic_—that is, akin to the laws of physics that we interact with in the real world. It feels familiar to us, so it makes us forget, for a little bit, that we're playing a game. Evoking this feeling is not easy, because mechanics are extremely complicated. Simulating the way a body moves through space, complete with its reactions to outside stimuli (like air resistance, etc) is really difficult! We don't think about it, because we literally live it, but when it comes time to tell something digital to act the same way, we're suddenly talking about something magnitudes more complex.
+物理也是一个比表面看起来更复杂的话题。当我们说一个游戏有非常沉浸式的移动或控制时，我们_确切地_在说什么？一般来说，当某些东西感觉_真实_时，我们会这样说——也就是说，类似于我们在现实世界中与之交互的物理定律。它对我们来说很熟悉，所以它让我们忘记，暂时地，我们正在玩游戏。唤起这种感觉并不容易，因为机制是极其复杂的。模拟一个物体在空间中的移动方式，包括它对外部刺激（如空气阻力等）的反应，真的很困难！我们不会想到它，因为我们真实地生活在其中，但当轮到告诉数字的东西以同样的方式行动时，我们突然在谈论复杂程度高出几个数量级的东西。
 
-The reason why I choose not to utilise pre-built engines in this class is because they tend to take the responsibility for these two things away from the developer—or at least abstract them away so much to the point of triviality. Of course, it's not as if you _can't_ ask for finer control in pre-built engines—you can (especially in Unreal), but at that point, it's almost as if you were working "against the grain" of these pieces of software. Meaning: why are you even using Unity if you're just going to reprogram the way Unity handles things? That kind of thing.
+我选择在这门课中不使用预构建引擎的原因是，它们往往从开发者那里夺走了对这两件事的责任——或者至少将它们抽象化到琐碎的程度。当然，这并不是说您_不能_在预构建引擎中要求更精细的控制——您可以（特别是在Unreal中），但在那种情况下，几乎就像您在"逆着"这些软件的方向工作。意思是：如果您只是要重新编程Unity处理事物的方式，为什么还要使用Unity？这种事情。
 
-So, what does this amount to? By choosing not to use a pre-built engine, we are effectively choosing to _build an engine ourselves_. That's right: from the ground up, we will be using a cute little library call **raylib** to build our own custom game engine, capable of rendering graphics the way _we_ want it to, handle user input the way _we_ want it to, and simulate physics the way _we_ want it to. The benefits of this approach, in my opinion, far outweigh any "handicap" we might have for not using a pre-built engine:
+那么，这意味着什么？通过选择不使用预构建引擎，我们实际上是在选择_自己构建引擎_。没错：从头开始，我们将使用一个可爱的小库叫**raylib**来构建我们自己的定制游戏引擎，能够按照_我们_想要的方式渲染图形，按照_我们_想要的方式处理用户输入，并按照_我们_想要的方式模拟物理。在我看来，这种方法的好处远远超过我们不使用预构建引擎可能有的任何"劣势"：
 
-1. You get lots of programming practice doing something you can call your own.
-2. You can immediately expand your résumé with any of the games that you will program this semester, stating (correctly) that it was doing in your own custom engine.
-3. Most [**professional developers**](https://gist.github.com/raysan5/909dc6cf33ed40223eb0dfe625c0de74) use their own custom engines, which they of course build themselves.
-4. After this class, picking up Unity and/or Unreal will be a piece of cake. (Getting good at them? Another story.)
+1. 您在做一些您可以称为自己的事情时获得大量编程练习。
+2. 您可以立即用您本学期将编程的任何游戏扩展您的简历，（正确地）声明它是在您自己的定制引擎中完成的。
+3. 大多数[**专业开发者**](https://gist.github.com/raysan5/909dc6cf33ed40223eb0dfe625c0de74)使用他们自己的定制引擎，当然，他们自己构建这些引擎。
+4. 在这门课之后，掌握Unity和/或Unreal将是小菜一碟。（精通它们？那是另一回事。）
 
-If you agree with my reasoning, or at least if you're not going to drop the class after today, then I welcome you. I can't wait to see what you make.
+如果您同意我的推理，或者至少如果您不会在今天之后退课，那么我欢迎您。我迫不及待地想看到您制作什么。
 
 <br>
 
 <a id="2"></a>
 
-## Why raylib?
+## 为什么选择raylib？
 
-The better-informed amongst you may be aware that I used to teach this course using an [**old, janky version of a library called OpenGL**](https://github.com/sebastianromerocruz/CS3113-intro-to-game-programming/tree/main?tab=readme-ov-file#cs3113-introduction-to-game-programming). We actually will still be using OpenGL, but in a slight different, more controlled way. [**OpenGL**](https://www.opengl.org/) is a quite famous library that interacts directly with your graphics card to create hi-fi graphics with much smaller overhead than, say, Unity or even Unreal. The particulars of why I'm switching out of that model are not important, but the gist is that as students' started to get newer, compatibility issues basically became the norm, and it was really messing with the focus of the class. Basically, more time was being spent figuring out why the setup didn't work than actually working on the game themselves.
+您们中更了解情况的人可能知道，我过去使用一个[**叫做OpenGL的旧的、粗糙的库版本**](https://github.com/sebastianromerocruz/CS3113-intro-to-game-programming/tree/main?tab=readme-ov-file#cs3113-introduction-to-game-programming)来教授这门课程。实际上我们仍然会使用OpenGL，但以一种稍微不同、更受控制的方式。[**OpenGL**](https://www.opengl.org/)是一个相当著名的库，它直接与您的显卡交互，以创建高保真图形，开销比Unity甚至Unreal都要小得多。我从那种模式中切换出来的具体原因并不重要，但要点是，随着学生开始使用更新的设备，兼容性问题基本上成为了常态，这真的干扰了课程的重点。基本上，更多的时间被花在弄清楚为什么设置不工作上，而不是实际工作在游戏本身上。
 
-So, a former student recommended [**raylib**](#https://www.raylib.com/index.html) which, in their own words:
+所以，一个前学生推荐了[**raylib**](#https://www.raylib.com/index.html)，用他们自己的话说：
 
-> _...is a programming library to enjoy videogames programming; no fancy interface, no visual helpers, no gui tools or editors... just coding in pure spartan-programmers way._
+> _...是一个享受视频游戏编程的编程库；没有花哨的界面，没有视觉助手，没有图形界面工具或编辑器...只是以纯斯巴达程序员的方式编码。_
 > 
-> — Official raylib website.
+> — 官方raylib网站。
 
 <a id="fg-1"></a>
 
@@ -76,26 +76,26 @@ So, a former student recommended [**raylib**](#https://www.raylib.com/index.html
 
 <p align=center>
     <sub>
-        <strong>Figure I</strong>: raylib's entire architecture (<a href="https://github.com/raysan5/raylib/wiki/raylib-architecture"><strong>source</strong></a>).
+        <strong>图I</strong>: raylib的整个架构 (<a href="https://github.com/raysan5/raylib/wiki/raylib-architecture"><strong>源</strong></a>)。
     </sub>
 </p>
 
-As you can see, raylib itself is built on OpenGL, so we are still getting a pretty fine level of control over our machines, just with more friendly programmatic interface. Other things that I like about it are that:
+如您所见，raylib本身构建在OpenGL之上，所以我们仍然对我们的机器有相当精细的控制级别，只是有更友好的程序接口。我喜欢它的其他事情是：
 
-- It's a breeze to set up.
-- It is [**highly-modular**](https://github.com/raysan5/raylib/wiki/raylib-architecture). We like that.
-- It is open-source. We _love_ that.
-- It's ported to [**every language under the sun**](https://github.com/raysan5/raylib/blob/master/BINDINGS.md#raylib-bindings-and-wrappers). We're really only using the C version because C/C++ tends to be the standard in the industry.
+- 设置起来轻而易举。
+- 它是[**高度模块化**](https://github.com/raysan5/raylib/wiki/raylib-architecture)的。我们喜欢这一点。
+- 它是开源的。我们_爱_这一点。
+- 它被移植到[**阳光下的每种语言**](https://github.com/raysan5/raylib/blob/master/BINDINGS.md#raylib-bindings-and-wrappers)。我们真的只使用C版本，因为C/C++往往是行业的标准。
 
-Overall, while there are some things I wish it did differently / closer to how raw OpenGL does it, it seems to be a really small but powerful library—and more than enough for what we will be covering this semester.
+总的来说，虽然有一些我希望它做得不同/更接近原始OpenGL做法的事情，但它似乎是一个真正小而强大的库——对于我们本学期将要涵盖的内容来说绰绰有余。
 
 <br>
 
 <a id="3"></a>
 
-## Hello, Raylib!
+## 你好，Raylib！
 
-To get started with the library, let's analyse the code necessary to display an off-white screen using raylib and break it up part-by-part:
+要开始使用这个库，让我们分析使用raylib显示一个米白色屏幕所需的代码，并逐部分分解它：
 
 <a id="cb-1"></a>
 

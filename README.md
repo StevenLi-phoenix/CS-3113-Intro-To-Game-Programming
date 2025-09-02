@@ -194,11 +194,11 @@
 
 <a id="9"></a>
 
-### _Getting Help and Slack_
+### _获取帮助和Slack_
 
-If you are emailing me for help with your projects, upload your entire project to github and email me with the link (I need to see everything so I can help you). Do not email screenshots of your code. 
+如果您在项目上需要帮助而发邮件给我，请将您的整个项目上传到github并将链接发给我（我需要看到所有内容才能帮助您）。不要发送代码截图。 
 
-**Slack Server**: We will be using Slack to answer quick questions that you may have about the course throughout the semester; the join link will be provided during the first day of class. While I’m usually pretty lax in terms of behavior in our server, this server is still a university environment and should be treated as such. Be respectful to me, your course assistant, and to your fellow students. Please adhere to the following rules:
+**Slack服务器**: We will be using Slack to answer quick questions that you may have about the course throughout the semester; the join link will be provided during the first day of class. While I’m usually pretty lax in terms of behavior in our server, this server is still a university environment and should be treated as such. Be respectful to me, your course assistant, and to your fellow students. Please adhere to the following rules:
 
 - Do not post your homework assignment code, or anybody else's, on this server. Doing so will have you automatically banned and flagged for plagiarism. You may, however, share small code blocks that don’t give away your implementation in order to ask questions.
 
