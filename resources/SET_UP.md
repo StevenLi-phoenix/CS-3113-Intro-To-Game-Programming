@@ -1,31 +1,31 @@
-<h1 align=center>Raylib Setup Guide (macOS & Windows)</h1>
+<h1 align=center>Raylib设置指南（macOS和Windows）</h1>
 
-<h3 align=center>MacOS & Windows</h3>
+<h3 align=center>MacOS和Windows</h3>
 
 ---
 
-## Sections
+## 章节
 
-1. [**MacOS Instructions**](#1)
-   1. [**Step 1: Install Homebrew (if not already installed)**](#1-1)
-   2. [**Step 2: Install Required Packages**](#1-2)
-   3. [**Step 3: Verify Installation**](#1-3)
-2. [**Windows Instructions (MinGW)**](#2)
-   1. [**Install Raylib for Windows**](#2-1)
-   2. [**Test `g++` and `make`**](#2-2)
-3. [**Folder Setup**](#3)
-4. [**Makefile Contents**](#4)
-5. [**How to Use the Makefile**](#5)
+1. [**MacOS说明**](#1)
+   1. [**步骤1：安装Homebrew（如果尚未安装）**](#1-1)
+   2. [**步骤2：安装所需软件包**](#1-2)
+   3. [**步骤3：验证安装**](#1-3)
+2. [**Windows说明（MinGW）**](#2)
+   1. [**为Windows安装Raylib**](#2-1)
+   2. [**测试`g++`和`make`**](#2-2)
+3. [**文件夹设置**](#3)
+4. [**Makefile内容**](#4)
+5. [**如何使用Makefile**](#5)
 
 ---
 
 <a id="1"></a>
 
-## macOS Instructions
+## macOS说明
 
 <a id="1-1"></a>
 
-### Step 1: Install Homebrew (if not already installed)
+### 步骤1：安装Homebrew（如果尚未安装）
 
 If you don’t have Homebrew installed, open the Terminal and run:
 

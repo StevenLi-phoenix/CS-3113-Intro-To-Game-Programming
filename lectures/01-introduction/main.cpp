@@ -1,24 +1,24 @@
 #include "raylib.h"
 
-// Enums
+// 枚举
 enum AppStatus { TERMINATED, RUNNING };
 
-// Global Constants
+// 全局常量
 constexpr int SCREEN_WIDTH        = 800 * 1.5f,
               SCREEN_HEIGHT       = 450 * 1.5f,
               FPS                 = 60;
 
-// Global Variables
+// 全局变量
 AppStatus gAppStatus   = RUNNING;
 
-// Function Declarations
+// 函数声明
 void initialise();
 void processInput();
 void update();
 void render();
 void shutdown();
 
-// Function Definitions
+// 函数定义
 void initialise()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Hello raylib!");
@@ -44,7 +44,7 @@ void render()
 
 void shutdown() 
 { 
-    CloseWindow(); // Close window and OpenGL context
+    CloseWindow(); // 关闭窗口和OpenGL上下文
 }
 
 int main(void)

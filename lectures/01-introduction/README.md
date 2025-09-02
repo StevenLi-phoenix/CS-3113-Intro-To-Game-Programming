@@ -168,17 +168,17 @@ int main(void)
 
 <p align=center>
     <sub>
-        <strong>Code Block I</strong>: The contents of this week's <a href="main.cpp"><strong>source code</strong></a>.
+        <strong>代码块I</strong>: 本周<a href="main.cpp"><strong>源代码</strong></a>的内容。
     </sub>
 </p>
 
-To run the following code (assuming you have its [**corresponding `makefile`**](makefile) in the same folder), simply run the following command in your terminal/command line:
+要运行以下代码（假设您在同一文件夹中有其对应的[**`makefile`**](makefile)），只需在终端/命令行中运行以下命令：
 
 ```bash
 make run
 ```
 
-And voilà!
+然后瞧！
 
 <a id="fg-2"></a>
 
@@ -189,7 +189,7 @@ And voilà!
 
 <p align=center>
     <sub>
-        <strong>Figure II</strong>: Fascinating, I know.
+        <strong>图II</strong>: 迷人，我知道。
     </sub>
 </p>
 
