@@ -1,6 +1,6 @@
-<h1 align=center>CS3113 <em>Introduction to Game Programming</em></h1>
+<h1 align=center>CS3113 <em>游戏编程入门</em></h1>
 
-<h2 align=center>New York University Tandon School of Engineering</h2>
+<h2 align=center>纽约大学坦登工程学院</h2>
 
 <p align=center>
     <a href="https://www.learncpp.com/"><img src="https://img.shields.io/badge/Language-C%2B%2B-yellow"></img></a>
@@ -10,30 +10,30 @@
 
 ---
 
-### _Sections_
+### _章节_
 
-1.  [**Lecture Notes**](#1)
-2.  [**Instructor and Course Assistant**](#2)
-3.  [**Class Information**](#3)
-4.  [**Description**](#4)
-5.  [**Objectives**](#5)
-6.  [**Computer/Software Requirements**](#6)
-7.  [**Grading Scheme**](#7)
-8.  [**Deadlines, Extensions, and Late Work Policy**](#8)
-    - [**Project Schedule**](#8-1)
-9. [**Getting Help and Slack**](#9)
-10. [**Moses Center Statement of Disability**](#10)
-11. [**Academic Integrity**](#11)
-    - [**Generative AI**](#11-1)
-    - [**Penalties**](#11-2)
+1.  [**课程笔记**](#1)
+2.  [**讲师和课程助教**](#2)
+3.  [**课程信息**](#3)
+4.  [**课程描述**](#4)
+5.  [**学习目标**](#5)
+6.  [**计算机/软件要求**](#6)
+7.  [**评分方案**](#7)
+8.  [**截止日期、延期和迟交政策**](#8)
+    - [**项目时间表**](#8-1)
+9. [**获取帮助和Slack**](#9)
+10. [**Moses中心残疾声明**](#10)
+11. [**学术诚信**](#11)
+    - [**生成式AI**](#11-1)
+    - [**处罚措施**](#11-2)
 
 ---
 
 <a id="1"></a>
 
-### _Lecture Notes_
+### _课程笔记_
 
-1. [**The Basics: _Hello, Raylib!_**](lectures/01-introduction)
+1. [**基础知识: _你好，Raylib!_**](lectures/01-introduction)
 
 <!-- 1. **Week 1**: The basics
     1.  [**Introduction**](lectures/introduction/)
@@ -64,135 +64,131 @@
     2. [**Shaders**](lectures/shaders/)
 10. **Week 10**: [**Playtesting and publishing your game**](lectures/playtesting/) -->
 
-<sub>Released on each Friday day before class.</sub>
+<sub>每周五课前发布。</sub>
 
 <br>
 
 <a id="2"></a>
 
-### _Instructor and Course Assistant_
+### _讲师和课程助教_
 
 [**Sebastián Romero Cruz**](https://github.com/sebastianromerocruz)  _(They / Them)_
 
-| **E-Mail**                                  | **Office Hours**                                                                                                     |
+| **邮箱**                                  | **办公时间**                                                                                                     |
 |---------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
 | [**sebastian.romerocruz@nyu.edu**](mailto:src402@nyu.edu) | [**calendly**](https://calendly.com/profromerocruz) |
 
-[**TBD**]()
+[**待定**]()
 
-| **E-Mail**                                  | **Office Hours**                                                                                                     |
+| **邮箱**                                  | **办公时间**                                                                                                     |
 |---------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| [**TBD**](mailto:) | TBD |
+| [**待定**](mailto:) | 待定 |
 
 
 <br>
 
 <a id="3"></a>
 
-### _Class Information_
+### _课程信息_
 
-- **Pre-Requisites**: [_**CS-UY 2124 Object-Oriented Programming (dē factō)**_](http://bulletin.engineering.nyu.edu/preview_course_nopop.php?catoid=15&coid=36541) (C- or better)
-- **Credits**: 3
+- **先修课程**: [_**CS-UY 2124 面向对象编程（事实上的）**_](http://bulletin.engineering.nyu.edu/preview_course_nopop.php?catoid=15&coid=36541)（C-或更好成绩）
+- **学分**: 3
 
 <a id="4"></a>
 
-### _Description_
+### _课程描述_
 
-A programming intensive introduction to the creation of computer games. Using mostly two-dimensional 
-sprite-based programming, we examine and experiment with animation, physics, artificial intelligence 
-and audio. In addition, the course explores the mathematics of transformations (both 2D and 3D) and 
-the ways they may be represented.
+一门以编程为重点的计算机游戏创作入门课程。主要使用二维精灵（sprite）编程，我们将研究和实验动画、物理、人工智能和音频。此外，本课程还探索变换的数学（二维和三维）以及它们的表示方法。
 
 <br>
 
 <a id="5"></a>
 
-### _Objectives_
+### _学习目标_
 
-You will learn about vector, coordinate systems, sprites, animation, collisions, physics, map-building, simple enemy AI, audio and handling user input. This will all be done with C++ programming and utilizing the [**raylib**](https://www.raylib.com/) library, itself a cross-platform OpenGL wrapper. You will be able to create simple 2D games in your engine as well as gain exposure into 3D game programming.
+您将学习向量、坐标系统、精灵、动画、碰撞、物理、地图构建、简单敌人AI、音频和处理用户输入。这些内容将通过C++编程实现，并利用[**raylib**](https://www.raylib.com/)库，它本身是一个跨平台的OpenGL包装器。您将能够在您的引擎中创建简单的2D游戏，并接触3D游戏编程。
 
 <br>
 
 <a id="6"></a>
 
-### _Computer/Software Requirements_
+### _计算机/软件要求_
 
-You need to use either a Mac, Linux, or Windows computer. You do not need a powerful machine as we are
-not implementing anything super complicated. While I recommend the use of [**Visual Studio Code (VSCode)**](https://code.visualstudio.com/), you can use whatever you're most comfortable with.
+您需要使用Mac、Linux或Windows计算机。您不需要功能强大的机器，因为我们不会实现任何超级复杂的内容。虽然我推荐使用[**Visual Studio Code (VSCode)**](https://code.visualstudio.com/)，但您可以使用您最熟悉的编辑器。
 
-You will also need a [**Github**](https://github.com/) account!
+您还需要一个[**Github**](https://github.com/)账户！
 
-[**Project Setup Instructions**](resources/SET_UP.md)
+[**项目设置说明**](resources/SET_UP.md)
 
 <br>
 
 <a id="7"></a>
 
-### _Grading Scheme_
+### _评分方案_
 
-| **Item**                                                                | **Percentage** |
+| **项目**                                                                | **百分比** |
 |-------------------------------------------------------------------------|----------------|
-| **_Project 1_**: **Draw a Simple 2D Scene** | 10%            |
-| **_Project 2_**: **Pong**                   | 10%            |
-| **_Project 3_**: **Lunar Lander**           | 15%            |
-| **_Project 4_**: **Rise of The AI**         | 25%            |
-| **_Project 5_**: **Students' Choice**                               | 30%            |
-| **_Classwork_**                                                         | 10%            |
+| **_项目1_**: **绘制简单2D场景** | 10%            |
+| **_项目2_**: **乒乓球**                   | 10%            |
+| **_项目3_**: **月球登陆器**           | 15%            |
+| **_项目4_**: **AI的崛起**         | 25%            |
+| **_项目5_**: **学生自选**                               | 30%            |
+| **_课堂作业_**                                                         | 10%            |
 
-- **Projects** (90%)
-    - Assigned roughly every two weeks, these are programming projects based on class material and are to be _independently done_. 
-    - As you can see, this class is very project-heavy. What this means is that, while there are no exams nor quizzes, the grade of each of the projects has a relatively large impact on your overall course grade.
-    - This class assumes a solid understanding of the C++ language, including syntax, control flow, functional decomposition, and object-oriented programming. For this reason, we will not be grading you on the quality of your code. 
-    - However, as the raylib library is quite expansive and as there are multiple ways of approaching it, you are expected to _only use structures that we have learned in class_. For example, if we define a specific class during lecture, and we require its use in a project, **you must use it for full credit**. 
-    - Of course, if you are free to make your own modifications and create any auxiliary functions/classes/libraries to best suit your programming style. If you are ever unsure of whether you are allowed to use something in a homework project, please ask us first.
-    - Every assignment will have an "extra credit" portion. This will **add 5% to your final grade** at the end of the semester if you complete the extra credit portion of **at least 3 of the projects**. While 5% may not seem like a lot, it can mean the difference between two letter grades. This can be especially helpful later in the semester, when the projects become longer and more complex.
+- **项目**（90%）
+    - 大约每两周分配一次，这些是基于课程材料的编程项目，需要_独立完成_。
+    - 如您所见，这门课程以项目为主。这意味着，虽然没有考试或测验，但每个项目的成绩对您的总体课程成绩有相对较大的影响。
+    - 本课程假设您对C++语言有扎实的理解，包括语法、控制流、函数分解和面向对象编程。因此，我们不会根据代码质量给您评分。
+    - 但是，由于raylib库相当广泛，而且有多种方法来使用它，您只能_使用我们在课堂上学过的结构_。例如，如果我们在讲座中定义了一个特定的类，并且在项目中要求使用它，**您必须使用它才能获得满分**。
+    - 当然，您可以自由地进行自己的修改，并创建任何辅助函数/类/库，以最适合您的编程风格。如果您不确定是否可以在作业项目中使用某些内容，请先询问我们。
+    - 每个作业都会有一个"额外学分"部分。如果您完成**至少3个项目**的额外学分部分，这将在学期末**为您的最终成绩加5%**。虽然5%可能看起来不多，但它可能意味着两个字母等级之间的差别。这在学期后期特别有帮助，因为届时项目会变得更长更复杂。
 
-- **Classwork** (10%) is based on 5-7 group assignments to be completed, as the name implies, during class. In order to get credit for these, you will need to:
-    1. Be there.
-    2. Complete the assignment with your team _before_ the end of class.
-    3. Complete the assignment using only structures learned in class.
-    4. Ensure that at least one person in your team shows the finished solution to the professor.
+- **课堂作业**（10%）基于5-7个小组作业，顾名思义，需要在课堂上完成。为了获得学分，您需要：
+    1. 到场。
+    2. 在课程结束_之前_与您的团队完成作业。
+    3. 仅使用课堂上学过的结构完成作业。
+    4. 确保您的团队中至少有一人向教授展示完成的解决方案。
 
-As for your final letter grade, the following scale will be used:
+至于您的最终字母等级，将使用以下评分标准：
 
-| **Letter Grade** | **A**  | **A-** | **B+** | **B** | **B-** | **C+** | **C** | **C-** | **D+** | **D** | **F** |
+| **字母等级** | **A**  | **A-** | **B+** | **B** | **B-** | **C+** | **C** | **C-** | **D+** | **D** | **F** |
 |------------------|--------|--------|--------|-------|--------|--------|-------|--------|--------|-------|-------|
-| **Range**        | 93-100 | 90-92  | 87-89  | 83-86 | 80-82  | 77-79  | 73-76 | 70-72  | 67-69  | 60-66 | 0-60  |
+| **分数范围**        | 93-100 | 90-92  | 87-89  | 83-86 | 80-82  | 77-79  | 73-76 | 70-72  | 67-69  | 60-66 | 0-60  |
 
-**There is no additional extra credit** in this course and the grades are **not curved**.
+**本课程没有额外的加分**，成绩**不调整曲线**。
 
 <br>
 
 <a id="8"></a>
 
-### _Deadlines, Extensions, and Late Work Policy_
+### _截止日期、延期和迟交政策_
 
-- All projects are due at **11:59pm on Saturdays**.
-    - Late projects will have **10 points deducted per day**. 
-    - Late projects will not be accepted after **2 days**.
-    - Due by 11:59pm means your project was successfully pushed to GitHub _by that time_. This means that the version to be graded must be uploaded in both Brightspace and GitHub at that time. Start pushing your project at least an hour before the deadline.
-    - Projects received **1 minute late** are considered to be **a day** late.
+- 所有项目都在**周六晚上11:59**截止。
+    - 迟交项目将**每天扣10分**。
+    - 迟交项目在**2天**后将不被接受。
+    - 晚上11:59截止意味着您的项目必须在那个时间_之前_成功推送到GitHub。这意味着要评分的版本必须在那个时间同时上传到Brightspace和GitHub。请至少在截止时间前一小时开始推送您的项目。
+    - **晚1分钟**收到的项目被视为**迟交一天**。
 
-- If there are any issues with uploading your project, you must email me **24 hours prior to the due date**.
-    - While I check email regularly, do not expect a response over the weekend or close to deadlines.
-    - Your code must compile. Code that does not compile will receive a grade of 0.
+- 如果上传项目时遇到任何问题，您必须在**截止日期前24小时**发邮件给我。
+    - 虽然我经常查看邮件，但不要期望在周末或临近截止日期时收到回复。
+    - 您的代码必须能够编译。无法编译的代码将得到0分。
 
-- You may ask for an extension for **any 2 of your 5 projects**. The extension policy varies per project:
-    - **Projects 1-3**: You may ask for an informal extension by asking Prof. Romero Cruz at least 72 hours (3 days) before the deadline. The exact length of the extension will be assigned on a case-by-case basis.
-    - **Project 4**: You _must_ contact the [**Office of Student Advocacy**]() in order to request an extension for this project, since its deadline coincides with the start of your work on your final project. If they approve it, then I will grant it with no problem at all.
-    - **Project 5**: Your final project is graded _during the last day of lecture_, when you will present it to the class. This means that no extensions are, in theory, possible. However, should an emergency arise, I can grant you an incomplete grade (`I`) for the time being and give you a short extension. This really is a last-resort option, so try to avoid it as best as possible.
+- 您可以为**5个项目中的任意2个**申请延期。各项目的延期政策不同：
+    - **项目1-3**：您可以通过在截止日期前至少72小时（3天）向Romero Cruz教授申请非正式延期。延期的确切长度将根据具体情况分配。
+    - **项目4**：您_必须_联系[**学生权益办公室**]()申请此项目的延期，因为其截止日期与您开始最终项目的时间冲突。如果他们批准，那么我将毫无问题地批准。
+    - **项目5**：您的最终项目在_最后一天课程_期间评分，届时您将向全班展示。这意味着理论上不可能延期。但是，如果出现紧急情况，我可以暂时给您一个未完成的成绩（`I`）并给您短期延期。这确实是最后的选择，所以请尽量避免。
 
 <a id="8-1"></a>
 
-#### Project Schedule
+#### 项目时间表
 
-| Project                 | Release Date | Due Date      |
+| 项目                 | 发布日期 | 截止日期      |
 |-------------------------|--------------|---------------|
-| **Simple Scene**        | TBD          | TBD           |
-| **Pong**                | TBD          | TBD           |
-| **Lunar Lander**        | TBD          | TBD           |
-| **Platformer**          | TBD          | TBD           |
-| **Students' Choice**    | TBD          | TBD           |
+| **简单场景**        | 待定          | 待定           |
+| **乒乓球**                | 待定          | 待定           |
+| **月球登陆器**        | 待定          | 待定           |
+| **平台游戏**          | 待定          | 待定           |
+| **学生自选**    | 待定          | 待定           |
 
 <br>
 
