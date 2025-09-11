@@ -1,25 +1,39 @@
 #include "raylib.h"
+#include <math.h>
 
 // Enums
 enum AppStatus { TERMINATED, RUNNING };
-enum Direction { LEFT, RIGHT };       // turning left or right?
 
 // Global Constants
 constexpr int SCREEN_WIDTH        = 800 * 1.5f,
               SCREEN_HEIGHT       = 450 * 1.5f,
               FPS                 = 60,
-              SIZE         = 100;
+              SIDES               = 3;
 
-constexpr float LIMIT_ANGLE = 20.0f;  // when turning directions will flip
+constexpr float RADIUS          = 100.0f, // radius of the orbit
+                ORBIT_SPEED     = 0.05f,  // the speed at which the triangle will travel its orbit
+                BASE_SIZE       = 50,     // the size of the triangle when it's not being scaled
+                MAX_AMPLITUDE   = 10.0f,  // by how much the triangle will be expanding/contracting
+                PULSE_SPEED     = 100.0f, // how fast the triangle is going to be "pulsing"
+                PULSE_INCREMENT = 10.0f;  // the current value we're scaling by
+
+constexpr Vector2 ORIGIN = { 
+    SCREEN_WIDTH  / 2, 
+    SCREEN_HEIGHT / 2
+};
 
 // Global Variables
 AppStatus gAppStatus = RUNNING;
-Direction gDirection = RIGHT;         // start by rotating right
-float gScaleFactor   = 100.0f,
-      gAngle         = 0.0f;
-Vector2 gPosition    = { 0.0f, 0.0f };
+
+float gScaleFactor   = BASE_SIZE,
+      gAngle         = 0.0f,
+      gPulseTime     = 0.0f;
+Vector2 gPosition    = ORIGIN;
+
+float gOrbitLocation = 0.0f;
 
 // Function Declarations
+Color ColorFromHex(const char *hex);
 void initialise();
 void processInput();
 void update();
@@ -62,10 +76,10 @@ Color ColorFromHex(const char *hex)
     return RAYWHITE;
 }
 
-// Function Definitions
+
 void initialise()
 {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Transformations");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Funny Heartbeat");
 
     SetTargetFPS(FPS);
 }
@@ -77,19 +91,13 @@ void processInput()
 
 void update() 
 {
-    gScaleFactor *= 1.0025f;
+    /**
+     * HEARTBEAT EFFECT
+     */
 
-    if (gPosition.x < SCREEN_WIDTH)  gPosition.x += 1.0f;
-    if (gPosition.y < SCREEN_HEIGHT) gPosition.y += 0.5f;
-
-    // Increase angle by 1.0f times either 1
-    // if we're turning right or -1 if we're
-    // turning left
-    gAngle += 1.0f * gDirection == RIGHT ? 1 : -1;
-
-    // Once we reach the limit angle, switch direction
-    if      (gAngle >  LIMIT_ANGLE) gDirection = LEFT;
-    else if (gAngle < -LIMIT_ANGLE) gDirection = RIGHT;
+    /**
+     * ORBIT EFFECT
+     */
 }
 
 void render()
@@ -100,7 +108,7 @@ void render()
 
     DrawPoly(
         gPosition,
-        3, 
+        SIDES, 
         gScaleFactor, 
         gAngle, 
         ColorFromHex("#F88379")
