@@ -10,17 +10,21 @@ constexpr int SCREEN_WIDTH        = 800 * 1.5f,
               FPS                 = 60,
               SIDES               = 3;
 
-constexpr float RADIUS          = 100.0f, // radius of the orbit
+constexpr float RADIUS          = 200.0f, // radius of the orbit
                 ORBIT_SPEED     = 0.05f,  // the speed at which the triangle will travel its orbit
                 BASE_SIZE       = 50,     // the size of the triangle when it's not being scaled
-                MAX_AMPLITUDE   = 10.0f,  // by how much the triangle will be expanding/contracting
+                MAX_AMPLITUDE   = 1.5f,  // by how much the triangle will be expanding/contracting
                 PULSE_SPEED     = 100.0f, // how fast the triangle is going to be "pulsing"
-                PULSE_INCREMENT = 10.0f;  // the current value we're scaling by
+                PULSE_INCREMENT = 1.0f;  // the current value we're scaling by
 
 constexpr Vector2 ORIGIN = { 
     SCREEN_WIDTH  / 2, 
     SCREEN_HEIGHT / 2
 };
+
+// new
+enum PulseDirection {SMALLER = -1, BIGGER = 1};
+PulseDirection gpulseDirection = BIGGER;
 
 // Global Variables
 AppStatus gAppStatus = RUNNING;
@@ -82,6 +86,8 @@ void initialise()
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Funny Heartbeat");
 
     SetTargetFPS(FPS);
+
+    gAngle = 20.0f;
 }
 
 void processInput() 
@@ -94,10 +100,18 @@ void update()
     /**
      * HEARTBEAT EFFECT
      */
+    gScaleFactor += PULSE_INCREMENT * gpulseDirection;
+    if (gScaleFactor > MAX_AMPLITUDE * BASE_SIZE) gpulseDirection = SMALLER;
+    else if (gScaleFactor < BASE_SIZE) gpulseDirection = BIGGER;
 
     /**
      * ORBIT EFFECT
      */
+    gPulseTime += ORBIT_SPEED;
+    gPosition = (Vector2){ 
+        RADIUS * cos(gPulseTime) + ORIGIN.x, 
+        RADIUS * sin(gPulseTime) + ORIGIN.y 
+    };
 }
 
 void render()
