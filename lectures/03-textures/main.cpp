@@ -6,11 +6,12 @@ constexpr int   SCREEN_WIDTH  = 1600,
                 SCREEN_HEIGHT = 900,
                 FPS           = 60,
                 SIZE          = 1000;
-constexpr float MAX_AMP       = 10.0f;
+constexpr float MAX_AMP       = 100.0f;
 
 constexpr char    BG_COLOUR[] = "#B2AAC6";
 constexpr Vector2 ORIGIN      = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 constexpr Vector2 BASE_SIZE   = { (float) SIZE, (float) SIZE };
+constexpr float PULSE_TRANSLATION_SPEED   = 100.0f;
 
 // Image owned by Nintendo — please don't sue me.
 constexpr char EDELGARD_FP[]  = "assets/game/edelgard_square.png";
@@ -61,6 +62,8 @@ void update()
         BASE_SIZE.x + MAX_AMP * cos(gPulseTime),
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
+
+    gPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
 }
 
 void render()
