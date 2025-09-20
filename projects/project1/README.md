@@ -2,7 +2,7 @@
 
 A small raylib project that simulates a simplified three-body system for CS-3113 Project 1. The sun, earth, and moon use sprite sheet UVs from `assets/merged_texture.png` and move according to a handcrafted gravitational model while satisfying the assignment requirements for unique textures, relative motion, and non-linear movement.
 
-See [instructions.md](projects/project1/Instruction.md) for more details.
+See [instructions.md](/projects/project1/Instruction.md) for more details.
 
 ## Features
 - Simulates sun, earth, and moon with individual masses, velocities, and accelerations
@@ -126,11 +126,11 @@ constexpr bool ENABLE_FLASHING_BACKGROUND = false;
 
 ## Screenshots
 Base simulation with only gravitational attraction enabled (no optional visual extras):
-![Base simulation without optional effects](projects/project1/screenshots/Simlation_without_any_feature.png)
+![Base simulation without optional effects](/projects/project1/screenshots/Simlation_without_any_feature.png)
 
 Scaled and angled planet responses showcase how the optional modifiers change the orbital feel:
-![Scaled and angled modifiers](projects/project1/screenshots/Simulation_with_scale_angle.png)
+![Scaled and angled modifiers](/projects/project1/screenshots/Simulation_with_scale_angle.png)
 
 All toggles enabled, including scale-based sizing, rotation, and the flashing background effect:
-![All features enabled](projects/project1/screenshots/Simulation_with_all_feature_enabled.png)
+![All features enabled](/projects/project1/screenshots/Simulation_with_all_feature_enabled.png)
 
