@@ -1,5 +1,7 @@
 #include "CS3113/cs3113.h"
 #include <math.h>
+#include <iostream>
+using namespace std;
 
 enum Member { MURDOC, TWO_D, RUSSEL, NOODLE };
 
@@ -14,6 +16,7 @@ constexpr float MAX_AMP       = 10.0f;
 constexpr char    BG_COLOUR[] = "#000000";
 constexpr Vector2 ORIGIN      = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 constexpr Vector2 BASE_SIZE   = { (float) SIZE, (float) SIZE };
+constexpr float   MEMBER_ANGLE_INCREMENT = PI / 2;
 
 // Image owned by Gorillaz @see https://gorillaz.com/
 constexpr char ALBUM_COVER_FP[] = "assets/demon_days.png";
@@ -25,7 +28,10 @@ float     gScaleFactor   = SIZE,
           gPulseTime     = 0.0f;
 Vector2   gPosition      = ORIGIN;
 Vector2   gScale         = BASE_SIZE;
-
+float     gPreviousTicks = 0.0f;
+int       gFrameCount   = 0;
+Member    gMember       = MURDOC;
+float     gMemberAngle  = 315.0f * PI / 180.0f;
 Texture2D gTexture;
 
 // Function Declarations
@@ -55,12 +61,14 @@ void update()
     /**
      * @todo Calculate delta time
      */
-
+    float ticks = (float) GetTime();
+    float deltaTime = ticks - gPreviousTicks;
+    gPreviousTicks = ticks;
 
     /**
      * @todo Apply delta time to the time-dependent logic
      */
-    gPulseTime += 1.0f;
+    gPulseTime += 1.0f * deltaTime;
 
     gScale = {
         BASE_SIZE.x + MAX_AMP * cos(gPulseTime),
@@ -70,6 +78,13 @@ void update()
     /**
      * @todo Switch member every 100 fames
      */
+    gFrameCount++;
+    if (gFrameCount >= FRAME_LIMIT) {
+        gFrameCount = 0;
+        gMember = (Member)((gMember + 1) % 4);
+        gMemberAngle += MEMBER_ANGLE_INCREMENT;
+    }
+    
 }
 
 void render()
@@ -83,11 +98,12 @@ void render()
      */
     Rectangle textureArea = {
         // top-left corner
-        0.0f, 0.0f,
+        static_cast<float>(round(cos(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.width / 2,
+        static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.height / 2,
 
         // bottom-right corner (of texture)
-        static_cast<float>(gTexture.width),
-        static_cast<float>(gTexture.height)
+        static_cast<float>(gTexture.width) / 2,
+        static_cast<float>(gTexture.height) / 2
     };
 
     // Destination rectangle – centred on gPosition
