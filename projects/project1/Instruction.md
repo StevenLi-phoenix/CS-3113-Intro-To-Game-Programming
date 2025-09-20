@@ -1,5 +1,9 @@
 # Submission Instructions
 
+Click on [Brightspace](https://brightspace.nyu.edu/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1079370&grpid=0&isprv=False&bp=0&ou=501465) to see the original instructions.
+
+Below is a converted version of the original instructions.
+
 * You must use **delta time** in your animations.
 * You should submit your homework on **Brightspace**.
 * You should also push the same version to your **GitHub account**.
