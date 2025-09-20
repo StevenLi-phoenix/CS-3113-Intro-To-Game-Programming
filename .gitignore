@@ -153,5 +153,6 @@ $RECYCLE.BIN/
 lectures/*
 !lectures/01-introduction
 !lectures/02-transformations
+!lectures/03-textures
 
 exercises/01-transformations/SOLUTION.cpp
