@@ -134,3 +134,14 @@ Scaled and angled planet responses showcase how the optional modifiers change th
 All toggles enabled, including scale-based sizing, rotation, and the flashing background effect:
 ![All features enabled](/projects/project1/screenshots/Simulation_with_all_feature_enabled.png)
 
+# Credit
+
+moon --> https://img.freepik.com/free-vector/grey-full-moon-illustration-white-background_53876-117406.jpg?semt=ais_incoming&w=740&q=80
+sun --> https://purepng.com/public/uploads/large/purepng.com-sunsunlightrayssolar-1411527180926csoj9.png
+earth --> https://stock.adobe.com/ca/search?k=cartoon+earth
+
+background remover: apple
+
+how uv picture was created:
+[image_proceeing.py](/projects/project1/image_proceeing.py)
+
