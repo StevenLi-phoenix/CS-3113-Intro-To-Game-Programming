@@ -136,9 +136,9 @@ All toggles enabled, including scale-based sizing, rotation, and the flashing ba
 
 # Credit
 
-moon --> https://img.freepik.com/free-vector/grey-full-moon-illustration-white-background_53876-117406.jpg?semt=ais_incoming&w=740&q=80
-sun --> https://purepng.com/public/uploads/large/purepng.com-sunsunlightrayssolar-1411527180926csoj9.png
-earth --> https://stock.adobe.com/ca/search?k=cartoon+earth
+- moon --> https://img.freepik.com/free-vector/grey-full-moon-illustration-white-background_53876-117406.jpg?semt=ais_incoming&w=740&q=80
+- sun --> https://purepng.com/public/uploads/large/purepng.com-sunsunlightrayssolar-1411527180926csoj9.png
+- earth --> https://stock.adobe.com/ca/search?k=cartoon+earth
 
 background remover: apple
 
