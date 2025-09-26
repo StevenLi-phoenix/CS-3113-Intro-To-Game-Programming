@@ -26,10 +26,13 @@ AppStatus gAppStatus     = RUNNING;
 float     gScaleFactor   = SIZE,
           gAngle         = 0.0f,
           gPulseTime     = 0.0f;
-Vector2   gTeardropPosition      = ORIGIN;
-Vector2   gTeardropScale         = BASE_SIZE;
-
-Texture2D gTeardropTexture;
+Vector2   gLinkPosition      = ORIGIN;
+Vector2   gLinkScale         = BASE_SIZE;
+float     gPreviousTicks = 0.0f;
+int       gFrameCount   = 0;
+Member    gMember       = MURDOC;
+float     gMemberAngle  = 315.0f * PI / 180.0f;
+Texture2D gLinkTexture;
 
 // Function Declarations
 void initialise();
@@ -43,7 +46,7 @@ void initialise()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Textures");
 
-    gTeardropTexture = LoadTexture(ALBUM_COVER_FP);
+    gLinkTexture = LoadTexture(ALBUM_COVER_FP);
 
     SetTargetFPS(FPS);
 }
@@ -67,7 +70,7 @@ void update()
      */
     gPulseTime += 1.0f * deltaTime;
 
-    gTeardropScale = {
+    gLinkScale = {
         BASE_SIZE.x + MAX_AMP * cos(gPulseTime),
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
@@ -99,27 +102,27 @@ void render()
         static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.height / 2,
 
         // bottom-right corner (of texture)
-        static_cast<float>(gTeardropTexture.width),
-        static_cast<float>(gTeardropTexture.height)
+        static_cast<float>(gLinkTexture.width),
+        static_cast<float>(gLinkTexture.height)
     };
 
     // Destination rectangle – centred on gPosition
     Rectangle destinationArea = {
-        gTeardropPosition.x,
-        gTeardropPosition.y,
-        static_cast<float>(gTeardropScale.x),
-        static_cast<float>(gTeardropScale.y)
+        gLinkPosition.x,
+        gLinkPosition.y,
+        static_cast<float>(gLinkScale.x),
+        static_cast<float>(gLinkScale.y)
     };
 
     // Origin inside the source texture (centre of the texture)
     Vector2 objectOrigin = {
-        static_cast<float>(gTeardropScale.x) / 2.0f,
-        static_cast<float>(gTeardropScale.y) / 2.0f
+        static_cast<float>(gLinkScale.x) / 2.0f,
+        static_cast<float>(gLinkScale.y) / 2.0f
     };
 
     // Render the texture on screen
     DrawTexturePro(
-        gTeardropTexture, 
+        gLinkTexture, 
         textureArea, 
         destinationArea, 
         objectOrigin, 
