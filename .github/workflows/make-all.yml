@@ -109,6 +109,17 @@ jobs:
       - name: Configure build environment
         run: |
           set -euo pipefail
+          dir="${{ matrix.directory }}"
+          if [ "$dir" = "." ]; then
+            artifact="root"
+            search_dir="."
+          else
+            artifact="$dir"
+            search_dir="$dir"
+          fi
+          artifact=${artifact//\//-}
+          echo "ARTIFACT_NAME=$artifact" >> "$GITHUB_ENV"
+          echo "BUILD_SEARCH_DIR=$search_dir" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$HOME/.local/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
           echo "LIBRARY_PATH=$HOME/.local/lib:${LIBRARY_PATH:-}" >> "$GITHUB_ENV"
@@ -130,3 +141,29 @@ jobs:
           set -euo pipefail
           make clean || true
           make
+
+      - name: Collect build outputs
+        if: always()
+        run: |
+          set -euo pipefail
+          dest="${GITHUB_WORKSPACE}/_artifacts/${ARTIFACT_NAME}"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          search_dir="$BUILD_SEARCH_DIR"
+          found=0
+          while IFS= read -r file; do
+            cp "$file" "$dest/"
+            found=1
+          done < <(find "$search_dir" -maxdepth 1 -type f \( -name 'raylib_app' -o -name 'raylib_app.exe' -o -perm /111 \)) || true
+          if [ $found -eq 0 ]; then
+            echo "No build outputs generated in $search_dir" > "$dest/README.txt"
+          fi
+
+      - name: Upload build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ env.ARTIFACT_NAME }}
+          path: _artifacts/${{ env.ARTIFACT_NAME }}
+          if-no-files-found: warn
+          retention-days: 7
