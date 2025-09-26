@@ -21,7 +21,7 @@ AppStatus gAppStatus     = RUNNING;
 float     gScaleFactor   = SIZE,
           gAngle         = 0.0f,
           gPulseTime     = 0.0f;
-Vector2   gLinkPosition      = ORIGIN;
+Vector2   gTeardropPosition      = ORIGIN;
 Vector2   gLinkScale         = BASE_SIZE;
 float     gPreviousTicks = 0.0f;
 
@@ -63,7 +63,7 @@ void update()
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
 
-    gLinkPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
+    gTeardropPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
 }
 
 void render()
@@ -83,8 +83,8 @@ void render()
 
     // Destination rectangle – centred on gPosition
     Rectangle destinationArea = {
-        gLinkPosition.x,
-        gLinkPosition.y,
+        gTeardropPosition.x,
+        gTeardropPosition.y,
         static_cast<float>(gLinkScale.x),
         static_cast<float>(gLinkScale.y)
     };
