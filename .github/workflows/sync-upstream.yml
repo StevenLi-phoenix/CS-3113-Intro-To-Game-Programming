@@ -29,17 +29,29 @@ jobs:
         uses: actions/cache@v3
         id: raylib-cache
         with:
-          path: ~/.local
+          path: |
+            ~/.local
+            ~/.cache/raylib-sysdeps
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
       - name: Install build dependencies
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake git pkg-config \
-            libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
-            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
-            libwayland-dev libxkbcommon-dev
+          cache_tar="$HOME/.cache/raylib-sysdeps/libs.tgz"
+          if [ -f "$cache_tar" ]; then
+            sudo tar -xzf "$cache_tar" -C /
+          else
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake git pkg-config \
+              libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
+              libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
+              libwayland-dev libxkbcommon-dev
+            mkdir -p "$(dirname "$cache_tar")"
+            dpkg-query -L build-essential cmake git pkg-config \
+              libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
+              libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
+              libwayland-dev libxkbcommon-dev gcc g++ make | tar -czf "$cache_tar" -T -
+          fi
 
       - name: Build and install Raylib (if needed)
         if: steps.raylib-cache.outputs.cache-hit != 'true'
