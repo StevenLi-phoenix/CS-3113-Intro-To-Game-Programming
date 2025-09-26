@@ -108,7 +108,7 @@ void update()
      * ORBIT EFFECT
      */
     gPulseTime += ORBIT_SPEED;
-    gTeardropPosition = (Vector2){ 
+    gPosition = (Vector2){ 
         RADIUS * cos(gPulseTime) + ORIGIN.x, 
         RADIUS * sin(gPulseTime) + ORIGIN.y 
     };
