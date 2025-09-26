@@ -32,7 +32,7 @@ AppStatus gAppStatus = RUNNING;
 float gScaleFactor   = BASE_SIZE,
       gAngle         = 0.0f,
       gPulseTime     = 0.0f;
-Vector2 gPosition    = ORIGIN;
+Vector2 gLinkPosition    = ORIGIN;
 
 float gOrbitLocation = 0.0f;
 
@@ -121,7 +121,7 @@ void render()
     ClearBackground(RAYWHITE);
 
     DrawPoly(
-        gPosition,
+        gLinkPosition,
         SIDES, 
         gScaleFactor, 
         gAngle, 

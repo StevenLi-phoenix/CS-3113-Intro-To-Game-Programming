@@ -1,41 +1,69 @@
-# Source and target
-SRCS = main.cpp
-TARGET = raylib_app
+# ------------------------------------------------------------
+#   Simple Makefile for a single‑source raylib program on macOS
+# ------------------------------------------------------------
 
-# OS detection (macOS = Darwin, Windows via MinGW = MINGW*)
+# ---------- 1️⃣ Sources & target ----------
+SRCS   = main.cpp                # your source file(s)
+TARGET = raylib_app              # name of the executable
+
+# ---------- 2️⃣ Detect OS ----------
 UNAME_S := $(shell uname -s)
 
-# Default values
-CXX = g++
-CXXFLAGS = -std=c++11
+# ---------- 3️⃣ Compiler & basic flags ----------
+CXX      = g++                   # or clang++ if you prefer
+CXXFLAGS = -std=c++11 -Wall -Wextra
 
-ifeq ($(UNAME_S), Darwin)
-    # macOS configuration
-    CXXFLAGS += -arch arm64 -I/opt/homebrew/opt/raylib/include
-    LIBS = -L/opt/homebrew/opt/raylib/lib -lraylib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo
-    EXEC = ./$(TARGET)
+# ---------- 4️⃣ macOS‑specific configuration ----------
+ifeq ($(UNAME_S),Darwin)
+
+    # Detect Apple‑silicon vs Intel Homebrew prefix
+    ifeq ($(shell uname -m),arm64)
+        BREW_PREFIX = /opt/homebrew
+    else
+        BREW_PREFIX = /usr/local
+    endif
+
+    # Tell the compiler where the header lives
+    CXXFLAGS += -I$(BREW_PREFIX)/include
+
+    # Tell the linker where the library lives
+    LDFLAGS  += -L$(BREW_PREFIX)/lib
+
+    # Optional: force a native arm64 binary (g++ will do this anyway)
+    CXXFLAGS += -arch arm64
+
+    # Link against raylib + the macOS frameworks it needs
+    LIBS = -lraylib \
+           -framework OpenGL \
+           -framework Cocoa \
+           -framework IOKit \
+           -framework CoreVideo
+
+    RUN_CMD = ./$(TARGET)
+
+# ---------- 5️⃣ Windows (MinGW) ----------
 else ifneq (,$(findstring MINGW,$(UNAME_S)))
-    # Windows configuration (assumes raylib is in C:/raylib)
     CXXFLAGS += -IC:/raylib/include
-    LIBS = -LC:/raylib/lib -lraylib -lopengl32 -lgdi32 -lwinmm
+    LDFLAGS  += -LC:/raylib/lib
+    LIBS = -lraylib -lopengl32 -lgdi32 -lwinmm
     TARGET := $(TARGET).exe
-    EXEC = $(TARGET)
+    RUN_CMD = $(TARGET)
+
+# ---------- 6️⃣ Linux (fallback) ----------
 else
-    # Linux fallback (WSL or native Linux)
-    CXXFLAGS +=
     LIBS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
-    EXEC = ./$(TARGET)
+    RUN_CMD = ./$(TARGET)
 endif
 
-# Build rule
+# ---------- 7️⃣ Build rule ----------
 $(TARGET): $(SRCS)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS) $(LIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 
-# Clean rule
+# ---------- 8️⃣ Convenience targets ----------
+.PHONY: clean run
+
 clean:
-	@if [ -f "$(TARGET)" ]; then rm -f $(TARGET); fi
-	@if [ -f "$(TARGET).exe" ]; then rm -f $(TARGET).exe; fi
+	rm -f $(TARGET) $(TARGET).exe
 
-# Run rule
 run: $(TARGET)
-	$(EXEC)
+	$(RUN_CMD)
