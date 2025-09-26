@@ -1,4 +1,6 @@
 #include "CS3113/cs3113.h"
+#include <iostream>
+using namespace std;
 
 enum TeardropStatus { HANGING, RELEASED };
 
@@ -123,12 +125,19 @@ void initialise()
 void processInput() 
 {
     // TODO - Get mouse position
-
+    gMousePosition = GetMousePosition();
     // TODO - Check if mouse coordinates fall within teardrop object
-
+    Vector2 mouseScale = { 0.0f, 0.0f };
+    bool withinTeardrop = isColliding(&gPosition, &gScale, &gMousePosition, &mouseScale);
     // TODO - If the player presses left mouse button within teardrop, release
     //        teardrop (i.e. use its movement vector)
-
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+    {
+        if (withinTeardrop)
+        {
+            gTeardropStatus = RELEASED;
+        }
+    }
     // to avoid faster diagonal speed
     if (GetLength(&gTeardropMovement) > 1.0f) Normalise(&gTeardropMovement);
 
@@ -144,13 +153,29 @@ void update()
     gPreviousTicks  = ticks;
 
     // TODO - Stop horizontal translation once teardrop is released
-    gPosition.x = gPosition.x + SPEED * cos(GetTime()) * 
-                          deltaTime; // moving back and forth on the X-AXIS
-
+    if (gTeardropStatus == HANGING) {
+        gPosition.x = gPosition.x + SPEED * cos(GetTime()) *  deltaTime; // moving back and forth on the X-AXIS
+    }
+   
     // TODO - Add vertical translation for teardrop
+    if (gTeardropStatus == RELEASED) {
+        gTeardropMovement.y = SPEED * deltaTime;
+    }
 
     // TODO - If teardrop is colliding with beaker, shrink the size of teardrop
     //        in a way that is FRAME-INDEPENDENT
+    if (gTeardropStatus == RELEASED && isColliding(&gPosition, &gScale, &gBeakerPosition, &gBeakerScale)) {
+        // gTeardropMovement.y = 0;
+        if (gScale.x>0) gScale.x -= deltaTime * SHRINK_RATE;
+        if (gScale.y>0) gScale.y -= deltaTime * SHRINK_RATE;
+    }
+
+    // LOG(deltaTime);
+
+    if (gPosition.y > SCREEN_HEIGHT + gScale.y/2) gTeardropMovement.y = 0;
+
+    gPosition.x += gTeardropMovement.x;
+    gPosition.y += gTeardropMovement.y;
 }
 
 void render()

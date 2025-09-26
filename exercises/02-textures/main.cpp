@@ -31,6 +31,11 @@ Vector2   gScale         = BASE_SIZE;
 
 Texture2D gTexture;
 
+float     gPreviousTicks = 0.0f;
+int       gFrameCount   = 0;
+Member    gMember       = MURDOC;
+float     gMemberAngle  = 315.0f * PI / 180.0f;
+
 // Function Declarations
 void initialise();
 void processInput();
@@ -95,12 +100,12 @@ void render()
      */
     Rectangle textureArea = {
         // top-left corner
-        static_cast<float>(round(cos(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.width / 2,
-        static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.height / 2,
+        static_cast<float>(round(cos(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.width / 2,
+        static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.height / 2,
 
         // bottom-right corner (of texture)
-        static_cast<float>(gTexture.width),
-        static_cast<float>(gTexture.height)
+        static_cast<float>(gTexture.width / 2),
+        static_cast<float>(gTexture.height / 2)
     };
 
     // Destination rectangle – centred on gPosition
