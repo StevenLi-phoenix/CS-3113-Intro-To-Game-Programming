@@ -28,7 +28,10 @@ float     gScaleFactor   = SIZE,
           gPulseTime     = 0.0f;
 Vector2   gLinkPosition      = ORIGIN;
 Vector2   gLinkScale         = BASE_SIZE;
-
+float     gPreviousTicks = 0.0f;
+int       gFrameCount   = 0;
+Member    gMember       = MURDOC;
+float     gMemberAngle  = 315.0f * PI / 180.0f;
 Texture2D gLinkTexture;
 
 // Function Declarations
@@ -95,8 +98,8 @@ void render()
      */
     Rectangle textureArea = {
         // top-left corner
-        static_cast<float>(round(cos(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.width / 2,
-        static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gTexture.height / 2,
+        static_cast<float>(round(cos(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.width / 2,
+        static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.height / 2,
 
         // bottom-right corner (of texture)
         static_cast<float>(gLinkTexture.width),
