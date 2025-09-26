@@ -28,7 +28,7 @@ AppStatus gAppStatus = RUNNING;
 float gScaleFactor   = BASE_SIZE,
       gAngle         = 0.0f,
       gPulseTime     = 0.0f;
-Vector2 gTeardropPosition    = ORIGIN;
+Vector2 gLinkPosition    = ORIGIN;
 
 float gOrbitLocation = 0.0f;
 
@@ -101,8 +101,8 @@ void update()
      * ORBIT EFFECT
      */
     gAngle      += ORBIT_SPEED;
-    gTeardropPosition.x  = ORIGIN.x + RADIUS * cos(gAngle);
-    gTeardropPosition.y  = ORIGIN.y + RADIUS * sin(gAngle);
+    gLinkPosition.x  = ORIGIN.x + RADIUS * cos(gAngle);
+    gLinkPosition.y  = ORIGIN.y + RADIUS * sin(gAngle);
 }
 
 void render()
@@ -112,7 +112,7 @@ void render()
     ClearBackground(RAYWHITE);
 
     DrawPoly(
-        gTeardropPosition,
+        gLinkPosition,
         SIDES, 
         gScaleFactor, 
         gAngle, 
