@@ -1,6 +1,6 @@
 # Continuous Integration
 
-This repository ships with a GitHub Actions workflow at `.github/workflows/make-all.yml` that runs `make` inside every tracked directory containing a Makefile on each push and pull request. Each Makefile executes in its own matrix job so failures are isolated to the directory that broke. Trigger the same behaviour locally by running `git ls-files -- '*[Mm]akefile' | xargs -I{} dirname {} | sort -u | xargs -I{} make -C {}`.
+This repository ships with a GitHub Actions workflow at `.github/workflows/make-all.yml` that runs `make` inside every tracked directory containing a Makefile on each push and pull request. Each Makefile executes in its own matrix job so failures are isolated to the directory that broke. The workflow bootstraps Raylib from source following the [official GNU/Linux instructions](https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux), so it works on the headless GitHub runners. Trigger the same behaviour locally by running `git ls-files -- '*[Mm]akefile' | xargs -I{} dirname {} | sort -u | xargs -I{} make -C {}`.
 
 ## Upstream Synchronisation
 
