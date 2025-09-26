@@ -27,8 +27,15 @@ jobs:
             exit 1
           fi
 
-          json=$(printf '%s\n' "${dirs[@]}" | jq -R . | jq -s '{directory: .}')
-          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+          json='{"directory":['
+          for dir in "${dirs[@]}"; do
+            escaped=$(printf '%s' "$dir" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            json+="\"${escaped}\","
+          done
+          json="${json%,}"
+          json+="]}"
+
+          printf 'matrix=%s\n' "$json" >> "$GITHUB_OUTPUT"
 
   build:
     needs: detect
