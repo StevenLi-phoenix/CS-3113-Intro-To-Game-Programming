@@ -32,11 +32,6 @@ jobs:
           path: ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: sync-upstream-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
-
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
@@ -69,8 +64,6 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$HOME/.local:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
           echo "CPLUS_INCLUDE_PATH=$HOME/.local/include:${CPLUS_INCLUDE_PATH:-}" >> "$GITHUB_ENV"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "CC=ccache gcc" >> "$GITHUB_ENV"
-          echo "CXX=ccache g++" >> "$GITHUB_ENV"
           export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           pkg-config --modversion raylib
 
@@ -130,6 +123,7 @@ jobs:
             make
             popd >/dev/null
           done
+
 
       - name: Push sync branch
         if: steps.merge.outputs.sync_needed == 'true'
