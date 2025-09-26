@@ -26,16 +26,16 @@ AppStatus gAppStatus     = RUNNING;
 float     gScaleFactor   = SIZE,
           gAngle         = 0.0f,
           gPulseTime     = 0.0f;
+
 Vector2   gTeardropPosition      = ORIGIN;
 Vector2   gLinkScale         = BASE_SIZE;
-
-Texture2D gLinkTexture;
 
 float     gPreviousTicks = 0.0f;
 int       gFrameCount   = 0;
 Member    gMember       = MURDOC;
 float     gMemberAngle  = 315.0f * PI / 180.0f;
 
+Texture2D gLinkTexture;
 
 // Function Declarations
 void initialise();
