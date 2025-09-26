@@ -63,7 +63,7 @@ void update()
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
 
-    gLinkPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
+    gTeardropPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
 }
 
 void render()
