@@ -37,6 +37,7 @@ Texture2D gRupeeTexture;
 
 unsigned int startTime;
 
+float gMouseSmoothOutDistance = 2.0f;
 // Function Declarations
 void initialise();
 void processInput();
@@ -68,6 +69,11 @@ bool isColliding(const Vector2 *positionA,  const Vector2 *scaleA,
     if (xDistance < 0.0f && yDistance < 0.0f) return true;
 
     return false;
+}
+
+float calculateDistance(const Vector2 *positionA, const Vector2 *positionB)
+{
+    return sqrt(pow(positionA->x - positionB->x, 2) + pow(positionA->y - positionB->y, 2));
 }
 
 void renderObject(const Texture2D *texture, const Vector2 *position, 
@@ -132,11 +138,14 @@ void processInput()
     once the object reaches a general area AROUND the mouse position.
     */
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-    {
-        if (gLinkPosition.x < gMousePosition.x) gLinkMovement.x =  1;
-        if (gLinkPosition.x > gMousePosition.x) gLinkMovement.x = -1;
-        if (gLinkPosition.y < gMousePosition.y) gLinkMovement.y =  1;
-        if (gLinkPosition.y > gMousePosition.y) gLinkMovement.y = -1;
+    {   
+        if (abs(gLinkPosition.x - gMousePosition.x) < gMouseSmoothOutDistance) gLinkMovement.x = 0;
+        else if (gLinkPosition.x < gMousePosition.x) gLinkMovement.x =  1;
+        else if (gLinkPosition.x > gMousePosition.x) gLinkMovement.x = -1;
+
+        if (abs(gLinkPosition.y - gMousePosition.y) < gMouseSmoothOutDistance) gLinkMovement.y = 0;
+        else if (gLinkPosition.y < gMousePosition.y) gLinkMovement.y =  1;
+        else if (gLinkPosition.y > gMousePosition.y) gLinkMovement.y = -1;
     }
 
     // to avoid faster diagonal speed
