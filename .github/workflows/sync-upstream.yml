@@ -5,9 +5,6 @@ on:
     - cron: '0 9 * * *'
   workflow_dispatch:
 
-env:
-  RAYLIB_VERSION: '5.0'
-
 permissions:
   contents: write
   pull-requests: write
@@ -25,49 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore Raylib cache
-        uses: actions/cache@v3
-        id: raylib-cache
-        with:
-          path: ~/.local
-          key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
-
-      - name: Cache apt packages
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: >-
-            build-essential cmake git pkg-config libasound2-dev libpulse-dev
-            libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev
-            libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
-          version: ${{ env.RAYLIB_VERSION }}
-
-      - name: Confirm build dependencies
-        run: echo "APT packages restored via cache"
-
-      - name: Build and install Raylib (if needed)
-        if: steps.raylib-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.local"
-          git clone --depth 1 --branch "${RAYLIB_VERSION}" https://github.com/raysan5/raylib.git /tmp/raylib
-          cmake -S /tmp/raylib -B /tmp/raylib/build -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_EXAMPLES=OFF -DBUILD_GAMES=OFF -DCMAKE_INSTALL_PREFIX="$HOME/.local"
-          cmake --build /tmp/raylib/build --config Release
-          cmake --install /tmp/raylib/build
-
-      - name: Configure Raylib environment
-        run: |
-          set -euo pipefail
-          echo "PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$HOME/.local/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=$HOME/.local/lib:${LIBRARY_PATH:-}" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$HOME/.local:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
-          echo "CPLUS_INCLUDE_PATH=$HOME/.local/include:${CPLUS_INCLUDE_PATH:-}" >> "$GITHUB_ENV"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-          pkg-config --modversion raylib
-
-      - name: Merge upstream main
+      - name: Merge upstream changes
         id: merge
         shell: bash
         run: |
@@ -91,7 +46,7 @@ jobs:
           if git merge "upstream/${TARGET_BRANCH}" -X theirs --no-edit; then
             echo "Merge completed without conflicts."
           else
-            echo "Merge reported conflicts; resolving by taking upstream versions."
+            echo "Merge reported conflicts; resolving by preferring upstream versions."
             while IFS= read -r path; do
               git checkout --theirs "$path"
               git add -f "$path"
@@ -103,32 +58,9 @@ jobs:
           echo "sync_branch=${SYNC_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
 
-      - name: Run make in every project directory
-        if: steps.merge.outputs.sync_needed == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          readarray -t dirs < <(git ls-files --full-name -- '*[Mm]akefile' | xargs -I{} dirname {} | sort -u)
-
-          if [ ${#dirs[@]} -eq 0 ]; then
-            echo "No Makefiles found; aborting."
-            exit 1
-          fi
-
-          for dir in "${dirs[@]}"; do
-            pushd "$dir" >/dev/null
-            echo "Running make in $dir"
-            make clean || true
-            make
-            popd >/dev/null
-          done
-
-
       - name: Push sync branch
         if: steps.merge.outputs.sync_needed == 'true'
-        run: |
-          git push --force --set-upstream origin "$SYNC_BRANCH"
+        run: git push --force --set-upstream origin "$SYNC_BRANCH"
 
       - name: Create or update pull request
         if: steps.merge.outputs.sync_needed == 'true'
