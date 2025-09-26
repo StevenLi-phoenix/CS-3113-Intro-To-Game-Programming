@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/lishuyu/Codes/CS-3113-Intro-To-Game-Programming/projects/project2/main'
+relocations:     []
+...
