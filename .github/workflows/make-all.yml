@@ -50,7 +50,17 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libraylib-dev
+          sudo apt-get install -y build-essential cmake git pkg-config \
+            libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
+            libwayland-dev libxkbcommon-dev
+
+          git clone --depth 1 https://github.com/raysan5/raylib.git /tmp/raylib
+          cmake -S /tmp/raylib -B /tmp/raylib/build -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_EXAMPLES=OFF -DBUILD_GAMES=OFF
+          cmake --build /tmp/raylib/build --config Release
+          sudo cmake --install /tmp/raylib/build
+          sudo ldconfig
 
       - name: Run make
         if: matrix.directory != '.'
