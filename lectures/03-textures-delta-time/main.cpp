@@ -11,7 +11,7 @@ constexpr float MAX_AMP       = 100.0f;
 constexpr char    BG_COLOUR[] = "#B2AAC6";
 constexpr Vector2 ORIGIN      = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 constexpr Vector2 BASE_SIZE   = { (float) SIZE, (float) SIZE };
-constexpr float PULSE_TRANSLATION_SPEED   = 100.0f;
+constexpr float PULSE_TRANSLATION_SPEED   = 0.8f;
 
 // Image owned by Nintendo — please don't sue me.
 constexpr char LINK_FP[]  = "assets/game/edelgard_square.png";
@@ -63,7 +63,7 @@ void update()
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
 
-    gTeardropPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
+    gPosition.x = ORIGIN.x + MAX_AMP * cos(gPulseTime * PULSE_TRANSLATION_SPEED);
 }
 
 void render()
