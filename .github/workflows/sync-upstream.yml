@@ -32,6 +32,11 @@ jobs:
           path: ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: sync-upstream-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
@@ -41,21 +46,8 @@ jobs:
             libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
           version: ${{ env.RAYLIB_VERSION }}
 
-      - name: Install build dependencies
-        run: |
-          set -euo pipefail
-          sudo rm -rf /var/cache/man /var/lib/man /usr/share/man
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git pkg-config \
-            libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
-            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
-            libwayland-dev libxkbcommon-dev
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: sync-upstream-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+      - name: Confirm build dependencies
+        run: echo "APT packages restored via cache"
 
       - name: Build and install Raylib (if needed)
         if: steps.raylib-cache.outputs.cache-hit != 'true'

@@ -48,35 +48,33 @@ jobs:
         uses: actions/cache@v3
         id: raylib-cache
         with:
-          path: |
-            ~/.local
+          path: ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+
+      - name: Restore compiler cache
+        id: ccache-restore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}-${{ hashFiles('**/Makefile', '**/makefile') }}
+          restore-keys: |
+            ccache-make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}-
+            ccache-make-all-${{ runner.os }}-
+
+      - name: Ensure compiler cache directory
+        run: mkdir -p ~/.cache/ccache
+
+      - name: Remove man page directories
+        run: sudo rm -rf /var/cache/man /var/lib/man /usr/share/man || true
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: >-
-            build-essential cmake git pkg-config libasound2-dev libpulse-dev
+            build-essential cmake git pkg-config ccache libasound2-dev libpulse-dev
             libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev
             libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
           version: ${{ env.RAYLIB_VERSION }}
-
-      - name: Install build prerequisites
-        if: steps.raylib-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          sudo rm -rf /var/cache/man /var/lib/man /usr/share/man
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git pkg-config \
-            libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
-            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
-            libwayland-dev libxkbcommon-dev
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
       - name: Configure compiler cache
         run: |
@@ -96,6 +94,9 @@ jobs:
           cmake --build /tmp/raylib/build --config Release
           cmake --install /tmp/raylib/build
 
+      - name: Show ccache stats (prepare)
+        run: ccache -s || true
+
   build:
     needs:
       - detect
@@ -111,36 +112,35 @@ jobs:
       - name: Restore Raylib cache
         uses: actions/cache@v3
         with:
-          path: |
-            ~/.local
+          path: ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+
+      - name: Restore compiler cache
+        id: ccache-restore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}-${{ hashFiles('**/Makefile', '**/makefile') }}
+          restore-keys: |
+            ccache-make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}-
+            ccache-make-all-${{ runner.os }}-
+
+      - name: Ensure compiler cache directory
+        run: mkdir -p ~/.cache/ccache
+
+      - name: Remove man page directories
+        run: sudo rm -rf /var/cache/man /var/lib/man /usr/share/man || true
 
       - name: Cache apt packages
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: >-
-            build-essential cmake git pkg-config libasound2-dev libpulse-dev
+            build-essential cmake git pkg-config ccache libasound2-dev libpulse-dev
             libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev
             libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
           version: ${{ env.RAYLIB_VERSION }}
 
-      - name: Install build dependencies
-        run: |
-          set -euo pipefail
-          sudo rm -rf /var/cache/man /var/lib/man /usr/share/man
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake git pkg-config \
-            libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
-            libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
-            libwayland-dev libxkbcommon-dev
-
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
-
-      - name: Configure Raylib environment
+      - name: Configure build environment
         run: |
           set -euo pipefail
           echo "PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
@@ -166,3 +166,7 @@ jobs:
           set -euo pipefail
           make clean || true
           make
+
+      - name: Show ccache stats (build)
+        if: always()
+        run: ccache -s || true
