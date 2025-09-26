@@ -26,16 +26,10 @@ AppStatus gAppStatus     = RUNNING;
 float     gScaleFactor   = SIZE,
           gAngle         = 0.0f,
           gPulseTime     = 0.0f;
+Vector2   gPosition      = ORIGIN;
+Vector2   gScale         = BASE_SIZE;
 
-Vector2   gTeardropPosition      = ORIGIN;
-Vector2   gLinkScale         = BASE_SIZE;
-
-float     gPreviousTicks = 0.0f;
-int       gFrameCount   = 0;
-Member    gMember       = MURDOC;
-float     gMemberAngle  = 315.0f * PI / 180.0f;
-
-Texture2D gLinkTexture;
+Texture2D gTexture;
 
 // Function Declarations
 void initialise();
@@ -49,7 +43,7 @@ void initialise()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Textures");
 
-    gLinkTexture = LoadTexture(ALBUM_COVER_FP);
+    gTexture = LoadTexture(ALBUM_COVER_FP);
 
     SetTargetFPS(FPS);
 }
@@ -73,7 +67,7 @@ void update()
      */
     gPulseTime += 1.0f * deltaTime;
 
-    gLinkScale = {
+    gScale = {
         BASE_SIZE.x + MAX_AMP * cos(gPulseTime),
         BASE_SIZE.y + MAX_AMP * cos(gPulseTime)
     };
@@ -105,27 +99,27 @@ void render()
         static_cast<float>(round(sin(gMemberAngle) * sqrt(2) / 2 + 0.5)) * gLinkTexture.height / 2,
 
         // bottom-right corner (of texture)
-        static_cast<float>(gLinkTexture.width),
-        static_cast<float>(gLinkTexture.height)
+        static_cast<float>(gTexture.width),
+        static_cast<float>(gTexture.height)
     };
 
     // Destination rectangle – centred on gPosition
     Rectangle destinationArea = {
-        gTeardropPosition.x,
-        gTeardropPosition.y,
-        static_cast<float>(gLinkScale.x),
-        static_cast<float>(gLinkScale.y)
+        gPosition.x,
+        gPosition.y,
+        static_cast<float>(gScale.x),
+        static_cast<float>(gScale.y)
     };
 
     // Origin inside the source texture (centre of the texture)
     Vector2 objectOrigin = {
-        static_cast<float>(gLinkScale.x) / 2.0f,
-        static_cast<float>(gLinkScale.y) / 2.0f
+        static_cast<float>(gScale.x) / 2.0f,
+        static_cast<float>(gScale.y) / 2.0f
     };
 
     // Render the texture on screen
     DrawTexturePro(
-        gLinkTexture, 
+        gTexture, 
         textureArea, 
         destinationArea, 
         objectOrigin, 
