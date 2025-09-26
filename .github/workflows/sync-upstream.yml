@@ -1,0 +1,119 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      UPSTREAM_REPO: https://github.com/sebastianromerocruz/CS-3113-Intro-To-Game-Programming.git
+      TARGET_BRANCH: main
+      SYNC_BRANCH: auto/upstream-sync
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libraylib-dev jq
+
+      - name: Merge upstream main
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch upstream "$TARGET_BRANCH"
+          git fetch origin "$TARGET_BRANCH"
+
+          if [ "$(git rev-list --count origin/${TARGET_BRANCH}..upstream/${TARGET_BRANCH})" -eq 0 ]; then
+            echo "Nothing to sync; upstream is already merged."
+            echo "sync_needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git checkout -B "$SYNC_BRANCH" "origin/${TARGET_BRANCH}"
+
+          if git merge "upstream/${TARGET_BRANCH}" -X theirs --no-edit; then
+            echo "Merge completed without conflicts."
+          else
+            echo "Merge reported conflicts; resolving by taking upstream versions."
+            while IFS= read -r path; do
+              git checkout --theirs "$path"
+              git add -f "$path"
+            done < <(git diff --name-only --diff-filter=U)
+            git commit -m "Merge upstream/${TARGET_BRANCH} into ${TARGET_BRANCH}" || true
+          fi
+
+          echo "sync_needed=true" >> "$GITHUB_OUTPUT"
+          echo "sync_branch=${SYNC_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Run make in every project directory
+        if: steps.merge.outputs.sync_needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          readarray -t dirs < <(git ls-files --full-name -- '*[Mm]akefile' | xargs -I{} dirname {} | sort -u)
+
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No Makefiles found; aborting."
+            exit 1
+          fi
+
+          for dir in "${dirs[@]}"; do
+            pushd "$dir" >/dev/null
+            echo "Running make in $dir"
+            make
+            popd >/dev/null
+          done
+
+      - name: Push sync branch
+        if: steps.merge.outputs.sync_needed == 'true'
+        run: |
+          git push --force --set-upstream origin "$SYNC_BRANCH"
+
+      - name: Create or update pull request
+        if: steps.merge.outputs.sync_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_BRANCH: ${{ steps.merge.outputs.sync_branch }}
+          TARGET_BRANCH: ${{ steps.merge.outputs.target_branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          pr_url=$(gh pr list --state open --head "$SYNC_BRANCH" --json url --jq '.[0].url')
+
+          if [ -z "$pr_url" ]; then
+            pr_url=$(gh pr create \
+              --base "$TARGET_BRANCH" \
+              --head "$SYNC_BRANCH" \
+              --title "chore: sync with upstream $TARGET_BRANCH" \
+              --body "Automated sync of upstream ${TARGET_BRANCH} into ${TARGET_BRANCH}." \
+              || true)
+          else
+            echo "Reusing existing PR: $pr_url"
+          fi
+
+          if [ -z "$pr_url" ]; then
+            echo "Failed to create or locate a pull request." >&2
+            exit 1
+          fi
+
+          echo "Pull request ready for review: $pr_url"

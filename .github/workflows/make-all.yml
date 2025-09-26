@@ -1,0 +1,55 @@
+name: Make All Projects
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Discover make targets
+        id: set-matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          readarray -t dirs < <(git ls-files --full-name -- '*[Mm]akefile' | xargs -I{} dirname {} | sort -u)
+
+          if [ ${#dirs[@]} -eq 0 ]; then
+            echo "No Makefiles found." >&2
+            exit 1
+          fi
+
+          json=$(printf '%s\n' "${dirs[@]}" | jq -R . | jq -s '{directory: .}')
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: detect
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libraylib-dev
+
+      - name: Run make
+        if: matrix.directory != '.'
+        working-directory: ${{ matrix.directory }}
+        run: make
+
+      - name: Run make (root directory)
+        if: matrix.directory == '.'
+        run: make
