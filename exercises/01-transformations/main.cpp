@@ -108,7 +108,7 @@ void update()
      * ORBIT EFFECT
      */
     gPulseTime += ORBIT_SPEED;
-    gPosition = (Vector2){ 
+    gLinkPosition = (Vector2){ 
         RADIUS * cos(gPulseTime) + ORIGIN.x, 
         RADIUS * sin(gPulseTime) + ORIGIN.y 
     };

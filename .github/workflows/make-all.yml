@@ -52,6 +52,15 @@ jobs:
             ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: >-
+            build-essential cmake git pkg-config libasound2-dev libpulse-dev
+            libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev
+            libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+          version: ${{ env.RAYLIB_VERSION }}
+
       - name: Install build prerequisites
         if: steps.raylib-cache.outputs.cache-hit != 'true'
         run: |
@@ -74,6 +83,16 @@ jobs:
             libasound2-dev libpulse-dev libx11-dev libxrandr-dev libxi-dev \
             libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
             libwayland-dev libxkbcommon-dev
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+
+      - name: Configure compiler cache
+        run: |
+          echo "CC=ccache gcc" >> "$GITHUB_ENV"
+          echo "CXX=ccache g++" >> "$GITHUB_ENV"
 
       - name: Build and install Raylib
         if: steps.raylib-cache.outputs.cache-hit != 'true'
@@ -107,6 +126,15 @@ jobs:
             ~/.local
           key: raylib-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
 
+      - name: Cache apt packages
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: >-
+            build-essential cmake git pkg-config libasound2-dev libpulse-dev
+            libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev
+            libxcursor-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+          version: ${{ env.RAYLIB_VERSION }}
+
       - name: Install build dependencies
         run: |
           set -euo pipefail
@@ -129,6 +157,11 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev \
             libwayland-dev libxkbcommon-dev
 
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: make-all-${{ runner.os }}-${{ env.RAYLIB_VERSION }}
+
       - name: Configure Raylib environment
         run: |
           set -euo pipefail
@@ -138,6 +171,8 @@ jobs:
           echo "CMAKE_PREFIX_PATH=$HOME/.local:${CMAKE_PREFIX_PATH:-}" >> "$GITHUB_ENV"
           echo "CPLUS_INCLUDE_PATH=$HOME/.local/include:${CPLUS_INCLUDE_PATH:-}" >> "$GITHUB_ENV"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "CC=ccache gcc" >> "$GITHUB_ENV"
+          echo "CXX=ccache g++" >> "$GITHUB_ENV"
 
       - name: Run make
         if: matrix.directory != '.'
