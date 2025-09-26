@@ -156,3 +156,5 @@ lectures/*
 !lectures/03-textures
 
 exercises/01-transformations/SOLUTION.cpp
+
+**/raylib_app
