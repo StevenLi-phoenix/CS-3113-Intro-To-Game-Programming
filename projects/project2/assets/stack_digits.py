@@ -2,7 +2,7 @@
 """Stack labelled sprites vertically and emit a UV mapping JSON file.
 
 Example:
-    python stack_digits.py digits_norm stacked_digits.png --json uv.json --labels 1,2,3,4,5,6,7,8,9,0
+    python stack_digits.py digits_norm stacked_digits.png --json uv.json --labels 0,1,2,3,4,5,6,7,8,9
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ def parse_size(value: str) -> Tuple[int, int]:
 
 def parse_labels(value: str | None) -> Sequence[str]:
     if value is None:
-        return list("1234567890")
+        return list("0123456789")
     labels = [item.strip() for item in value.split(",") if item.strip()]
     if not labels:
         raise SystemExit("At least one label must be provided")
@@ -69,7 +69,7 @@ def parse_args(argv: Iterable[str]) -> Config:
         "--labels",
         type=str,
         default=None,
-        help="Comma-separated list of sprite basenames in stack order (default: 1-9,0)",
+        help="Comma-separated list of sprite basenames in stack order (default: 0-9)",
     )
     parser.add_argument(
         "--size",
