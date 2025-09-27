@@ -22,7 +22,8 @@
 #include <iostream>
 using namespace std;
 
-enum PaddleStatus { PLAYER_CONTROLLED, AI_CONTROLLED };
+enum PaddleStatus { PLAYER_CONTROLLED, AI_CONTROLLED, NIGHTMARE_CONTROLLED, GOD_CONTROLLED};
+enum MouseOperate { MOUSE_DID_NOT_CLICK, MOUSE_CLICKED };
 
 // Global Constants
 constexpr int SCREEN_WIDTH = 800 * 1.5f,
@@ -31,18 +32,24 @@ constexpr int SCREEN_WIDTH = 800 * 1.5f,
 
 constexpr int PADDLE_WIDTH = 10;
 constexpr int PADDLE_HEIGHT = 100;
-constexpr int PADDLE_SPEED = 200;
+constexpr int PADDLE_SPEED = 1000;
 constexpr int PADDLE_INIT_POS_SCREEN_MARGIN = SCREEN_WIDTH / 25;
 constexpr int PADDLE_MASS = 1;
 constexpr int BALL_SPEED = 200;
-constexpr int BALL_SIZE = 100;
+constexpr float BALL_SPEED_RANDOM_OFFSET = 1.2f;
+constexpr int BALL_SIZE = 20;
 constexpr int BALL_MASS = 1;
 constexpr bool ENABLE_WIND_RESISTANCE = true;
 constexpr bool ENABLE_GROUND_FRICTION = true;
-constexpr float WIND_FRICTION = 0.001f;
-constexpr float GROUND_FRICTION = 0.1f;
+constexpr float WIND_FRICTION = 0.01f;
+constexpr float GROUND_FRICTION = 0.8f;
 constexpr float G = 9.8f;
-constexpr int BALL_COUNT = 10000;
+constexpr int BALL_COUNT = 1;
+constexpr Color PADDLE_1_COLOR = RED;
+constexpr Color PADDLE_2_COLOR = BLUE;
+constexpr bool APPLY_RANDOM_FORCE_ON_COLLISION = true;
+constexpr float AI_CONTROLLED_PADDLE_SPEED = PADDLE_SPEED;
+constexpr float AI_CONTROLLED_IGNORE_DISTANCE = 50;
 
 // Forward declarations
 class GameObject;
@@ -69,12 +76,14 @@ int gFrameCount = 0;
 static const int AVG_WINDOW = 60;
 static float fpsWindow[AVG_WINDOW] = {0};
 static int windowIndex = 0;
+Vector2 gMousePosition = GetMousePosition();
+MouseOperate gMouseOperate = MOUSE_DID_NOT_CLICK;
 
 
 // helper functions
 void updateDeltaTime();
 bool isCollidingBox(GameObject* object1, GameObject* object2);
-
+Color colorFromInt(int r, int g, int b, int a);
 // Function Declarations
 void initialise();
 void processInput();
@@ -143,7 +152,7 @@ public:
     }
     void setAngle(float angle)
     {
-        this->angle = angle;
+        this->angle = angle * PI / 180;
         this->velocity.x = getSpeed() * cos(angle);
         this->velocity.y = getSpeed() * sin(angle);
     }
@@ -188,17 +197,21 @@ public:
     }
     void draw() override
     {
-        DrawCircle(this->position.x, this->position.y, this->scale.x, this->color);
+        DrawCircle(this->position.x, this->position.y, this->scale.x / 2.0f, this->color);
     }
     void reset()
     {
+        // Color randomness based on time
+        // int timenow = (int)(GetTime() * 100);
+        // this->color = colorFromInt(timenow % 256, (timenow) % 256, (timenow) % 256, 255);
+        
         this->position = {SCREEN_WIDTH / 2 + (float)(rand() % 100 - 50), SCREEN_HEIGHT / 2 + (float)(rand() % SCREEN_HEIGHT / 2 - SCREEN_HEIGHT / 4)};
         this->angle = rand() % 120;
         if (this->angle < 60) this->angle = -120 + this->angle;
         this->angle = this->angle - 90;
-        this->angle *= PI / 180;
         this->setAngle(this->angle);
-        this->setSpeed(BALL_SPEED);
+        float random_offset = (float)(rand() % 100) * BALL_SPEED_RANDOM_OFFSET / 100.0f * BALL_SPEED;
+        this->setSpeed(BALL_SPEED + random_offset);
     }
     void handlePaddleCollision(GameObject* paddle)
     {
@@ -219,13 +232,18 @@ public:
                 this->position.x -= this->velocity.x * dt;
                 this->position.y -= this->velocity.y * dt;
             }
-
-            // check if ball is colliding with paddle because vertical
-            if (this->position.y + this->collisionBox.y / 2 > paddle->position.y + paddle->collisionBox.y / 2 && this->position.y - this->collisionBox.y / 2 < paddle->position.y - paddle->collisionBox.y / 2) {
-                this->velocity.y = -this->velocity.y; // reflect vertically
+            if (this->position.x > SCREEN_WIDTH / 2) {
+                this->velocity.x = -fabs(this->velocity.x);
+            } else {
+                this->velocity.x = fabs(this->velocity.x);
             }
-            
-            this->velocity.x = -this->velocity.x;
+            if (APPLY_RANDOM_FORCE_ON_COLLISION) {
+                if (this->velocity.x > 0) {
+                    this->applyForce({getSpeed(),  this->velocity.y ? getSpeed() : -getSpeed()});
+                } else {
+                    this->applyForce({-getSpeed(), this->velocity.y ? getSpeed() : -getSpeed()});
+                }
+            }
         }
     }
     void handleWallCollisions()
@@ -301,6 +319,15 @@ public:
             }
         }
     }
+    void reset(){
+        this->position = {this->position.x, SCREEN_HEIGHT / 2};
+        this->collisionBox = {PADDLE_WIDTH, PADDLE_HEIGHT};
+        this->velocity = {0, 0};
+        this->acceleration = {0, 0};
+        this->angle = 0;
+        this->speed = 0;
+        this->color = this->color;
+    }
 };
 
 class ScoreBoard
@@ -313,29 +340,20 @@ public:
         : position(position), scale(scale), texture(nullptr), currentScore(0), drawLeftToRight(false), digitHeight(0.0f)
     {}
 
-    void draw()
-    {
+    void draw(){
         drawScore(currentScore, drawLeftToRight);
     }
 
-    void displayScore(int scoreValue, bool leftToRight = false)
-    {
+    void displayScore(int scoreValue, bool leftToRight = false){
         currentScore = scoreValue;
         drawLeftToRight = leftToRight;
         drawScore(currentScore, drawLeftToRight);
     }
 
-    void setTexture(Texture2D* tex)
-    {
+    void setTexture(Texture2D* tex){
         texture = tex;
-        if (texture && texture->height > 0)
-        {
-            digitHeight = static_cast<float>(texture->height) / 10.0f;
-        }
-        else
-        {
-            digitHeight = 0.0f;
-        }
+        if (texture && texture->height > 0){digitHeight = static_cast<float>(texture->height) / 10.0f;}
+        else{digitHeight = 0.0f;}
     }
 
 private:
@@ -343,15 +361,13 @@ private:
     bool drawLeftToRight;
     float digitHeight;
 
-    void drawScore(int value, bool leftToRight)
-    {
+    void drawScore(int value, bool leftToRight){
         if (!texture || texture->id == 0 || digitHeight <= 0.0f) return;
 
         if (value < 0) value = 0;
         string digits = to_string(value);
 
-        for (size_t i = 0; i < digits.size(); ++i)
-        {
+        for (size_t i = 0; i < digits.size(); ++i){
             size_t digitIndex = leftToRight ? i : (digits.size() - 1 - i);
             int digit = digits[digitIndex] - '0';
             digit = max(0, min(9, digit));
@@ -369,8 +385,7 @@ private:
         }
     }
 
-    Rectangle digitSourceRect(int digit) const
-    {
+    Rectangle digitSourceRect(int digit) const {
         float y = digitHeight * static_cast<float>(digit);
         return {0.0f, y, static_cast<float>(texture->width), digitHeight};
     }
@@ -378,9 +393,8 @@ private:
 
 ScoreBoard gScoreBoard({SCREEN_WIDTH / 2 - 108.0f, 10.0f}, {72.0f, 72.0f});
 ScoreBoard gScoreBoard2({SCREEN_WIDTH / 2 + 36.0f, 10.0f}, {72.0f, 72.0f});
-Paddle gPaddle({PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, RED);
-Paddle gPaddle2({SCREEN_WIDTH - PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, BLUE);
-
+Paddle gPaddle({PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, PADDLE_1_COLOR);
+Paddle gPaddle2({SCREEN_WIDTH - PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, PADDLE_2_COLOR);
 
 // Function Definitions
 void initialise()
@@ -391,9 +405,8 @@ void initialise()
     gStackedDigitsTexture = LoadTexture("assets/stacked_digits.png");
 
     // Initialize game objects
-    for (int i = 0; i < gBallCount; ++i) {
-        Color random_color = {static_cast<unsigned char>(rand() % 256), static_cast<unsigned char>(rand() % 256), static_cast<unsigned char>(rand() % 256), 255};
-        Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, random_color);
+    for (int i = 0; i < gBallCount; ++i) { 
+        Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, colorFromInt(rand() % 256, rand() % 256, rand() % 256, 255));
         gBall.reset();
         gBalls.push_back(gBall);
     }
@@ -411,12 +424,54 @@ void processInput()
     if (WindowShouldClose()) gAppStatus = TERMINATED;
     if (IsKeyDown(KEY_ESCAPE)) gAppStatus = TERMINATED;
 
+    // Reset paddle status if R is pressed
+    if (IsKeyDown(KEY_R)) {
+        for (Paddle& paddle : gPaddles) {
+            paddle.reset();
+        }
+        for (Ball& ball : gBalls) {
+            ball.reset();
+        }
+        gLeftScore = 0;
+        gRightScore = 0;
+        gPaddleStatus = PLAYER_CONTROLLED;
+        gMouseOperate = MOUSE_DID_NOT_CLICK;
+    }
+
+    if (IsKeyDown(KEY_E)) {
+        gBalls.push_back(Ball({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, colorFromInt(rand() % 256, rand() % 256, rand() % 256, 255)));
+        gBalls.back().reset();
+        gBallCount++;
+    }
+    if (IsKeyDown(KEY_Q)) {
+        if (gBallCount > 1) {
+            gBalls.pop_back();
+            gBallCount--;
+        }
+    }
+
+
     // change paddle status if T is pressed
     if (IsKeyDown(KEY_T)) gPaddleStatus = AI_CONTROLLED;
+    if (IsKeyDown(KEY_Y)) gPaddleStatus = NIGHTMARE_CONTROLLED;
+    if (IsKeyDown(KEY_U)) gPaddleStatus = GOD_CONTROLLED;
 
     // handle paddle movement if W, S / UP, DOWN is pressed
-    if (IsKeyDown(KEY_W)) gPaddles[0].applyForce({0, -PADDLE_SPEED});
-    if (IsKeyDown(KEY_S)) gPaddles[0].applyForce({0, PADDLE_SPEED});
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) gMouseOperate = MOUSE_CLICKED;
+    if (IsKeyDown(KEY_W)) {
+        gMouseOperate = MOUSE_DID_NOT_CLICK;
+        gPaddles[0].applyForce({0, -PADDLE_SPEED});
+    }
+    if (IsKeyDown(KEY_S)) {
+        gMouseOperate = MOUSE_DID_NOT_CLICK;
+        gPaddles[0].applyForce({0, PADDLE_SPEED});
+    }
+    if (gMouseOperate == MOUSE_CLICKED){
+        gMousePosition = GetMousePosition();
+        if (gMousePosition.y > gPaddles[0].position.y) gPaddles[0].applyForce({0, PADDLE_SPEED});
+        else if (gMousePosition.y < gPaddles[0].position.y) gPaddles[0].applyForce({0, -PADDLE_SPEED});
+    }
+
     if (gPaddleStatus == PLAYER_CONTROLLED){
         if (IsKeyDown(KEY_UP)) gPaddles[1].applyForce({0, -PADDLE_SPEED});
         if (IsKeyDown(KEY_DOWN)) gPaddles[1].applyForce({0, PADDLE_SPEED});
@@ -435,10 +490,27 @@ void processInput()
                 nearestBallIdx = i;
             }
         }
-        if (gBalls[nearestBallIdx].position.y > gPaddles[1].position.y)
-            gPaddles[1].applyForce({0, PADDLE_SPEED});
-        else
-            gPaddles[1].applyForce({0, -PADDLE_SPEED});
+        if (gBalls[nearestBallIdx].position.y > gPaddles[1].position.y + AI_CONTROLLED_IGNORE_DISTANCE)
+            gPaddles[1].applyForce({0, AI_CONTROLLED_PADDLE_SPEED});
+        else if (gBalls[nearestBallIdx].position.y < gPaddles[1].position.y - AI_CONTROLLED_IGNORE_DISTANCE)
+            gPaddles[1].applyForce({0, -AI_CONTROLLED_PADDLE_SPEED});
+    } else if (gPaddleStatus == NIGHTMARE_CONTROLLED){
+        
+        int nearestBallIdx = 0;
+        float minDist = fabs(gBalls[0].position.x - gPaddles[1].position.x);
+        for (int i = 1; i < gBalls.size(); ++i) {
+            if (gBalls[i].velocity.x < 0) continue; // only consider balls moving towards the right paddle
+            float dist = fabs(gBalls[i].position.x - gPaddles[1].position.x);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestBallIdx = i;
+            }
+        }
+        gPaddles[1].position.y = gBalls[nearestBallIdx].position.y;
+    } else if (gPaddleStatus == GOD_CONTROLLED){
+        gPaddles[1].position.y = SCREEN_HEIGHT/2;
+        gPaddles[1].collisionBox.x = 40;
+        gPaddles[1].collisionBox.y = SCREEN_HEIGHT;
     }
 
 
@@ -489,8 +561,6 @@ void render()
     }
     gScoreBoard.displayScore(gLeftScore, false);
     gScoreBoard2.displayScore(gRightScore, true);
-
-    DrawFPS(10, 10);
 
     EndDrawing();
 }
@@ -548,7 +618,9 @@ void updateDeltaTime()
     }
     float onePercentLowFps = minFps;
 
-    LOG("FPS: " << fps << ", 1%% Low: " << onePercentLowFps << ", Moving Avg: " << movingAvgFps);
+    if (gFrameCount % 30 == 0) {
+        LOG("FPS: " << fps << ", 1%% Low: " << onePercentLowFps << ", Moving Avg: " << movingAvgFps << ", Frame Time: " << deltaTime);
+    }
 }
 /**
 * @brief Checks if two boxes are colliding
@@ -565,4 +637,9 @@ bool isCollidingBox(GameObject* object1, GameObject* object2)
     if (xDistance < 0.0f && yDistance < 0.0f) return true;
 
     return false;
+}
+
+Color colorFromInt(int r, int g, int b, int a)
+{
+    return {static_cast<unsigned char>(r), static_cast<unsigned char>(g), static_cast<unsigned char>(b), static_cast<unsigned char>(a)};
 }
