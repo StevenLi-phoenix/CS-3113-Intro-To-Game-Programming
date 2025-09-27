@@ -17,8 +17,12 @@
 
 #include "CS3113/cs3113.h"
 #include <math.h>
+#include <vector>
+#include <map>
 #include <iostream>
 using namespace std;
+
+enum PaddleStatus { PLAYER_CONTROLLED, AI_CONTROLLED };
 
 // Global Constants
 constexpr int SCREEN_WIDTH = 800 * 1.5f,
@@ -27,8 +31,37 @@ constexpr int SCREEN_WIDTH = 800 * 1.5f,
 
 constexpr int PADDLE_WIDTH = 10;
 constexpr int PADDLE_HEIGHT = 100;
-constexpr int PADDLE_SPEED = 100;
+constexpr int PADDLE_SPEED = 200;
 constexpr int PADDLE_INIT_POS_SCREEN_MARGIN = SCREEN_WIDTH / 25;
+constexpr int PADDLE_MASS = 1;
+constexpr int BALL_SPEED = 200;
+constexpr int BALL_SIZE = 10;
+constexpr int BALL_MASS = 1;
+constexpr bool ENABLE_WIND_RESISTANCE = true;
+constexpr bool ENABLE_GROUND_FRICTION = true;
+constexpr float WIND_FRICTION = 0.001f;
+constexpr float GROUND_FRICTION = 0.1f;
+constexpr float G = 9.8f;
+
+// TODO: Replace with actual score digit rectangles when texture is loaded.
+// For now, use placeholder rectangles for digits 0-9.
+const map<int, Rectangle> SCORE_MAP = {
+    {0, {0, 0, 10, 20}},
+    {1, {10, 0, 10, 20}},
+    {2, {20, 0, 10, 20}},
+    {3, {30, 0, 10, 20}},
+    {4, {40, 0, 10, 20}},
+    {5, {50, 0, 10, 20}},
+    {6, {60, 0, 10, 20}},
+    {7, {70, 0, 10, 20}},
+    {8, {80, 0, 10, 20}},
+    {9, {90, 0, 10, 20}},
+};
+
+// Forward declarations
+class GameObject;
+class Ball;
+class Paddle;
 
 // Global Variables
 AppStatus gAppStatus = RUNNING;
@@ -36,37 +69,49 @@ Vector2 ORIGIN = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
 Texture2D gbackground;
 float deltaTime = 0.0f;
 float gPreviousTicks = 0.0f;
+PaddleStatus gPaddleStatus = PLAYER_CONTROLLED;
+vector<Ball> gBalls;
+vector<Paddle> gPaddles;
+
+
+// helper functions
+void updateDeltaTime();
+bool isCollidingBox(GameObject* object1, GameObject* object2);
+
+// Function Declarations
+void initialise();
+void processInput();
+void update();
+void render();
+void shutdown();
 
 // GameObject class
-/**
-* @brief GameObject class
-*
-* @param position The position of the game object
-* @param velocity The velocity of the game object
-* @param acceleration The acceleration of the game object
-* @param mass The mass of the game object
-* @param scale The scale of the game object
-* @param angle The angle of the game object
-* @param texture The texture of the game object, should use in draw() override in child classes
-*/
 class GameObject
 {
 public:
     Vector2 position;
     Vector2 velocity;
     Vector2 acceleration;
+    Vector2 collisionBox;
     float mass;
     Vector2 scale;
     float angle;
+    float speed;
     Color color;
-
-    GameObject(Vector2 position, Vector2 velocity, Vector2 acceleration, float mass, Vector2 scale, float angle, Color color): position(position), velocity(velocity), acceleration(acceleration), mass(mass), scale(scale), angle(angle), color(color)
+    bool windResistance = ENABLE_WIND_RESISTANCE;
+    bool groundFriction = ENABLE_GROUND_FRICTION;
+    GameObject(Vector2 position, float mass, Vector2 scale, float angle, float speed, Color color): position(position), mass(mass), scale(scale), angle(angle), speed(speed), color(color), velocity({0, 0}), acceleration({0, 0})
     {
+        this->velocity.x = speed * cos(angle * PI / 180);
+        this->velocity.y = speed * sin(angle * PI / 180);
+        this->collisionBox = {scale.x, scale.y};
     }
     virtual ~GameObject() = default;
     virtual void draw() = 0; // pure virtual, must be overridden in child classes
     void update(float deltaTime)
     {
+        if (windResistance) applyForce(calculateWindResistanceForce());
+        if (groundFriction) applyForce(calculateGroundFrictionForce());
         velocity.x += acceleration.x * deltaTime;
         velocity.y += acceleration.y * deltaTime;
         position.x += velocity.x * deltaTime;
@@ -76,29 +121,154 @@ public:
     }
     void applyForce(Vector2 force)
     {
+        if (abs(force.x) < 0.0001f) force.x = 0.0f;
+        if (abs(force.y) < 0.0001f) force.y = 0.0f;
         acceleration.x += force.x / mass;
         acceleration.y += force.y / mass;
+    }
+    float getSpeed()
+    {
+        return sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    }
+    float getSpeedSquare()
+    {
+        return velocity.x * velocity.x + velocity.y * velocity.y;
+    }
+    void setSpeed(float speed)
+    {
+        this->speed = speed;
+        this->velocity.x = speed * cos(angle);
+        this->velocity.y = speed * sin(angle);
+    }
+    float getAngle()
+    {
+        return atan2(velocity.y, velocity.x);
+    }
+    void setAngle(float angle)
+    {
+        this->angle = angle;
+        this->velocity.x = getSpeed() * cos(angle);
+        this->velocity.y = getSpeed() * sin(angle);
+    }
+    bool collidedScreenVertical()
+    {
+        if (position.y + collisionBox.y / 2 > SCREEN_HEIGHT) return true;
+        if (position.y - collisionBox.y / 2 < 0) return true;
+        return false;
+    }
+
+    bool collidedScreenHorizontal()
+    {
+        if (position.x + collisionBox.x / 2 > SCREEN_WIDTH) return true;
+        if (position.x - collisionBox.x / 2 < 0) return true;
+        return false;
+    }
+    Vector2 calculateWindResistanceForce()
+    {
+        // F = (1/2) * C * ρ * S * V²，其中F为风阻力，C为风阻系数，ρ为空气密度，S为迎风面积，V为相对速度。这个公式也可以表示为 正面风阻力= 风阻系数× (空气密度x 车头正面投影面积x 车速平方) / 2
+        constexpr float AIR_DENSITY = 1.225 * 0.001f;
+        float angle = getAngle();
+        float windResistanceForce = (1.0f/2.0f) * WIND_FRICTION * AIR_DENSITY * scale.x * scale.y * getSpeedSquare();
+        return {windResistanceForce * cos(angle + PI), windResistanceForce * sin(angle + PI)}; // in opposite direction of velocity
+    }
+    Vector2 calculateGroundFrictionForce()
+    {
+        float angle = getAngle();
+        float groundFrictionForce = GROUND_FRICTION * mass * G;
+        if (getSpeedSquare() < 0.01f) return {0, 0};
+        return {groundFrictionForce * cos(angle + PI), groundFrictionForce * sin(angle + PI)}; // in opposite direction of velocity
     }
 };
 
 class Ball : public GameObject
 {
 public:
-    Ball(Vector2 position, Vector2 velocity, Vector2 acceleration, float mass, Vector2 scale, float angle, Color color)
-        : GameObject(position, velocity, acceleration, mass, scale, angle, color)
+    Ball(Vector2 position, float mass, Vector2 scale, float angle, float speed, Color color)
+        : GameObject(position, mass, scale, angle, speed, color)
     {
+        this->windResistance = false;
+        this->groundFriction = false;
     }
     void draw() override
     {
         DrawCircle(this->position.x, this->position.y, this->scale.x, this->color);
+    }
+    void reset()
+    {
+        this->position = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
+        this->angle = rand() % 120;
+        if (this->angle < 60) this->angle = -120 + this->angle;
+        this->angle = this->angle - 90;
+        this->angle *= PI / 180;
+        this->setAngle(this->angle);
+        this->setSpeed(BALL_SPEED);
+    }
+    void handlePaddleCollision(GameObject* paddle)
+    {
+        if (isCollidingBox(this, paddle)) {
+            // Calculate time to roll back to collision point
+            float dt = 0.0f;
+            
+            if (this->velocity.x > 0) {
+                // Ball moving right, calculate time to hit left edge of paddle
+                float distanceToCollision = (paddle->position.x - paddle->collisionBox.x / 2) - (this->position.x + this->collisionBox.x / 2);
+                dt = distanceToCollision / this->velocity.x;
+            } else if (this->velocity.x < 0) {
+                // Ball moving left, calculate time to hit right edge of paddle
+                float distanceToCollision = (this->position.x - this->collisionBox.x / 2) - (paddle->position.x + paddle->collisionBox.x / 2);
+                dt = distanceToCollision / this->velocity.x;
+            }
+            
+            // Only roll back if dt is positive and reasonable
+            if (dt > 0 && dt < deltaTime) {
+                this->position.x -= this->velocity.x * dt;
+                this->position.y -= this->velocity.y * dt;
+            }
+            
+            this->velocity.x = -this->velocity.x;
+        }
+    }
+    void handleWallCollisions()
+    {
+        // Handle vertical wall collisions (top/bottom)
+        if (collidedScreenVertical()) {
+            float dt = 0.0f;
+            
+            if (this->position.y - this->collisionBox.y / 2 < 0) {
+                // Ball hit top wall, calculate time to roll back
+                float distanceToCollision = this->collisionBox.y / 2 - this->position.y;
+                dt = distanceToCollision / this->velocity.y;
+            } else if (this->position.y + this->collisionBox.y / 2 > SCREEN_HEIGHT) {
+                // Ball hit bottom wall, calculate time to roll back
+                float distanceToCollision = this->position.y + this->collisionBox.y / 2 - SCREEN_HEIGHT;
+                dt = distanceToCollision / this->velocity.y;
+            }
+            
+            // Only roll back if dt is positive and reasonable
+            if (dt > 0 && dt < deltaTime) {
+                this->position.x -= this->velocity.x * dt;
+                this->position.y -= this->velocity.y * dt;
+            }
+            
+            this->velocity.y = -this->velocity.y;
+        }
+    }
+    void update(float deltaTime)
+    {
+        GameObject::update(deltaTime);
+        // Handle horizontal walls, when ball is fully outside of screen (left/right) - reset ball
+        if (this->position.x + this->collisionBox.x / 2 < 0 || this->position.x - this->collisionBox.x / 2 > SCREEN_WIDTH) {
+            reset();
+        }
+        
     }
 };
 
 class Paddle : public GameObject
 {
 public:
-    Paddle(Vector2 position, Vector2 velocity, Vector2 acceleration, float mass, Vector2 scale, float angle, Color color)
-        : GameObject(position, velocity, acceleration, mass, scale, angle, color)
+    Paddle(Vector2 position, float mass, Vector2 scale, float angle, float speed, Color color)
+        : GameObject(position, mass, scale, angle, speed, color)
     {
     }
     void draw() override
@@ -111,21 +281,66 @@ public:
             color
         );
     }
+    void handleVerticalCollision()
+    {
+        if (collidedScreenVertical()) {
+            this->velocity.y = 0;
+            this->acceleration.y = 0;
+            // Reposition paddle to valid position
+            if (this->position.y + this->collisionBox.y / 2 > SCREEN_HEIGHT) {
+                this->position.y = SCREEN_HEIGHT - this->collisionBox.y / 2;
+            }
+            if (this->position.y - this->collisionBox.y / 2 < 0) {
+                this->position.y = this->collisionBox.y / 2;
+            }
+        }
+    }
 };
 
-Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, {0, 0}, {0, 0}, 1, {10, 10}, 0, GREEN);
-Paddle gPaddle({PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, {0, 0}, {0, 0}, 1, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, RED);
-Paddle gPaddle2({SCREEN_WIDTH - PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, {0, 0}, {0, 0}, 1, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, BLUE);
+class ScoreBoard
+{
+public:
+    Vector2 position;
+    Vector2 scale;
+    Texture2D texture;
+    ScoreBoard(Vector2 position, Vector2 scale)
+    {
+        this->position = position;
+        this->scale = scale;
+    }
+    void draw()
+    {
 
-// helper functions
-void updateDeltaTime();
-bool isCollidingBox(GameObject* object1, GameObject* object2);
-// Function Declarations
-void initialise();
-void processInput();
-void update();
-void render();
-void shutdown();
+        DrawTexturePro(
+            texture,
+            source,
+            destination,
+            origin,
+            0,
+            WHITE
+        )
+    }
+    void displayScore(int score, bool leftToRight = false)
+    {
+        vec_score<int> score;
+        while (score > 0) {
+            score.push_back(score % 10);
+            score /= 10;
+        }
+        for (int i = 0; i < score.size(); i++) {
+            if (leftToRight) {
+                DrawTexturePro(texture, {0, 0, (float)texture.width, (float)texture.height}, {position.x + i * scale.x, position.y, scale.x, scale.y}, {0, 0}, 0, WHITE);
+            } else {
+                DrawTexturePro(texture, {0, 0, (float)texture.width, (float)texture.height}, {position.x - i * scale.x, position.y, scale.x, scale.y}, {0, 0}, 0, WHITE);
+            }
+        }
+    }
+};
+
+Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, GREEN);
+Ball gBall2({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, BLUE);
+Paddle gPaddle({PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, RED);
+Paddle gPaddle2({SCREEN_WIDTH - PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, BLUE);
 
 // Function Definitions
 void initialise()
@@ -136,21 +351,74 @@ void initialise()
 
     SetTargetFPS(FPS);
 
-    gBall.velocity.x = 100;
+    gBall.reset();
+    gBall2.reset();
+    gBalls.push_back(gBall);
+    gBalls.push_back(gBall2);
+    gPaddles.push_back(gPaddle);
+    gPaddles.push_back(gPaddle2);
 }
 
 void processInput()
 {
     if (WindowShouldClose()) gAppStatus = TERMINATED;
     if (IsKeyDown(KEY_ESCAPE)) gAppStatus = TERMINATED;
+
+    // change paddle status if T is pressed
+    if (IsKeyDown(KEY_T)) gPaddleStatus = AI_CONTROLLED;
+
+    // handle paddle movement if W, S / UP, DOWN is pressed
+    if (IsKeyDown(KEY_W)) gPaddles[0].applyForce({0, -PADDLE_SPEED});
+    if (IsKeyDown(KEY_S)) gPaddles[0].applyForce({0, PADDLE_SPEED});
+    if (gPaddleStatus == PLAYER_CONTROLLED){
+        if (IsKeyDown(KEY_UP)) gPaddles[1].applyForce({0, -PADDLE_SPEED});
+        if (IsKeyDown(KEY_DOWN)) gPaddles[1].applyForce({0, PADDLE_SPEED});
+    }
+    else if (gPaddleStatus == AI_CONTROLLED){
+        // should be PID or AI controller
+        // TODO: implement PID or AI controller
+        // Find the ball closest (in x) to the right paddle
+        int nearestBallIdx = 0;
+        float minDist = fabs(gBalls[0].position.x - gPaddles[1].position.x);
+        for (int i = 1; i < gBalls.size(); ++i) {
+            if (gBalls[i].velocity.x < 0) continue; // only consider balls moving towards the right paddle
+            float dist = fabs(gBalls[i].position.x - gPaddles[1].position.x);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestBallIdx = i;
+            }
+        }
+        if (gBalls[nearestBallIdx].position.y > gPaddles[1].position.y)
+            gPaddles[1].applyForce({0, PADDLE_SPEED});
+        else
+            gPaddles[1].applyForce({0, -PADDLE_SPEED});
+    }
+
+
 }
 
 void update() {
     updateDeltaTime();
 
-    gBall.update(deltaTime);
-    gPaddle.update(deltaTime);
-    gPaddle2.update(deltaTime);
+    // handle ball collisions
+    for (Ball& ball : gBalls) {
+        for (Paddle& paddle : gPaddles) {
+            ball.handlePaddleCollision(&paddle);
+        }
+        ball.handleWallCollisions();
+    }
+    // handle paddle collisions with screen boundaries
+    for (Paddle& paddle : gPaddles) {
+        paddle.handleVerticalCollision();
+    }
+
+    for (Ball& ball : gBalls) {
+        ball.update(deltaTime);
+    }
+    for (Paddle& paddle : gPaddles) {
+        paddle.update(deltaTime);
+    }
+
 }
 
 void render()
@@ -166,9 +434,12 @@ void render()
         0,
         WHITE
     );
-    gBall.draw();
-    gPaddle.draw();
-    gPaddle2.draw();
+    for (Ball& ball : gBalls) {
+        ball.draw();
+    }
+    for (Paddle& paddle : gPaddles) {
+        paddle.draw();
+    }
 
     DrawFPS(10, 10);
 
@@ -212,8 +483,8 @@ void updateDeltaTime()
 */
 bool isCollidingBox(GameObject* object1, GameObject* object2)
 {
-    float xDistance = fabs(object1->position.x - object2->position.x) - ((object1->scale.x + object2->scale.x) / 2.0f);
-    float yDistance = fabs(object1->position.y - object2->position.y) - ((object1->scale.y + object2->scale.y) / 2.0f);
+    float xDistance = fabs(object1->position.x - object2->position.x) - ((object1->collisionBox.x + object2->collisionBox.x) / 2.0f);
+    float yDistance = fabs(object1->position.y - object2->position.y) - ((object1->collisionBox.y + object2->collisionBox.y) / 2.0f);
 
     if (xDistance < 0.0f && yDistance < 0.0f) return true;
 
