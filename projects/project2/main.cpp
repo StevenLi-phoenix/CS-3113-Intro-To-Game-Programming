@@ -18,7 +18,7 @@
 #include "CS3113/cs3113.h"
 #include <math.h>
 #include <vector>
-#include <map>
+#include <string>
 #include <iostream>
 using namespace std;
 
@@ -35,28 +35,14 @@ constexpr int PADDLE_SPEED = 200;
 constexpr int PADDLE_INIT_POS_SCREEN_MARGIN = SCREEN_WIDTH / 25;
 constexpr int PADDLE_MASS = 1;
 constexpr int BALL_SPEED = 200;
-constexpr int BALL_SIZE = 10;
+constexpr int BALL_SIZE = 100;
 constexpr int BALL_MASS = 1;
 constexpr bool ENABLE_WIND_RESISTANCE = true;
 constexpr bool ENABLE_GROUND_FRICTION = true;
 constexpr float WIND_FRICTION = 0.001f;
 constexpr float GROUND_FRICTION = 0.1f;
 constexpr float G = 9.8f;
-
-// TODO: Replace with actual score digit rectangles when texture is loaded.
-// For now, use placeholder rectangles for digits 0-9.
-const map<int, Rectangle> SCORE_MAP = {
-    {0, {0, 0, 10, 20}},
-    {1, {10, 0, 10, 20}},
-    {2, {20, 0, 10, 20}},
-    {3, {30, 0, 10, 20}},
-    {4, {40, 0, 10, 20}},
-    {5, {50, 0, 10, 20}},
-    {6, {60, 0, 10, 20}},
-    {7, {70, 0, 10, 20}},
-    {8, {80, 0, 10, 20}},
-    {9, {90, 0, 10, 20}},
-};
+constexpr int BALL_COUNT = 10000;
 
 // Forward declarations
 class GameObject;
@@ -67,11 +53,22 @@ class Paddle;
 AppStatus gAppStatus = RUNNING;
 Vector2 ORIGIN = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
 Texture2D gbackground;
+Texture2D gStackedDigitsTexture;
 float deltaTime = 0.0f;
 float gPreviousTicks = 0.0f;
 PaddleStatus gPaddleStatus = PLAYER_CONTROLLED;
 vector<Ball> gBalls;
 vector<Paddle> gPaddles;
+int gLeftScore = 0;
+int gRightScore = 0;
+int gBallCount = BALL_COUNT;
+// FPS tracking variables
+static float fps = 0.0f;
+static float fpsSum = 0.0f;
+int gFrameCount = 0;
+static const int AVG_WINDOW = 60;
+static float fpsWindow[AVG_WINDOW] = {0};
+static int windowIndex = 0;
 
 
 // helper functions
@@ -195,7 +192,7 @@ public:
     }
     void reset()
     {
-        this->position = {SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2};
+        this->position = {SCREEN_WIDTH / 2 + (float)(rand() % 100 - 50), SCREEN_HEIGHT / 2 + (float)(rand() % SCREEN_HEIGHT / 2 - SCREEN_HEIGHT / 4)};
         this->angle = rand() % 120;
         if (this->angle < 60) this->angle = -120 + this->angle;
         this->angle = this->angle - 90;
@@ -210,11 +207,9 @@ public:
             float dt = 0.0f;
             
             if (this->velocity.x > 0) {
-                // Ball moving right, calculate time to hit left edge of paddle
                 float distanceToCollision = (paddle->position.x - paddle->collisionBox.x / 2) - (this->position.x + this->collisionBox.x / 2);
                 dt = distanceToCollision / this->velocity.x;
             } else if (this->velocity.x < 0) {
-                // Ball moving left, calculate time to hit right edge of paddle
                 float distanceToCollision = (this->position.x - this->collisionBox.x / 2) - (paddle->position.x + paddle->collisionBox.x / 2);
                 dt = distanceToCollision / this->velocity.x;
             }
@@ -223,6 +218,11 @@ public:
             if (dt > 0 && dt < deltaTime) {
                 this->position.x -= this->velocity.x * dt;
                 this->position.y -= this->velocity.y * dt;
+            }
+
+            // check if ball is colliding with paddle because vertical
+            if (this->position.y + this->collisionBox.y / 2 > paddle->position.y + paddle->collisionBox.y / 2 && this->position.y - this->collisionBox.y / 2 < paddle->position.y - paddle->collisionBox.y / 2) {
+                this->velocity.y = -this->velocity.y; // reflect vertically
             }
             
             this->velocity.x = -this->velocity.x;
@@ -258,6 +258,12 @@ public:
         GameObject::update(deltaTime);
         // Handle horizontal walls, when ball is fully outside of screen (left/right) - reset ball
         if (this->position.x + this->collisionBox.x / 2 < 0 || this->position.x - this->collisionBox.x / 2 > SCREEN_WIDTH) {
+            if (this->position.x < SCREEN_WIDTH / 2) {
+                gRightScore++;
+            }
+            else {
+                gLeftScore++;
+            }
             reset();
         }
         
@@ -302,45 +308,79 @@ class ScoreBoard
 public:
     Vector2 position;
     Vector2 scale;
-    Texture2D texture;
+    Texture2D* texture;
     ScoreBoard(Vector2 position, Vector2 scale)
-    {
-        this->position = position;
-        this->scale = scale;
-    }
+        : position(position), scale(scale), texture(nullptr), currentScore(0), drawLeftToRight(false), digitHeight(0.0f)
+    {}
+
     void draw()
     {
-
-        DrawTexturePro(
-            texture,
-            source,
-            destination,
-            origin,
-            0,
-            WHITE
-        )
+        drawScore(currentScore, drawLeftToRight);
     }
-    void displayScore(int score, bool leftToRight = false)
+
+    void displayScore(int scoreValue, bool leftToRight = false)
     {
-        vec_score<int> score;
-        while (score > 0) {
-            score.push_back(score % 10);
-            score /= 10;
+        currentScore = scoreValue;
+        drawLeftToRight = leftToRight;
+        drawScore(currentScore, drawLeftToRight);
+    }
+
+    void setTexture(Texture2D* tex)
+    {
+        texture = tex;
+        if (texture && texture->height > 0)
+        {
+            digitHeight = static_cast<float>(texture->height) / 10.0f;
         }
-        for (int i = 0; i < score.size(); i++) {
-            if (leftToRight) {
-                DrawTexturePro(texture, {0, 0, (float)texture.width, (float)texture.height}, {position.x + i * scale.x, position.y, scale.x, scale.y}, {0, 0}, 0, WHITE);
-            } else {
-                DrawTexturePro(texture, {0, 0, (float)texture.width, (float)texture.height}, {position.x - i * scale.x, position.y, scale.x, scale.y}, {0, 0}, 0, WHITE);
-            }
+        else
+        {
+            digitHeight = 0.0f;
         }
+    }
+
+private:
+    int currentScore;
+    bool drawLeftToRight;
+    float digitHeight;
+
+    void drawScore(int value, bool leftToRight)
+    {
+        if (!texture || texture->id == 0 || digitHeight <= 0.0f) return;
+
+        if (value < 0) value = 0;
+        string digits = to_string(value);
+
+        for (size_t i = 0; i < digits.size(); ++i)
+        {
+            size_t digitIndex = leftToRight ? i : (digits.size() - 1 - i);
+            int digit = digits[digitIndex] - '0';
+            digit = max(0, min(9, digit));
+
+            Rectangle source = digitSourceRect(digit);
+            Rectangle destination = {
+                leftToRight ? position.x + scale.x * static_cast<float>(i)
+                            : position.x - scale.x * static_cast<float>(i),
+                position.y,
+                scale.x,
+                scale.y
+            };
+
+            DrawTexturePro(*texture, source, destination, {0.0f, 0.0f}, 0.0f, WHITE);
+        }
+    }
+
+    Rectangle digitSourceRect(int digit) const
+    {
+        float y = digitHeight * static_cast<float>(digit);
+        return {0.0f, y, static_cast<float>(texture->width), digitHeight};
     }
 };
 
-Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, GREEN);
-Ball gBall2({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, BLUE);
+ScoreBoard gScoreBoard({SCREEN_WIDTH / 2 - 108.0f, 10.0f}, {72.0f, 72.0f});
+ScoreBoard gScoreBoard2({SCREEN_WIDTH / 2 + 36.0f, 10.0f}, {72.0f, 72.0f});
 Paddle gPaddle({PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, RED);
 Paddle gPaddle2({SCREEN_WIDTH - PADDLE_INIT_POS_SCREEN_MARGIN, SCREEN_HEIGHT / 2}, PADDLE_MASS, {PADDLE_WIDTH, PADDLE_HEIGHT}, 0, 0, BLUE);
+
 
 // Function Definitions
 void initialise()
@@ -348,13 +388,20 @@ void initialise()
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Project 2: Pong Game");
 
     gbackground = LoadTexture("assets/pong_background.png");
+    gStackedDigitsTexture = LoadTexture("assets/stacked_digits.png");
+
+    // Initialize game objects
+    for (int i = 0; i < gBallCount; ++i) {
+        Color random_color = {static_cast<unsigned char>(rand() % 256), static_cast<unsigned char>(rand() % 256), static_cast<unsigned char>(rand() % 256), 255};
+        Ball gBall({SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, BALL_MASS, {BALL_SIZE, BALL_SIZE}, 0, 0, random_color);
+        gBall.reset();
+        gBalls.push_back(gBall);
+    }
+    gScoreBoard.setTexture(&gStackedDigitsTexture);
+    gScoreBoard2.setTexture(&gStackedDigitsTexture);
 
     SetTargetFPS(FPS);
 
-    gBall.reset();
-    gBall2.reset();
-    gBalls.push_back(gBall);
-    gBalls.push_back(gBall2);
     gPaddles.push_back(gPaddle);
     gPaddles.push_back(gPaddle2);
 }
@@ -440,6 +487,8 @@ void render()
     for (Paddle& paddle : gPaddles) {
         paddle.draw();
     }
+    gScoreBoard.displayScore(gLeftScore, false);
+    gScoreBoard2.displayScore(gRightScore, true);
 
     DrawFPS(10, 10);
 
@@ -448,6 +497,8 @@ void render()
 
 void shutdown()
 {
+    UnloadTexture(gbackground);
+    UnloadTexture(gStackedDigitsTexture);
     CloseWindow(); // Close window and OpenGL context
 }
 
@@ -473,6 +524,31 @@ void updateDeltaTime()
     float ticks = (float) GetTime();
     deltaTime = ticks - gPreviousTicks;
     gPreviousTicks = ticks;
+
+    // Calculate current FPS
+    if (deltaTime > 0.0f) {
+        gFrameCount++;
+        fps = 1.0f / deltaTime;
+    } else {
+        fps = 0.0f;
+    }
+
+    fpsWindow[windowIndex] = fps;
+    windowIndex = (windowIndex + 1) % AVG_WINDOW;
+
+    fpsSum = 0.0f;
+    for (int i = 0; i < AVG_WINDOW; ++i) {
+        fpsSum += fpsWindow[i];
+    }
+    float movingAvgFps = fpsSum / AVG_WINDOW;
+
+    float minFps = fpsWindow[0];
+    for (int i = 1; i < AVG_WINDOW; ++i) {
+        if (fpsWindow[i] < minFps) minFps = fpsWindow[i];
+    }
+    float onePercentLowFps = minFps;
+
+    LOG("FPS: " << fps << ", 1%% Low: " << onePercentLowFps << ", Moving Avg: " << movingAvgFps);
 }
 /**
 * @brief Checks if two boxes are colliding
