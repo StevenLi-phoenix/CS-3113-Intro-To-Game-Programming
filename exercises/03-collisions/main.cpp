@@ -26,7 +26,7 @@ AppStatus gAppStatus     = RUNNING;
 float     gAngle         = 0.0f,
           gPreviousTicks = 0.0f;
 
-Vector2 gTeardropPosition = TEARDROP_INIT_POS,
+Vector2 gPosition = TEARDROP_INIT_POS,
         gTeardropMovement = { 0.0f, 0.0f },
         gScale    = TEARDROP_BASE_SIZE,
 
@@ -153,8 +153,8 @@ void update()
     gPreviousTicks  = ticks;
 
     // TODO - Stop horizontal translation once teardrop is released
-    gTeardropPosition.x = gTeardropPosition.x + SPEED * cos(GetTime()) * 
-                          deltaTime; // moving back and forth on the X-AXIS
+    gPosition.x = gPosition.x + SPEED * cos(GetTime()) * 
+                  deltaTime; // moving back and forth on the X-AXIS
 
     // TODO - Add vertical translation for teardrop
     if (gTeardropStatus == RELEASED) {
@@ -183,7 +183,7 @@ void render()
     ClearBackground(RAYWHITE);
 
     // render teardrop
-    renderObject(&gTexture, &gTeardropPosition, &gScale);
+    renderObject(&gTexture, &gPosition, &gScale);
 
     // render the rupee
     renderObject(&gBeakerTexture, &gBeakerPosition, &gBeakerScale);
