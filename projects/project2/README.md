@@ -1,12 +1,12 @@
 # Project 2 - Pong
 
-A Raylib-powered take on Pong built for CS-3113. The project started as the classic two-paddle game and grew into a sandbox packed with 100 simultaneous balls, multiple paddle control modes, and a textured scoreboard driven by a custom digits pipeline.
+A Raylib-powered take on Pong built for CS-3113. The game focuses on the course requirements: textured paddles/ball, a single-player toggle, configurable ball counts (capped at three), and a clean game-over flow once someone scores.
 
 ## Features
-- 100-ball chaos mode with per-ball physics (wind resistance, friction toggles, rollback fixes on collisions).
-- Keyboard, mouse-follow, and three AI difficulties for the right paddle (standard AI, nightmare lock-on, and unbeatable "god" mode).
-- Textured scoreboard that reads from `assets/stacked_digits.png`/`stacked_digits.json` so digits render crisply at 72x72.
-- Configurable asset pipeline scripts to remove noisy backgrounds, split digits, and rebuild the atlas used by the scoreboard.
+- Textured paddles, balls, and scoreboards rendered from the asset pipeline provided in this repository.
+- Keyboard, mouse-follow, and three AI styles (standard, nightmare, and "god" mode) for the right paddle when single-player is toggled.
+- Number keys `1`–`3` (and Q/E quick adjust) modify the active ball count on the fly while respecting the three-ball cap.
+- Start and game-over screens that bracket the main gameplay loop; play pauses automatically once either side scores the winning point.
 - Cross-platform build via `make` with automatic Raylib detection through `pkg-config`.
 
 ## Controls
@@ -16,6 +16,10 @@ A Raylib-powered take on Pong built for CS-3113. The project started as the clas
 - `T`: Switch the right paddle to assisted AI.
 - `Y`: Switch the right paddle to nightmare AI (sticks to the incoming ball).
 - `U`: Switch the right paddle to god mode (full-height blocker).
+- `1`, `2`, `3`: Set the active ball count directly (top-row or numpad).
+- `Q`, `E`: Nudge the ball count down/up (capped between one and three).
+- `R`: Reset paddles, balls, and scores while staying in the current game state.
+- `Enter`: Advance the start screen or restart from the game-over screen.
 - `Esc`: Quit the game.
 
 ## Build & Run
@@ -55,6 +59,16 @@ All asset scripts live in `assets/` and require Python 3 plus Pillow (`python3 -
    Generates the sprite sheet consumed by the C++ `ScoreBoard`, plus a JSON file describing per-digit UV rectangles for reference.
 
 Adjust `--labels` or `--size` if you introduce new glyphs; the scoreboard assumes exactly ten frames stacked top-to-bottom, ordered `0` through `9`.
+
+### Game-over Sheet Utility
+
+Use `assets/stack_gameover.py` to standardise each `gameover_*.png` to a common size and stack them vertically into a sprite sheet used by the endgame screen:
+
+```bash
+python assets/stack_gameover.py --pattern "gameover_*.png" --output gameover_stacked.png
+```
+
+The script resizes each source frame to the largest width/height found, so the resulting sheet has uniform rows.
 
 ## Project Layout
 - `main.cpp`: Game loop, physics, paddle AI, and scoreboard rendering.
