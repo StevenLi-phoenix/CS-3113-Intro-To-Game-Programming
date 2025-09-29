@@ -153,8 +153,9 @@ void update()
     gPreviousTicks  = ticks;
 
     // TODO - Stop horizontal translation once teardrop is released
-    gPosition.x = gPosition.x + SPEED * cos(GetTime()) * 
-                  deltaTime; // moving back and forth on the X-AXIS
+    if (gTeardropStatus == HANGING) {
+        gPosition.x = gPosition.x + SPEED * cos(GetTime()) * deltaTime; // moving back and forth on the X-AXIS
+    }
 
     // TODO - Add vertical translation for teardrop
     if (gTeardropStatus == RELEASED) {

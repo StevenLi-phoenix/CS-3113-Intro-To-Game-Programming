@@ -138,11 +138,14 @@ void processInput()
     once the object reaches a general area AROUND the mouse position.
     */
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-    {
-        if (gPosition.x < gMousePosition.x) gMovement.x =  1;
-        if (gPosition.x > gMousePosition.x) gMovement.x = -1;
-        if (gPosition.y < gMousePosition.y) gMovement.y =  1;
-        if (gPosition.y > gMousePosition.y) gMovement.y = -1;
+    {   
+        if (abs(gPosition.x - gMousePosition.x) < gMouseSmoothOutDistance) gMovement.x = 0;
+        else if (gPosition.x < gMousePosition.x) gMovement.x =  1;
+        else if (gPosition.x > gMousePosition.x) gMovement.x = -1;
+
+        if (abs(gPosition.y - gMousePosition.y) < gMouseSmoothOutDistance) gMovement.y = 0;
+        else if (gPosition.y < gMousePosition.y) gMovement.y =  1;
+        else if (gPosition.y > gMousePosition.y) gMovement.y = -1;
     }
 
     // to avoid faster diagonal speed
