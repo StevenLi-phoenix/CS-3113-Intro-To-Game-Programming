@@ -108,7 +108,11 @@ void render()
     EndDrawing();
 }
 
-void shutdown() { CloseWindow(); }
+void shutdown() 
+{ 
+    CloseWindow(); 
+    UnloadTexture(gTexture);
+}
 
 int main(void)
 {
