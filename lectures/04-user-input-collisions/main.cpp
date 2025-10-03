@@ -32,7 +32,7 @@ Vector2 gPosition  = INIT_POS,
 
         gMousePosition = GetMousePosition();
 
-Texture2D gTexture;
+Texture2D gLinkTexture;
 Texture2D gRupeeTexture;
 
 unsigned int startTime;
@@ -117,7 +117,7 @@ void initialise()
 
     startTime = time(NULL);
 
-    gTexture  = LoadTexture(LINK_FP);
+    gLinkTexture  = LoadTexture(LINK_FP);
     gRupeeTexture = LoadTexture(RUPEE_FP);
 
     SetTargetFPS(FPS);
@@ -180,7 +180,7 @@ void render()
     ClearBackground(ColorFromHex(BG_COLOUR));
 
     // Render Link
-    renderObject(&gTexture, &gPosition, &gScale);
+    renderObject(&gLinkTexture, &gPosition, &gScale);
 
     // Render the rupee
     renderObject(&gRupeeTexture, &gRupeePosition, &gRupeeScale);
@@ -191,7 +191,7 @@ void render()
 void shutdown() 
 { 
     CloseWindow(); 
-    UnloadTexture(gTexture);
+    UnloadTexture(gLinkTexture);
     UnloadTexture(gRupeeTexture);
 }
 
