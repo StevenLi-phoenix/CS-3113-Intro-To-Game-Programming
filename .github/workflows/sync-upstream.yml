@@ -42,7 +42,26 @@ jobs:
           git fetch origin "${TARGET_BRANCH}"
           git fetch origin "${SYNC_BRANCH}" || true
 
+      - name: Evaluate upstream delta
+        id: delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          ahead=$(git rev-list --count "origin/${TARGET_BRANCH}".."${UPSTREAM_REMOTE}/${UPSTREAM_BRANCH}")
+          if [ "$ahead" -eq 0 ]; then
+            echo "Upstream is not ahead; skipping sync." >&2
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Upstream ahead by ${ahead} commit(s)." >&2
+            echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upstream already synced
+        if: steps.delta.outputs.needs_sync != 'true'
+        run: echo "No upstream updates detected."
+
       - name: Remove existing sync branch
+        if: steps.delta.outputs.needs_sync == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -57,7 +76,24 @@ jobs:
             echo "Removed local branch ${SYNC_BRANCH}."
           fi
 
+      - name: Prepare sync branch
+        if: steps.delta.outputs.needs_sync == 'true'
+        id: prepare_merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${SYNC_BRANCH}" "origin/${TARGET_BRANCH}"
+          if git merge "${UPSTREAM_REMOTE}/${UPSTREAM_BRANCH}" --no-commit --no-ff; then
+            echo "merge_state=clean" >> "$GITHUB_OUTPUT"
+          else
+            echo "merge_state=conflicts" >> "$GITHUB_OUTPUT"
+            echo "Merge has conflicts; leaving resolution to Claude." >&2
+          fi
+
       - name: Run Claude Sync
+        if: steps.delta.outputs.needs_sync == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -70,6 +106,7 @@ jobs:
             - Source branch: "${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}"
             - Working sync branch (push target): "${{ env.SYNC_BRANCH }}" on origin
             - Base branch for PR: "${{ env.TARGET_BRANCH }}"
+            - Preliminary merge status: `${{ steps.prepare_merge.outputs.merge_state }}` (merge applied via `git merge --no-commit --no-ff`)
 
             Guiding principles:
             - Treat `origin/${{ env.TARGET_BRANCH }}` as the canonical record of completed coursework. Do not overwrite solved exercises, removed TODOs, or other deliberate local edits with upstream placeholders.
@@ -86,14 +123,15 @@ jobs:
                - Start from the local version (checkout `origin/${{ env.TARGET_BRANCH }}`) and integrate upstream edits manually (`git merge --no-commit`, `git checkout --ours/--theirs`, or manual editing) so local progress is preserved.
                - Use `git cherry-pick`, `git apply`, or direct edits to bring over upstream additions without reintroducing undone TODOs.
                - When upstream updates an existing solution (e.g., adds resource cleanup), weave that change into the local implementation rather than wholesale replacing the file.
-            5. Rebuild `${{ env.SYNC_BRANCH }}` from `origin/${{ env.TARGET_BRANCH }}`, commit the curated changes, and force-push the branch.
-            6. Prepare reviewer-friendly release notes that call out retained local work and newly imported upstream content.
-            7. Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise **create one**.
-            8. After committing, run `git status --short` to confirm a clean working tree and `git rev-list origin/${{ env.TARGET_BRANCH }}..HEAD` to verify the branch contains new commits. If no commits remain, state that no PR is required and exit.
-            9. Force-push `${{ env.SYNC_BRANCH }}` to origin (`git push --force-with-lease origin ${{ env.SYNC_BRANCH }}`).
-            10. Ensure a PR exists: use `gh pr view --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and if none is found create one with `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and a body summarizing what you merged, what you left out, and any manual adjustments.
-            11. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
-            12. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
+            5. Finalize the in-progress merge: resolve conflicts (if any), ensure each file retains the completed coursework while layering in upstream improvements, and commit with a clear message (e.g., "Sync upstream updates").
+            6. If additional upstream commits or cherry-picks are appropriate, apply them now.
+            7. Prepare reviewer-friendly release notes that call out retained local work and newly imported upstream content.
+            8. Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise **create one**.
+            9. After committing, run `git status --short` to confirm a clean working tree and `git rev-list origin/${{ env.TARGET_BRANCH }}..HEAD` to verify the branch contains new commits. If no commits remain, state that no PR is required and exit.
+            10. Force-push `${{ env.SYNC_BRANCH }}` to origin (`git push --force-with-lease origin ${{ env.SYNC_BRANCH }}`).
+            11. Ensure a PR exists: use `gh pr view --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and if none is found create one with `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and a body summarizing what you merged, what you left out, and any manual adjustments.
+            12. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
+            13. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
 
             Conclude with a concise summary of your actions and include the PR URL when applicable.
           claude_args: >-
