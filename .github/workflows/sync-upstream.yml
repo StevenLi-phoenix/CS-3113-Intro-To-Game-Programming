@@ -42,6 +42,21 @@ jobs:
           git fetch origin "${TARGET_BRANCH}"
           git fetch origin "${SYNC_BRANCH}" || true
 
+      - name: Remove existing sync branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --heads origin "${SYNC_BRANCH}" | grep -q "${SYNC_BRANCH}"; then
+            git push origin --delete "${SYNC_BRANCH}" || true
+            echo "Removed remote branch ${SYNC_BRANCH}."
+          else
+            echo "No remote ${SYNC_BRANCH} branch to remove."
+          fi
+          if git show-ref --verify --quiet "refs/heads/${SYNC_BRANCH}"; then
+            git branch -D "${SYNC_BRANCH}"
+            echo "Removed local branch ${SYNC_BRANCH}."
+          fi
+
       - name: Run Claude Sync
         uses: anthropics/claude-code-action@v1
         with:
@@ -56,19 +71,27 @@ jobs:
             - Working sync branch (push target): "${{ env.SYNC_BRANCH }}" on origin
             - Base branch for PR: "${{ env.TARGET_BRANCH }}"
 
+            Guiding principles:
+            - Treat `origin/${{ env.TARGET_BRANCH }}` as the canonical record of completed coursework. Do not overwrite solved exercises, removed TODOs, or other deliberate local edits with upstream placeholders.
+            - Pull in upstream additions such as new assignments, assets, or instructor fixes that complement the existing solutions.
+            - When both sides modify the same file, start from the local version and carefully splice in upstream improvements (e.g., added cleanup calls) without regressing the finished work.
+            - Prefer additive merges: keep local solutions intact, then append or adapt upstream changes so the resulting file reflects both the student's progress and the new material.
+            - Document any trade-offs or manual decisions in the PR body so reviewers understand what stayed local and what came from upstream.
+
             Objectives:
             1. Make sure local refs for `${{ env.TARGET_BRANCH }}`, `${{ env.SYNC_BRANCH }}`, and `${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}` are up to date (`git fetch` as needed).
             2. Review the diff between `${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}` and `origin/${{ env.TARGET_BRANCH }}`. Ignore generated artifacts such as `*.o`, `*.log`, `build/`, or `bin/` directories.
-            3. Decide which upstream changes should land in `${{ env.TARGET_BRANCH }}`. If none are appropriate, explain why and stop without opening a PR.
-            4. When changes are worth carrying forward:
-               - Create or reset a local `${{ env.SYNC_BRANCH }}` branch based on `origin/${{ env.TARGET_BRANCH }}`.
-               - Selectively merge or cherry-pick upstream changes so `${{ env.SYNC_BRANCH }}` only contains the approved files.
-               - Commit the results and force-push `${{ env.SYNC_BRANCH }}` to origin.
-               - Prepare reviewer-friendly release notes.
-               - Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise create one.
-               - Use `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` with a concise title and a body summarizing what you merged and why.
-            5. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
-            6. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
+            3. Identify upstream changes that enrich the course (new exercises, assets, clarifications, bug fixes). Skip anything that would revert completed work unless an upstream fix is required to keep the solution correct.
+            4. For each candidate file:
+               - Start from the local version (checkout `origin/${{ env.TARGET_BRANCH }}`) and integrate upstream edits manually (`git merge --no-commit`, `git checkout --ours/--theirs`, or manual editing) so local progress is preserved.
+               - Use `git cherry-pick`, `git apply`, or direct edits to bring over upstream additions without reintroducing undone TODOs.
+               - When upstream updates an existing solution (e.g., adds resource cleanup), weave that change into the local implementation rather than wholesale replacing the file.
+            5. Rebuild `${{ env.SYNC_BRANCH }}` from `origin/${{ env.TARGET_BRANCH }}`, commit the curated changes, and force-push the branch.
+            6. Prepare reviewer-friendly release notes that call out retained local work and newly imported upstream content.
+            7. Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise **create one**.
+            8. Use `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` with a concise title and a body summarizing what you merged, what you left out, and any manual adjustments.
+            9. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
+            10. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
 
             Conclude with a concise summary of your actions and include the PR URL when applicable.
           claude_args: >-
