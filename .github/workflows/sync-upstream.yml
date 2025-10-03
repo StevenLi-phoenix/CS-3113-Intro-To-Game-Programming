@@ -89,10 +89,12 @@ jobs:
             5. Rebuild `${{ env.SYNC_BRANCH }}` from `origin/${{ env.TARGET_BRANCH }}`, commit the curated changes, and force-push the branch.
             6. Prepare reviewer-friendly release notes that call out retained local work and newly imported upstream content.
             7. Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise **create one**.
-            8. Use `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` with a concise title and a body summarizing what you merged, what you left out, and any manual adjustments.
-            9. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
-            10. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
+            8. After committing, run `git status --short` to confirm a clean working tree and `git rev-list origin/${{ env.TARGET_BRANCH }}..HEAD` to verify the branch contains new commits. If no commits remain, state that no PR is required and exit.
+            9. Force-push `${{ env.SYNC_BRANCH }}` to origin (`git push --force-with-lease origin ${{ env.SYNC_BRANCH }}`).
+            10. Ensure a PR exists: use `gh pr view --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and if none is found create one with `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` and a body summarizing what you merged, what you left out, and any manual adjustments.
+            11. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
+            12. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
 
             Conclude with a concise summary of your actions and include the PR URL when applicable.
           claude_args: >-
-            --allowed-tools "Bash(git fetch:*),Bash(git remote add:*),Bash(git remote set-url:*),Bash(git remote -v),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git switch:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git merge:*),Bash(git cherry-pick:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
+            --allowed-tools "Bash(git fetch:*),Bash(git remote add:*),Bash(git remote set-url:*),Bash(git remote -v),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git switch:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git merge:*),Bash(git cherry-pick:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(git rev-list:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
