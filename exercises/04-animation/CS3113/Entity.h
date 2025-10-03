@@ -1,7 +1,13 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
+#include <vector>
+#include <map>
+#include <string>
+#include <iostream>
 #include "cs3113.h"
+
+using namespace std;
 
 enum Direction  { LEFT, UP, RIGHT, DOWN }; // For walking
 enum WitchState { IDLE, POWERING_UP     };
@@ -42,7 +48,7 @@ public:
     static const int IDLE_ROWS           = 6;
     static const int POWERING_UP_ROWS    = 8;
 
-    Entity();;
+    Entity();
     Entity(Vector2 position, Vector2 scale, std::vector<const char*> textureFilepaths, 
         TextureType textureType, Vector2 spriteSheetDimensions, 
         std::map<WitchState, std::vector<int>> animationAtlas);
@@ -90,6 +96,23 @@ public:
         { mFrameSpeed = newSpeed;                 }
     void setAngle(float newAngle) 
         { mAngle = newAngle;                      }
+    void toggleWitchStatus()
+    {
+        if (mWitchStatus == IDLE) {
+            mWitchStatus = POWERING_UP;
+            mSpriteSheetDimensions = {8, 1};
+            mScale.x = 500.0f;
+            mPosition.x -= 125.0f;
+        }
+        else if (mWitchStatus == POWERING_UP) {
+            mWitchStatus = IDLE;
+            mSpriteSheetDimensions = {6, 1};
+            mScale.x = 250.0f;
+            mPosition.x += 125.0f;
+        }
+        mCurrentTexture = mTextures[mWitchStatus];
+
+    }
 };
 
 #endif // ENTITY_CPP

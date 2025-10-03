@@ -1,7 +1,13 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
+#include <vector>
+#include <map>
+#include <string>
+#include <iostream>
 #include "cs3113.h"
+
+using namespace std;
 
 enum Direction { LEFT, UP, RIGHT, DOWN }; // For walking
 

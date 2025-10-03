@@ -75,15 +75,13 @@ void Entity::animate(float deltaTime)
 void Entity::update(float deltaTime)
 {
     mAnimationIndices = mAnimationAtlas.at(mWitchStatus);
-
     mPosition = {
         mPosition.x + mSpeed * mMovement.x * deltaTime,
         mPosition.y + mSpeed * mMovement.y * deltaTime
     };
 
-    if (mTextureType == ATLAS && GetLength(mMovement) != 0) animate(deltaTime);
+    if (mTextureType == ATLAS) animate(deltaTime);
 }
-
 void Entity::render()
 {
     Rectangle textureArea;

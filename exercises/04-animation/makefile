@@ -71,5 +71,6 @@ $(TARGET): $(SRCS)
 clean:
 	@rm -f $(TARGET) $(TARGET).exe
 
-run: $(TARGET)
+run: clean
+	$(MAKE) $(TARGET)
 	$(EXEC)
