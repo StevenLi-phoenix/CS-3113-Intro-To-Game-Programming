@@ -23,6 +23,9 @@ jobs:
     env:
       TARGET_BRANCH: main
       SYNC_BRANCH: auto_fix
+      UPSTREAM_REMOTE: upstream
+      UPSTREAM_REPO: https://github.com/sebastianromerocruz/CS-3113-Intro-To-Game-Programming.git
+      UPSTREAM_BRANCH: main
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
@@ -30,23 +33,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for sync branch
-        id: sync_branch
+      - name: Configure upstream remote
         shell: bash
         run: |
           set -euo pipefail
-          if git ls-remote --heads origin "${SYNC_BRANCH}" > /dev/null 2>&1; then
-            echo "branch_exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "branch_exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Sync branch missing
-        if: steps.sync_branch.outputs.branch_exists != 'true'
-        run: echo "Sync branch ${SYNC_BRANCH} not found; nothing to do."
+          git remote add "${UPSTREAM_REMOTE}" "${UPSTREAM_REPO}" 2>/dev/null || git remote set-url "${UPSTREAM_REMOTE}" "${UPSTREAM_REPO}"
+          git fetch "${UPSTREAM_REMOTE}" "${UPSTREAM_BRANCH}"
+          git fetch origin "${TARGET_BRANCH}"
+          git fetch origin "${SYNC_BRANCH}" || true
 
       - name: Run Claude Sync
-        if: steps.sync_branch.outputs.branch_exists == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -56,21 +52,24 @@ jobs:
             You are automating the upstream sync triage for repository ${{ github.repository }}.
 
             Context:
-            - Base branch (target): "${{ env.TARGET_BRANCH }}"
-            - Candidate branch (sync): "${{ env.SYNC_BRANCH }}"
+            - Source branch: "${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}"
+            - Working sync branch (push target): "${{ env.SYNC_BRANCH }}" on origin
+            - Base branch for PR: "${{ env.TARGET_BRANCH }}"
 
             Objectives:
-            1. Update both branches locally (`git fetch origin ${{ env.TARGET_BRANCH }}:${{ env.TARGET_BRANCH }}` and `git fetch origin ${{ env.SYNC_BRANCH }}:${{ env.SYNC_BRANCH }}`) so your comparisons are fresh.
-            2. Compare the two branches and list the files that differ. Ignore generated artifacts such as `*.o`, `*.log`, folders named `build/` or `bin/`.
-            3. Decide which files should be merged back into ${{ env.TARGET_BRANCH }}. If no meaningful changes remain, explain why and stop.
-            4. When changes are worth merging:
-               - Prepare a short summary highlights section for reviewers.
-               - Check for an existing PR from `${{ env.SYNC_BRANCH }}` into `${{ env.TARGET_BRANCH }}`. Update its body if it exists; otherwise create a new PR.
-               - Use `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` with an informative title/body that includes the chosen files and reasoning.
-               - If some files need to be dropped before merging, reset them on `${{ env.SYNC_BRANCH }}` (use `git checkout ${{ env.TARGET_BRANCH }} -- <path>` followed by a commit) so the PR contains only the approved files.
+            1. Make sure local refs for `${{ env.TARGET_BRANCH }}`, `${{ env.SYNC_BRANCH }}`, and `${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}` are up to date (`git fetch` as needed).
+            2. Review the diff between `${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}` and `origin/${{ env.TARGET_BRANCH }}`. Ignore generated artifacts such as `*.o`, `*.log`, `build/`, or `bin/` directories.
+            3. Decide which upstream changes should land in `${{ env.TARGET_BRANCH }}`. If none are appropriate, explain why and stop without opening a PR.
+            4. When changes are worth carrying forward:
+               - Create or reset a local `${{ env.SYNC_BRANCH }}` branch based on `origin/${{ env.TARGET_BRANCH }}`.
+               - Selectively merge or cherry-pick upstream changes so `${{ env.SYNC_BRANCH }}` only contains the approved files.
+               - Commit the results and force-push `${{ env.SYNC_BRANCH }}` to origin.
+               - Prepare reviewer-friendly release notes.
+               - Check whether a PR from `${{ env.SYNC_BRANCH }}` to `${{ env.TARGET_BRANCH }}` already exists. Update its title/body if it does; otherwise create one.
+               - Use `gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SYNC_BRANCH }}` with a concise title and a body summarizing what you merged and why.
             5. Export `GH_TOKEN="${GH_TOKEN}"` before every `gh` command.
             6. Never merge directly into `${{ env.TARGET_BRANCH }}` from this workflow.
 
             Conclude with a concise summary of your actions and include the PR URL when applicable.
           claude_args: >-
-            --allowed-tools "Bash(git fetch:*),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
+            --allowed-tools "Bash(git fetch:*),Bash(git remote add:*),Bash(git remote set-url:*),Bash(git remote -v),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git switch:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git merge:*),Bash(git cherry-pick:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
