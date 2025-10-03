@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**/*.cpp'
   pull_request:
+    paths:
+      - '**/*.cpp'
 
 env:
   RAYLIB_VERSION: '5.0'
