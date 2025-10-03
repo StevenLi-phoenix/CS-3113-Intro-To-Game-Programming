@@ -2,15 +2,19 @@
 #define CS3113_H
 #define LOG(argument) std::cout << argument << '\n'
 
-#include "raylib.h"
-#include "rlgl.h"
-#include "raymath.h"
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
 #include <map>
 #include <vector>
 #include <string>
+#include <iostream>
+#include <memory>
+#include "raylib.h"
+#include "rlgl.h"
+#include "raymath.h"
+
+using namespace std;
 
 enum AppStatus   { TERMINATED, RUNNING };
 enum TextureType { SINGLE, ATLAS       };

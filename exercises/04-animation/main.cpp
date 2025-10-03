@@ -14,12 +14,16 @@ float gPreviousTicks = 0.0f;
 
 Entity *witch = nullptr;
 
-// Function Declarations
+// User-defined variables
+bool gKEY_P_PRESSED = false;
+
+// Function Declarations    
 void initialise();
 void processInput();
 void update();
 void render();
 void shutdown();
+
 
 void initialise()
 {
@@ -49,6 +53,17 @@ void initialise()
 void processInput() 
 {
     if (IsKeyPressed(KEY_Q) || WindowShouldClose()) gAppStatus = TERMINATED;
+
+    if (IsKeyPressed(KEY_P)) 
+    {
+        if (!gKEY_P_PRESSED) {
+            gKEY_P_PRESSED = true;
+            witch->toggleWitchStatus();
+        }
+        // pass
+        // key is held down
+    }
+    if (IsKeyReleased(KEY_P)) gKEY_P_PRESSED = false;
 }
 
 void update() 
@@ -66,7 +81,7 @@ void render()
 {
     BeginDrawing();
     ClearBackground(ColorFromHex(BG_COLOUR));
-
+    
     witch->render();
 
     EndDrawing();
