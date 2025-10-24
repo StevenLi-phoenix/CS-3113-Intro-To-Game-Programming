@@ -1,6 +1,6 @@
 # Source and target
 SRCS = main.cpp
-TARGET = raylib_app
+TARGET = raylib_app CS3113/*.cpp
 
 # OS detection (macOS = Darwin, Windows via MinGW = MINGW*)
 UNAME_S := $(shell uname -s)

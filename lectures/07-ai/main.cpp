@@ -33,7 +33,7 @@ AppStatus gAppStatus   = RUNNING;
 float gPreviousTicks   = 0.0f,
       gTimeAccumulator = 0.0f;
 
-GameState gState;
+GameState g;
 
 // Function Declarations
 void initialise();
@@ -47,11 +47,11 @@ void initialise()
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "AI");
     InitAudioDevice();
 
-    gState.bgm = LoadMusicStream("assets/game/04 - Silent Forest.wav");
-    SetMusicVolume(gState.bgm, 0.33f);
-    PlayMusicStream(gState.bgm);
+    g.bgm = LoadMusicStream("assets/game/04 - Silent Forest.wav");
+    SetMusicVolume(g.bgm, 0.33f);
+    PlayMusicStream(g.bgm);
 
-    gState.jumpSound = LoadSound("assets/game/Dirt Jump.wav");
+    g.jumpSound = LoadSound("assets/game/Dirt Jump.wav");
 
     /*
         ----------- PROTAGONIST -----------
@@ -66,7 +66,7 @@ void initialise()
     float sizeRatio  = 48.0f / 64.0f;
 
     // Assets from @see https://sscary.itch.io/the-adventurer-female
-    gState.xochitl = new Entity(
+    g.xochitl = new Entity(
         {ORIGIN.x - 300.0f, ORIGIN.y - 200.0f}, // position
         {250.0f * sizeRatio, 250.0f},           // scale
         "assets/game/walk.png",                 // texture file address
@@ -76,17 +76,17 @@ void initialise()
         PLAYER                                  // entity type
     );
 
-    gState.xochitl->setJumpingPower(450.0f);
-    gState.xochitl->setColliderDimensions({
-        gState.xochitl->getScale().x / 3.0f,
-        gState.xochitl->getScale().y / 3.0f
+    g.xochitl->setJumpingPower(450.0f);
+    g.xochitl->setColliderDimensions({
+        g.xochitl->getScale().x / 3.0f,
+        g.xochitl->getScale().y / 3.0f
     });
-    gState.xochitl->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
+    g.xochitl->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
 
     /*
         ----------- TILES -----------
     */
-    gState.tiles = new Entity[NUMBER_OF_TILES];
+    g.tiles = new Entity[NUMBER_OF_TILES];
 
     // Compute the left‑most x coordinate so that the entire row is centred
     float leftMostX = ORIGIN.x - (NUMBER_OF_TILES * TILE_DIMENSION) / 2.0f;
@@ -94,11 +94,11 @@ void initialise()
     for (int i = 0; i < NUMBER_OF_TILES; i++) 
     {
         // @see https://kenney.nl/assets/pixel-platformer-industrial-expansion
-        gState.tiles[i].setTexture("assets/game/tile_0000.png");
-        gState.tiles[i].setEntityType(PLATFORM);
-        gState.tiles[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
-        gState.tiles[i].setColliderDimensions({TILE_DIMENSION, TILE_DIMENSION});
-        gState.tiles[i].setPosition({
+        g.tiles[i].setTexture("assets/game/tile_0000.png");
+        g.tiles[i].setEntityType(PLATFORM);
+        g.tiles[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
+        g.tiles[i].setColliderDimensions({TILE_DIMENSION, TILE_DIMENSION});
+        g.tiles[i].setPosition({
             leftMostX + i * TILE_DIMENSION, 
             ORIGIN.y + TILE_DIMENSION
         });
@@ -107,23 +107,23 @@ void initialise()
     /*
         ----------- BLOCKS -----------
     */
-    gState.blocks = new Entity[NUMBER_OF_BLOCKS];
+    g.blocks = new Entity[NUMBER_OF_BLOCKS];
 
     for (int i = 0; i < NUMBER_OF_BLOCKS; i++) 
     {
         // @see https://kenney.nl/assets/pixel-platformer-industrial-expansion
-        gState.blocks[i].setTexture("assets/game/tile_0061.png");
-        gState.blocks[i].setEntityType(BLOCK);
-        gState.blocks[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
-        gState.blocks[i].setColliderDimensions(
+        g.blocks[i].setTexture("assets/game/tile_0061.png");
+        g.blocks[i].setEntityType(BLOCK);
+        g.blocks[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
+        g.blocks[i].setColliderDimensions(
             {TILE_DIMENSION, TILE_DIMENSION});
     }
 
-    gState.blocks[0].setPosition(
+    g.blocks[0].setPosition(
         {ORIGIN.x - TILE_DIMENSION * 3, ORIGIN.y - TILE_DIMENSION * 2.5f});
-    gState.blocks[1].setPosition(
+    g.blocks[1].setPosition(
         {ORIGIN.x, ORIGIN.y - TILE_DIMENSION * 2.5f});
-    gState.blocks[2].setPosition(
+    g.blocks[2].setPosition(
         {ORIGIN.x + TILE_DIMENSION * 3, ORIGIN.y - TILE_DIMENSION * 2.5f});
 
 
@@ -136,7 +136,7 @@ void initialise()
     };
 
     // @see dyru.itch.io/pixel-ghost-template
-    gState.ghost = new Entity(
+    g.ghost = new Entity(
         {ORIGIN.x + 300.0f, ORIGIN.y - 200.0f}, // position
         {100.0f, 100.0f},                       // scale
         "assets/game/gosth.png",                // texture file address
@@ -146,39 +146,39 @@ void initialise()
         NPC                                     // entity type
     );
 
-    gState.ghost->setAIType(FOLLOWER);
-    gState.ghost->setAIState(IDLE);
-    gState.ghost->setSpeed(Entity::DEFAULT_SPEED * 0.50f);
+    g.ghost->setAIType(FOLLOWER);
+    g.ghost->setAIState(IDLE);
+    g.ghost->setSpeed(Entity::DEFAULT_SPEED * 0.50f);
 
-    gState.ghost->setColliderDimensions({
-        gState.ghost->getScale().x / 2.0f,
-        gState.ghost->getScale().y
+    g.ghost->setColliderDimensions({
+        g.ghost->getScale().x / 2.0f,
+        g.ghost->getScale().y
     });
 
-    gState.ghost->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
-    gState.ghost->setDirection(LEFT);
-    gState.ghost->render(); // calling render once at the beginning to switch ghost's direction
+    g.ghost->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
+    g.ghost->setDirection(LEFT);
+    g.ghost->render(); // calling render once at the beginning to switch ghost's direction
 
     SetTargetFPS(FPS);
 }
 
 void processInput() 
 {
-    gState.xochitl->resetMovement();
-    gState.ghost->resetMovement();
+    g.xochitl->resetMovement();
+    g.ghost->resetMovement();
 
-    if      (IsKeyDown(KEY_A)) gState.xochitl->moveLeft();
-    else if (IsKeyDown(KEY_D)) gState.xochitl->moveRight();
+    if      (IsKeyDown(KEY_A)) g.xochitl->moveLeft();
+    else if (IsKeyDown(KEY_D)) g.xochitl->moveRight();
 
-    if (IsKeyPressed(KEY_W) && gState.xochitl->isCollidingBottom())
+    if (IsKeyPressed(KEY_W) && g.xochitl->isCollidingBottom())
     {
-        gState.xochitl->jump();
-        PlaySound(gState.jumpSound);
+        g.xochitl->jump();
+        PlaySound(g.jumpSound);
     }
 
     // to avoid faster diagonal speed
-    if (GetLength(gState.xochitl->getMovement()) > 1.0f) 
-        gState.xochitl->normaliseMovement();
+    if (GetLength(g.xochitl->getMovement()) > 1.0f) 
+        g.xochitl->normaliseMovement();
 
     if (IsKeyPressed(KEY_Q) || WindowShouldClose()) gAppStatus = TERMINATED;
 }
@@ -201,26 +201,26 @@ void update()
 
     while (deltaTime >= FIXED_TIMESTEP)
     {
-        UpdateMusicStream(gState.bgm);
+        UpdateMusicStream(g.bgm);
 
-        gState.xochitl->update(FIXED_TIMESTEP, nullptr, gState.tiles, 
-            NUMBER_OF_TILES, gState.blocks, NUMBER_OF_BLOCKS);
+        g.xochitl->update(FIXED_TIMESTEP, nullptr, g.tiles, 
+            NUMBER_OF_TILES, g.blocks, NUMBER_OF_BLOCKS);
 
-        gState.ghost->update(FIXED_TIMESTEP, gState.xochitl, gState.tiles, 
-            NUMBER_OF_TILES, gState.blocks, NUMBER_OF_BLOCKS);
+        g.ghost->update(FIXED_TIMESTEP, g.xochitl, g.tiles, 
+            NUMBER_OF_TILES, g.blocks, NUMBER_OF_BLOCKS);
 
         for (int i = 0; i < NUMBER_OF_BLOCKS; i++) 
-            gState.blocks[i].update(FIXED_TIMESTEP, nullptr, nullptr, 0, 
+            g.blocks[i].update(FIXED_TIMESTEP, nullptr, nullptr, 0, 
                 nullptr, 0);
 
         for (int i = 0; i < NUMBER_OF_TILES; i++) 
-            gState.tiles[i].update(FIXED_TIMESTEP, nullptr, nullptr, 0, 
+            g.tiles[i].update(FIXED_TIMESTEP, nullptr, nullptr, 0, 
                 nullptr, 0);
 
         deltaTime -= FIXED_TIMESTEP;
     }
 
-    if (gState.xochitl->getPosition().y > END_GAME_THRESHOLD) 
+    if (g.xochitl->getPosition().y > END_GAME_THRESHOLD) 
         gAppStatus = TERMINATED;
 }
 
@@ -229,24 +229,24 @@ void render()
     BeginDrawing();
     ClearBackground(ColorFromHex(BG_COLOUR));
 
-    gState.xochitl->render();
-    gState.ghost->render();
+    g.xochitl->render();
+    g.ghost->render();
 
-    for (int i = 0; i < NUMBER_OF_TILES;  i++) gState.tiles[i].render();
-    for (int i = 0; i < NUMBER_OF_BLOCKS; i++) gState.blocks[i].render();
+    for (int i = 0; i < NUMBER_OF_TILES;  i++) g.tiles[i].render();
+    for (int i = 0; i < NUMBER_OF_BLOCKS; i++) g.blocks[i].render();
 
     EndDrawing();
 }
 
 void shutdown() 
 {
-    delete   gState.xochitl;
-    delete[] gState.tiles;
-    delete[] gState.blocks;
-    delete   gState.ghost;
+    delete   g.xochitl;
+    delete[] g.tiles;
+    delete[] g.blocks;
+    delete   g.ghost;
 
-    UnloadMusicStream(gState.bgm);
-    UnloadSound(gState.jumpSound);
+    UnloadMusicStream(g.bgm);
+    UnloadSound(g.jumpSound);
 
     CloseAudioDevice();
     CloseWindow();

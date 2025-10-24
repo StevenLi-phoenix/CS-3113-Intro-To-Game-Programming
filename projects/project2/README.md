@@ -4,7 +4,7 @@
 
 A Raylib-based Pong recreation for CS-3113 Project 2 that satisfies the assignment requirements for textured visuals, dual-player controls, a single-player toggle, multi-ball management capped at three, and a definitive game-over state. Assets are sourced from the `assets/` pipeline, and gameplay runs entirely on delta-time-driven physics.
 
-See `requirement.md` for the original rubric and grading guidelines.
+See `instruction.md` for the original rubric and grading guidelines.
 
 ## Features
 
