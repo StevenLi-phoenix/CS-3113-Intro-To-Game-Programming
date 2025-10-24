@@ -10,6 +10,28 @@
 
 ---
 
+### Fork Overview
+
+This repository is an actively maintained fork of [sebastianromerocruz/CS-3113-Intro-To-Game-Programming](https://github.com/sebastianromerocruz/CS-3113-Intro-To-Game-Programming). The fork keeps the original course material intact while layering on local fixes, build automation, and documentation so the course can be followed independently of the upstream repo.
+
+### Repository Layout
+
+- `.github/` – workflow definitions that automate builds, reviews, summaries, and upstream sync tasks.
+- `exercises/` – weekly raylib practice exercises aligned with the lecture ordering.
+- `lectures/` – in-class code samples for each lecture module.
+- `practice/` – ad-hoc experiments and sandbox code used for lecture demos.
+- `projects/` – multi-week project starters and reference solutions.
+- `resources/` – setup references and a downloadable sample project template.
+- `FORK.md` – deeper notes on the fork-specific automation and synchronization strategy.
+
+### GitHub Actions
+
+- `make-all.yml` discovers every tracked Makefile, builds the corresponding directory with Raylib 5.0, and uploads artifacts for each job.
+- `claude-code-review.yml` runs Anthropics' Claude to review pull requests that touch C++ sources or Makefiles.
+- `claude.yml` enables on-demand Claude assistance when issues or reviews mention `@claude`.
+- `summary.yml` auto-summarizes freshly opened GitHub issues via `actions/ai-inference@v1`.
+- `sync-upstream.yml` checks the upstream course repo daily and uses Claude to prepare a reviewable pull request when new instructor content appears.
+
 ### _Sections_
 
 1.  [**Lecture Notes**](#1)
