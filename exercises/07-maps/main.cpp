@@ -1,9 +1,14 @@
+// Andy Cho (hc2985@nyu.edu)
+// Guanqiao Chen (gc3420@nyu.edu)
+// Hero Zhang (xz4440@nyu.edu)
+// Steven Li (sl10429@nyu.edu)
+
 #include "CS3113/Entity.h"
 
 struct GameState
 {
     Entity *xochitl;
-
+    Entity *trigger;
     Map *map;
 
     Music bgm;
@@ -30,18 +35,26 @@ constexpr float TILE_DIMENSION          = 75.0f,
                 END_GAME_THRESHOLD      = 800.0f;
 
 constexpr int LEVEL_WIDTH  = 14,
-              LEVEL_HEIGHT = 7;
+              LEVEL_HEIGHT = 12;
+constexpr int TRIGGER_POSITION_X = -6,
+              TRIGGER_POSITION_Y = -1;
 
 // Global Variables
 AppStatus gAppStatus   = RUNNING;
 float gPreviousTicks   = 0.0f,
       gTimeAccumulator = 0.0f;
+bool gIsTriggerActive = false;
 
 unsigned int gLevelData[] = {
+    4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    4, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4,
+    4, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 4, 0, 4,
     4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
-    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
-    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
-    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
+    4, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 4, 0, 4,
+    4, 0, 0, 0, 4, 0, 0, 0, 0, 0, 4, 0, 0, 4,
+    4, 4, 0, 0, 0, 0, 0, 0, 4, 4, 0, 0, 0, 4,
+    4, 0, 0, 0, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4,
+    4, 0, 0, 0, 0, 0, 0, 4, 0, 4, 4, 2, 2, 4,
     4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 4,
     4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4,
     4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
@@ -79,6 +92,19 @@ void initialise()
         ORIGIN                       // in-game origin
     );
 
+    /*
+        ----------- TRIGGER -----------
+    */
+    gState.trigger = new Entity(
+        {ORIGIN.x + 0.5*TILE_DIMENSION + TRIGGER_POSITION_X * TILE_DIMENSION, ORIGIN.y + 0.5*TILE_DIMENSION + TRIGGER_POSITION_Y * TILE_DIMENSION},
+        {TILE_DIMENSION, TILE_DIMENSION},
+        "assets/game/tile_0061.png",
+        BLOCK
+    );
+    gState.trigger->setColliderDimensions({
+        gState.trigger->getScale().x / 2.0f,
+        gState.trigger->getScale().y / 2.0f
+    });
     /*
         ----------- PROTAGONIST -----------
     */
@@ -174,6 +200,14 @@ void update()
 
         panCamera(&gState.camera, &currentPlayerPosition);
 
+        if (gIsTriggerActive == false && gState.xochitl->checkCollision(gState.trigger)){
+            gIsTriggerActive = true;
+            for (int i = 0; i < LEVEL_WIDTH; i++)
+            {
+               gLevelData[i] = 0;
+            }
+        }
+
         if (gState.xochitl->getPosition().y > 800.0f) gAppStatus = TERMINATED;
     }
 }
@@ -186,7 +220,13 @@ void render()
     BeginMode2D(gState.camera);
 
     gState.xochitl->render();
+    // gState.xochitl->displayCollider();
     gState.map->render();
+    if (!gIsTriggerActive)
+    {
+        gState.trigger->render();
+        // gState.trigger->displayCollider();
+    }
 
     EndMode2D();
 
@@ -197,6 +237,7 @@ void shutdown()
 {
     delete gState.xochitl;
     delete gState.map;
+    delete gState.trigger;
 
     UnloadMusicStream(gState.bgm);
     UnloadSound(gState.jumpSound);

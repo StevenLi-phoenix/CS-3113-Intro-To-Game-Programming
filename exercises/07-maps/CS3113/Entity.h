@@ -163,6 +163,11 @@ public:
         { mAIState = newState;                     }
     void setAIType(AIType newType)
         { mAIType = newType;                       }
+
+    bool checkCollision(Entity *entity)
+    {
+        return isColliding(entity);
+    }
 };
 
 #endif // ENTITY_CPP
