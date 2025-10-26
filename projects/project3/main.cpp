@@ -32,7 +32,7 @@ constexpr char    BG_COLOUR[]      = "#000718";
 constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 
 constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth
-constexpr float END_GAME_THRESHOLD      = -800.0f
+constexpr float END_GAME_THRESHOLD      = -800.0f;
                   
 constexpr float   TRANSLATIONAL_THRUST = 200.0f;
 constexpr float   ROTATIONAL_THRUST = 50.0f;
@@ -42,6 +42,8 @@ constexpr float   TRANSLATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
 constexpr float   ROTATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
 constexpr float   LUNAR_LANDER_MASS = 1.0f;
 constexpr float   LUNAR_LANDER_MOMENT = 1.0f;
+constexpr Vector2 LUNAR_LANDER_INIT_POSITION = {ORIGIN.x, ORIGIN.y - 400.0f};
+constexpr Vector2 LUNAR_LANDER_INIT_VELOCITY = {50.0f, 50.0f};
 constexpr float   STABILISER_OVERRIDE_DURATION = 0.25f;
 constexpr float   MAIN_THRUSTER_GAP = 6.0f;
 constexpr float   MAIN_ENGINE_MIN_THROTTLE = 0.15f;
@@ -81,6 +83,9 @@ constexpr float   CONTACT_EPSILON = 5.0f;
 constexpr float   LANDER_FOOT_SPAN_RATIO = 0.65f;
 constexpr float   CAMERA_PAN_LERP_SPEED = 0.1f;
 constexpr float   MAX_SAFE_LANDING_SPEED = 25.0f;
+constexpr float   INPUT_EPSILON = 0.01f;
+constexpr float DEBUG_DISPLAY_INTERVAL = 0.15f;
+
 
 static float normaliseAngle(float angle)
 {
@@ -560,7 +565,6 @@ void Lander::applyMainEngineThrust(float deltaTime)
 
 void Lander::applyTranslationStabilisation(float /* deltaTime */)
 {
-    constexpr float INPUT_EPSILON = 0.01f;
     bool manualInputActive = (std::fabs(mLastManualTranslationForce.x) > INPUT_EPSILON) ||
                              (std::fabs(mLastManualTranslationForce.y) > INPUT_EPSILON);
 
@@ -585,7 +589,6 @@ void Lander::applyTranslationStabilisation(float /* deltaTime */)
 
 void Lander::applyRotationStabilisation(float /* deltaTime */)
 {
-    constexpr float INPUT_EPSILON = 0.01f;
     bool manualInputActive = std::fabs(mLastManualTorque) > INPUT_EPSILON;
     float angularVelocity = getAngularVelocity();
 
@@ -662,7 +665,6 @@ bool gLandingOutcomeLocked = false;
 GameState g;
 
 #ifdef DEBUG
-constexpr float DEBUG_DISPLAY_INTERVAL = 0.15f;
 float gDebugDisplayTimer = 0.0f;
 char gDebugMessage[128] = "Stab Tx: 0.00 Ty: 0.00 R: 0.00";
 #endif
@@ -723,11 +725,10 @@ void initialise()
 
     // ----------- LUNAR LANDER -----------
     g.LunarLander = new Lander(
-        {ORIGIN.x, ORIGIN.y},
+        {ORIGIN.x, ORIGIN.y - 400.0f},
         {50.0f, 50.0f},
         "assets/game/lunar_lander.png"
     );
-
     g.LunarLander->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
     g.LunarLander->setDryMass(LUNAR_LANDER_MASS);
     g.LunarLander->setMomentOfInertia(LUNAR_LANDER_MOMENT);
