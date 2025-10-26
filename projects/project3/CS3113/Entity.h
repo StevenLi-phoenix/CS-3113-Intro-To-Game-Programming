@@ -6,13 +6,17 @@
 
 enum Direction    { LEFT, UP, RIGHT, DOWN              }; // For walking
 enum EntityStatus { ENTITY_ACTIVE, ENTITY_INACTIVE                   };
-enum EntityType   { ENTITY_PLAYER, ENTITY_BLOCK, ENTITY_PLATFORM, ENTITY_NPC, ENTITY_ANYMOUSE };
+enum EntityType   { ENTITY_PLAYER, ENTITY_BLOCK, ENTITY_PLATFORM, ENTITY_NPC, ENTITY_ANYMOUSE, ENTITY_BACKGROUND };
 
 class Entity
 {
 private:
     Entity* mParentEntity = nullptr;
     Vector2 mParentOffset {0.0f, 0.0f};
+    Vector2 mParentLocalOffset {0.0f, 0.0f};
+    bool mHasParentLocalOffset = false;
+    bool mInheritParentRotation = false;
+    float mParentAngleOffset = 0.0f;
 
     Vector2 mPosition;
     Vector2 mMovement;
@@ -185,8 +189,10 @@ public:
     void setAIActive(bool isActive)
         { mIsAIActive = isActive;                }
     void setParentEntity(Entity* parent);
+    void setParentLocalOffset(Vector2 localOffset);
+    void setParentRotationInheritance(bool inheritRotation, float angleOffset = 0.0f);
     Entity* getParentEntity() const { return mParentEntity; }
-   Vector2 getParentOffset() const { return mParentOffset; }
+    Vector2 getParentOffset() const { return mParentOffset; }
     void applyForce(Vector2 force);
     void applyTorque(float torque);
 };
