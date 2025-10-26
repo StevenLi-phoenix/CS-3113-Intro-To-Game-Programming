@@ -12,6 +12,7 @@
 * Author: Steven Li
 * Time: 2025/10/22 15:19PM
 * Time: 2025/10/25 18:44PM
+* Time: 2025/10/26 13:00PM
 * Assignment link: https://brightspace.nyu.edu/d2l/lms/dropbox/user/folder_submit_files.d2l?ou=501465&db=1079374
 * File UUID: 30c1d136-120c-4a38-96e5-817de24526df
 */
@@ -30,7 +31,7 @@ constexpr int SCREEN_WIDTH  = 1000,
 constexpr char    BG_COLOUR[]      = "#000718";
 constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 
-constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth * 10 n/kg
+constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth
 constexpr float END_GAME_THRESHOLD      = 800.0f;
                   
 constexpr float   TRANSLATIONAL_THRUST = 200.0f;
@@ -46,8 +47,8 @@ constexpr float   MAIN_THRUSTER_GAP = 6.0f;
 constexpr float   MAIN_ENGINE_MIN_THROTTLE = 0.15f;
 constexpr float   MAIN_ENGINE_MAX_THROTTLE = 1.0f;
 constexpr float   MAIN_ENGINE_DEFAULT_THROTTLE = 0.35f;
-constexpr float   MAIN_ENGINE_MAX_THRUST = 8000.0f;
-constexpr float   MAIN_ENGINE_FUEL_CAPACITY = 1200.0f;
+constexpr float   MAIN_ENGINE_MAX_THRUST = 400.0f;
+constexpr float   MAIN_ENGINE_FUEL_CAPACITY = 200.0f;
 constexpr float   MAIN_ENGINE_MAX_FUEL_BURN_RATE = 5.0f;
 constexpr float   MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE = 0.30f;
 constexpr float   MAIN_ENGINE_FUEL_MASS_PER_UNIT = 0.02f;
@@ -58,17 +59,42 @@ constexpr float   CAMERA_ZOOM_MIN = 0.35f;
 constexpr float   CAMERA_ZOOM_MAX = 2.0f;
 constexpr float   CAMERA_ZOOM_SCROLL_STEP = 0.08f;
 constexpr float   CAMERA_MAP_VIEW_ZOOM = 0.45f;
+constexpr float   TERRAIN_TILE_WORLD_SIZE = 64.0f;
+constexpr float   TERRAIN_BASE_HEIGHT = ORIGIN.y + 140.0f;
+constexpr float   TERRAIN_NOISE_AMPLITUDE_PRIMARY = 90.0f;
+constexpr float   TERRAIN_NOISE_AMPLITUDE_SECONDARY = 35.0f;
+constexpr float   TERRAIN_NOISE_FREQUENCY_PRIMARY = 0.0045f;
+constexpr float   TERRAIN_NOISE_FREQUENCY_SECONDARY = 0.0017f;
+constexpr float   TERRAIN_MIN_HEIGHT = ORIGIN.y - 80.0f;
+constexpr float   TERRAIN_MAX_HEIGHT = SCREEN_HEIGHT + 220.0f;
+constexpr int     TERRAIN_ATLAS_COLUMNS = 8;
+constexpr int     TERRAIN_ATLAS_ROWS    = 6;
+constexpr float   ISS_SPEED = 60.0f;
+constexpr float   ISS_VERTICAL_OFFSET = -420.0f;
+constexpr float   ISS_BASELINE_Y = ORIGIN.y + ISS_VERTICAL_OFFSET;
 constexpr int     ENGINE_MAX_CHANGES = 3;
 constexpr float   ENGINE_START_TIME = 1.4f;
 constexpr float   ENGINE_CLOSE_TIME = 1.0f;
 constexpr float   ENGINE_CHANGE_RATE = 0.5f; // 50% per second
 constexpr float   FLAME_ANIMATION_BASE_FPS = 8.0f;
+constexpr float   CONTACT_EPSILON = 5.0f;
 
 static float normaliseAngle(float angle)
 {
     while (angle > 180.0f) angle -= 360.0f;
     while (angle < -180.0f) angle += 360.0f;
     return angle;
+}
+
+static Vector2 rotatePoint(Vector2 point, float angleDegrees)
+{
+    float radians = angleDegrees * DEG2RAD;
+    float cosA = cosf(radians);
+    float sinA = sinf(radians);
+    return {
+        point.x * cosA - point.y * sinA,
+        point.x * sinA + point.y * cosA
+    };
 }
 
 class Lander : public Entity
@@ -161,27 +187,18 @@ enum GameStatus { GAME_START, GAME_RUNNING, GAME_PAUSED, GAME_WON, GAME_OVER };
 
 struct GameState
 {
-    // Entity *xochitl;
-    // Entity *tiles;
-    // Entity *blocks;
-    // Entity *ghost;
-
     Lander *LunarLander = nullptr;
 
     GameStatus gameStatus;
 
     Entity *background = nullptr;
     Entity *mainThrusterFlame = nullptr;
+    Entity *iss = nullptr;
+    Texture2D terrainTexture {};
     Music bgm;
     Sound engineLoopSound;
 };
 
-// constexpr int   NUMBER_OF_TILES         = 20,
-//                 NUMBER_OF_BLOCKS        = 3;
-// constexpr float TILE_DIMENSION          = 50.0f,
-//                 // in m/ms², since delta time is in ms
-//                 ACCELERATION_OF_GRAVITY = 981.0f,
-//                 END_GAME_THRESHOLD      = 800.0f;
 Lander::Lander(Vector2 position, Vector2 scale, const char *textureFilepath)
     : Entity(position, scale, textureFilepath, ENTITY_PLAYER)
 {
@@ -638,6 +655,8 @@ float gPreviousTicks   = 0.0f;
 Camera2D gCamera {};
 bool gMapViewActive = false;
 float gStoredZoomBeforeMap = 1.0f;
+Vector2 gBackgroundOffset {0.0f, 0.0f};
+bool gLandingOutcomeLocked = false;
 
 GameState g;
 
@@ -658,6 +677,20 @@ void drawControlTooltips();
 void panCamera(Camera2D *camera, const Vector2 *targetPosition);
 void handleCameraZoomInput();
 void updateBackgroundParallax();
+void renderBackground();
+void renderTerrain();
+void updateISS(float deltaTime);
+Vector2 getCameraViewExtents();
+float sampleTerrainHeight(float worldX);
+float sampleTerrainHeight(const Vector2 &worldPosition);
+struct TerrainContactInfo
+{
+    bool leftContact = false;
+    bool rightContact = false;
+    float impactSpeed = 0.0f;
+};
+TerrainContactInfo resolveTerrainCollision(Lander *lander);
+void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander);
 
 void initialise()
 {
@@ -675,6 +708,8 @@ void initialise()
 
     g.engineLoopSound = LoadSound("assets/game/sound_rocket_mini.wav");
     SetSoundVolume(g.engineLoopSound, 0.35f);
+    g.terrainTexture = LoadTexture("assets/game/moon_8x6.png");
+    SetTextureFilter(g.terrainTexture, TEXTURE_FILTER_POINT);
 
     // /*
     //     ----------- PROTAGONIST -----------
@@ -833,6 +868,15 @@ void initialise()
     g.mainThrusterFlame->setParentRotationInheritance(true);
     g.mainThrusterFlame->deactivate();
 
+    g.iss = new Entity(
+        {ORIGIN.x - SCREEN_WIDTH, ORIGIN.y + ISS_VERTICAL_OFFSET},
+        {180.0f, 90.0f},
+        "assets/game/ISS.png",
+        ENTITY_BACKGROUND
+    );
+    g.iss->setAcceleration({0.0f, 0.0f});
+    g.iss->setVelocity({ISS_SPEED, 0.0f});
+
     g.gameStatus = GAME_START;
 
     // g.ghost->render(); // calling render once at the beginning to switch ghost's direction
@@ -958,6 +1002,9 @@ void update()
     float deltaTime = ticks - gPreviousTicks;
     gPreviousTicks  = ticks;
 
+    if (deltaTime > 0.02f)
+        deltaTime = 0.02f;
+
     UpdateMusicStream(g.bgm);
 
     switch (g.gameStatus)
@@ -971,11 +1018,17 @@ void update()
             g.LunarLander->setAngularAcceleration(0.0f);
             g.LunarLander->resetControllers();
             if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
+            gLandingOutcomeLocked = false;
             break;
         case GAME_RUNNING:
             if (g.LunarLander->getPosition().y > END_GAME_THRESHOLD) 
                 g.gameStatus = GAME_OVER;
             g.LunarLander->update(deltaTime);
+            if (g.gameStatus == GAME_RUNNING)
+            {
+                TerrainContactInfo contactInfo = resolveTerrainCollision(g.LunarLander);
+                evaluateLandingOutcome(contactInfo, g.LunarLander);
+            }
 #ifdef DEBUG
             if (g.LunarLander)
             {
@@ -1018,6 +1071,7 @@ void update()
         panCamera(&gCamera, &target);
     }
     updateBackgroundParallax();
+    updateISS(deltaTime);
 
     bool flameShouldBeActive = false;
     bool engineFiring = false;
@@ -1081,7 +1135,9 @@ void render()
     BeginDrawing();
     ClearBackground(ColorFromHex(BG_COLOUR));
     BeginMode2D(gCamera);
-    if (g.background) g.background->render();
+    renderBackground();
+    renderTerrain();
+    if (g.iss) g.iss->render();
 
     if (g.mainThrusterFlame) g.mainThrusterFlame->render();
     if (g.LunarLander) g.LunarLander->render();
@@ -1166,7 +1222,7 @@ void render()
 #ifdef DEBUG
     if (g.LunarLander)
     {
-        DrawText(gDebugMessage, 20, 120, 18, YELLOW);
+        DrawText(gDebugMessage, 20, 140, 18, YELLOW);
     }
 #endif
 
@@ -1283,22 +1339,17 @@ void updateBackgroundParallax()
 {
     if (!g.background || !g.LunarLander) return;
 
-    Vector2 parallaxPosition {
-        ORIGIN.x + (gCamera.target.x - ORIGIN.x) * BACKGROUND_PARALLAX_FACTOR,
-        ORIGIN.y + (gCamera.target.y - ORIGIN.y) * BACKGROUND_PARALLAX_FACTOR
-    };
-
-    Vector2 velocityOffset = Vector2Scale(
-        g.LunarLander->getVelocity(),
-        BACKGROUND_VELOCITY_OFFSET_SCALE
-    );
-
-    g.background->setPosition(Vector2Add(parallaxPosition, velocityOffset));
+    Vector2 cameraRelativeOffset = Vector2Subtract(gCamera.target, ORIGIN);
+    Vector2 parallaxOffset = Vector2Scale(cameraRelativeOffset, BACKGROUND_PARALLAX_FACTOR);
+    Vector2 velocityOffset = Vector2Scale(g.LunarLander->getVelocity(), BACKGROUND_VELOCITY_OFFSET_SCALE);
+    gBackgroundOffset = Vector2Add(parallaxOffset, velocityOffset);
 }
 
 static float clampCameraZoom(float value)
 {
-    return std::clamp(value, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+    if (value < CAMERA_ZOOM_MIN) return CAMERA_ZOOM_MIN;
+    if (value > CAMERA_ZOOM_MAX) return CAMERA_ZOOM_MAX;
+    return value;
 }
 
 void handleCameraZoomInput()
@@ -1345,6 +1396,285 @@ void handleCameraZoomInput()
     }
 }
 
+Vector2 getCameraViewExtents()
+{
+    float zoom = (gCamera.zoom <= 0.0f) ? 0.0001f : gCamera.zoom;
+    return {
+        (SCREEN_WIDTH / zoom) / 2.0f,
+        (SCREEN_HEIGHT / zoom) / 2.0f
+    };
+}
+
+static unsigned int terrainHash(int column, int depth)
+{
+    unsigned int h = static_cast<unsigned int>(column) * 374761393u;
+    h += static_cast<unsigned int>(depth) * 668265263u;
+    h ^= h >> 13;
+    h *= 1274126177u;
+    return h;
+}
+
+float sampleTerrainHeight(float worldX)
+{
+    float primary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_PRIMARY) * TERRAIN_NOISE_AMPLITUDE_PRIMARY;
+    float secondary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_SECONDARY + 1.3f) * TERRAIN_NOISE_AMPLITUDE_SECONDARY;
+    float height = TERRAIN_BASE_HEIGHT + primary + secondary;
+    if (height < TERRAIN_MIN_HEIGHT) height = TERRAIN_MIN_HEIGHT;
+    if (height > TERRAIN_MAX_HEIGHT) height = TERRAIN_MAX_HEIGHT;
+    float tileHeight = TERRAIN_TILE_WORLD_SIZE;
+    float snappedTopOfTile = std::floor(height / tileHeight) * tileHeight;
+    return snappedTopOfTile;
+}
+
+float sampleTerrainHeight(const Vector2 &worldPosition)
+{
+    return sampleTerrainHeight(worldPosition.x);
+}
+
+static Rectangle getTerrainSourceRect(int row, int col)
+{
+    if (row < 0) row = 0;
+    if (row >= TERRAIN_ATLAS_ROWS) row = TERRAIN_ATLAS_ROWS - 1;
+    int wrappedCol = ((col % TERRAIN_ATLAS_COLUMNS) + TERRAIN_ATLAS_COLUMNS) % TERRAIN_ATLAS_COLUMNS;
+    int index = row * TERRAIN_ATLAS_COLUMNS + wrappedCol;
+    return getUVRectangle(&g.terrainTexture, index, TERRAIN_ATLAS_ROWS, TERRAIN_ATLAS_COLUMNS);
+}
+
+TerrainContactInfo resolveTerrainCollision(Lander *lander)
+{
+    TerrainContactInfo info;
+    if (!lander) return info;
+
+    Vector2 scale = lander->getScale();
+    Vector2 position = lander->getPosition();
+    float angle = lander->getAngle();
+    float halfWidth  = scale.x * 0.5f;
+    float halfHeight = scale.y * 0.5f;
+    const float FOOT_SPAN = 0.65f;
+
+    Vector2 leftLocal  { -halfWidth * FOOT_SPAN,  halfHeight };
+    Vector2 rightLocal {  halfWidth * FOOT_SPAN,  halfHeight };
+
+Vector2 leftFootWorld  = position + rotatePoint(leftLocal, angle);
+Vector2 rightFootWorld = position + rotatePoint(rightLocal, angle);
+
+float leftSurfaceHeight  = sampleTerrainHeight(leftFootWorld);
+float rightSurfaceHeight = sampleTerrainHeight(rightFootWorld);
+float leftPenetration    = leftFootWorld.y  - leftSurfaceHeight;
+float rightPenetration   = rightFootWorld.y - rightSurfaceHeight;
+float penetration        = std::max(leftPenetration, rightPenetration);
+Vector2 velocityBefore   = lander->getVelocity();
+float impactSpeed        = std::sqrt(velocityBefore.x * velocityBefore.x +
+                                     velocityBefore.y * velocityBefore.y);
+
+if (penetration > 0.0f)
+{
+    position.y -= penetration;
+    leftFootWorld.y  -= penetration;
+    rightFootWorld.y -= penetration;
+    lander->setPosition(position);
+
+    Vector2 velocity = lander->getVelocity();
+    if (velocity.y > 0.0f) velocity.y = 0.0f;
+    lander->setVelocity(velocity);
+}
+
+float leftOffsetAfter  = leftFootWorld.y  - leftSurfaceHeight;
+float rightOffsetAfter = rightFootWorld.y - rightSurfaceHeight;
+info.leftContact  = std::fabs(leftOffsetAfter)  <= CONTACT_EPSILON;
+info.rightContact = std::fabs(rightOffsetAfter) <= CONTACT_EPSILON;
+if (info.leftContact || info.rightContact)
+    info.impactSpeed = impactSpeed;
+
+return info;
+}
+
+void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander)
+{
+    if (!lander || gLandingOutcomeLocked || g.gameStatus != GAME_RUNNING) return;
+
+    bool anyContact = contactInfo.leftContact || contactInfo.rightContact;
+    if (!anyContact) return;
+
+    if (lander->isMainEngineFiring()) lander->toggleMainEngine();
+    lander->setMainEngineThrottle(MAIN_ENGINE_MIN_THROTTLE);
+    gLandingOutcomeLocked = true;
+
+    float speed = contactInfo.impactSpeed;
+    if (speed <= 0.0f)
+    {
+        Vector2 velocity = lander->getVelocity();
+        speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+    }
+    if (contactInfo.leftContact && contactInfo.rightContact && speed < 25.0f)
+    {
+        g.gameStatus = GAME_WON;
+    }
+    else
+    {
+        g.gameStatus = GAME_OVER;
+    }
+}
+
+void renderTerrain()
+{
+    if (g.terrainTexture.id == 0) return;
+
+    Vector2 extents = getCameraViewExtents();
+    float viewMinX = gCamera.target.x - extents.x;
+    float viewMaxX = gCamera.target.x + extents.x;
+    float viewMaxY = gCamera.target.y + extents.y;
+
+    float tileWidth = TERRAIN_TILE_WORLD_SIZE;
+    float tileHeight = TERRAIN_TILE_WORLD_SIZE;
+
+    int startColumn = static_cast<int>(std::floor(viewMinX / tileWidth)) - 2;
+    int endColumn   = static_cast<int>(std::ceil(viewMaxX / tileWidth)) + 2;
+
+    Vector2 origin { tileWidth / 2.0f, tileHeight / 2.0f };
+
+    for (int column = startColumn; column <= endColumn; ++column)
+    {
+        float columnWorldStart = column * tileWidth;
+        float columnCenterX = columnWorldStart + tileWidth / 2.0f;
+        float surfaceHeight = sampleTerrainHeight(columnCenterX);
+        float snappedTop = std::floor(surfaceHeight / tileHeight) * tileHeight + tileHeight / 2.0f;
+
+        unsigned int surfaceHash = terrainHash(column, 0);
+        Rectangle surfaceSource = getTerrainSourceRect(0, surfaceHash % TERRAIN_ATLAS_COLUMNS);
+        Rectangle surfaceDest {
+            columnCenterX,
+            snappedTop,
+            tileWidth,
+            tileHeight
+        };
+        DrawTexturePro(g.terrainTexture, surfaceSource, surfaceDest, origin, 0.0f, WHITE);
+
+        int depth = 1;
+        for (float y = snappedTop + tileHeight; y <= viewMaxY + tileHeight; y += tileHeight, ++depth)
+        {
+            unsigned int groundHash = terrainHash(column, depth);
+            int groundRow = 1 + (groundHash % (TERRAIN_ATLAS_ROWS - 1));
+            int groundCol = (groundHash / 7) % TERRAIN_ATLAS_COLUMNS;
+            Rectangle groundSource = getTerrainSourceRect(groundRow, groundCol);
+            Rectangle groundDest {
+                columnCenterX,
+                y,
+                tileWidth,
+                tileHeight
+            };
+            DrawTexturePro(g.terrainTexture, groundSource, groundDest, origin, 0.0f, WHITE);
+        }
+    }
+}
+
+void updateISS(float deltaTime)
+{
+    if (!g.iss) return;
+
+    Vector2 position = g.iss->getPosition();
+    position.y = ISS_BASELINE_Y;
+    g.iss->setPosition(position);
+
+    if (deltaTime <= 0.0f) return;
+
+    g.iss->setAcceleration({0.0f, 0.0f});
+    g.iss->setVelocity({ISS_SPEED, 0.0f});
+    g.iss->update(deltaTime);
+
+    Vector2 extents = getCameraViewExtents();
+    float worldRight = gCamera.target.x + extents.x;
+    float worldLeft  = gCamera.target.x - extents.x;
+    float halfWidth  = g.iss->getScale().x / 2.0f;
+    float margin     = halfWidth * 2.0f;
+
+    if (g.iss->getPosition().x - halfWidth > worldRight + margin)
+    {
+        g.iss->setPosition({worldLeft - margin, ISS_BASELINE_Y});
+    }
+
+    if (g.gameStatus == GAME_RUNNING && g.LunarLander)
+    {
+        Rectangle issRect {
+            g.iss->getPosition().x - halfWidth,
+            g.iss->getPosition().y - g.iss->getScale().y / 2.0f,
+            g.iss->getScale().x,
+            g.iss->getScale().y
+        };
+
+        Vector2 landerScale = g.LunarLander->getScale();
+        Rectangle landerRect {
+            g.LunarLander->getPosition().x - landerScale.x / 2.0f,
+            g.LunarLander->getPosition().y - landerScale.y / 2.0f,
+            landerScale.x,
+            landerScale.y
+        };
+
+        if (CheckCollisionRecs(issRect, landerRect))
+        {
+            g.gameStatus = GAME_OVER;
+            gLandingOutcomeLocked = true;
+            if (g.LunarLander->isMainEngineFiring()) g.LunarLander->toggleMainEngine();
+        }
+    }
+}
+
+void renderBackground()
+{
+    if (!g.background) return;
+
+    Texture2D texture = g.background->getTexture();
+    if (texture.id == 0) return;
+
+    Vector2 tileSize {
+        static_cast<float>(texture.width),
+        static_cast<float>(texture.height)
+    };
+
+    if (tileSize.x <= 0.0f || tileSize.y <= 0.0f) return;
+
+    Vector2 extents = getCameraViewExtents();
+    Vector2 viewMin {
+        gCamera.target.x - extents.x,
+        gCamera.target.y - extents.y
+    };
+    Vector2 viewMax {
+        gCamera.target.x + extents.x,
+        gCamera.target.y + extents.y
+    };
+
+    Vector2 offset = gBackgroundOffset;
+
+    float startX = std::floor((viewMin.x + offset.x) / tileSize.x) * tileSize.x;
+    float startY = std::floor((viewMin.y + offset.y) / tileSize.y) * tileSize.y;
+
+    Rectangle source {
+        0.0f,
+        0.0f,
+        tileSize.x,
+        tileSize.y
+    };
+
+    for (float x = startX; x < viewMax.x + offset.x + tileSize.x; x += tileSize.x)
+    {
+        for (float y = startY; y < viewMax.y + offset.y + tileSize.y; y += tileSize.y)
+        {
+            float drawCenterX = (x - offset.x) + tileSize.x / 2.0f;
+            float drawCenterY = (y - offset.y) + tileSize.y / 2.0f;
+
+            Rectangle dest {
+                drawCenterX,
+                drawCenterY,
+                tileSize.x,
+                tileSize.y
+            };
+
+            Vector2 origin { tileSize.x / 2.0f, tileSize.y / 2.0f };
+            DrawTexturePro(texture, source, dest, origin, 0.0f, WHITE);
+        }
+    }
+}
+
 void shutdown() 
 {
     // delete   g.xochitl;
@@ -1355,6 +1685,13 @@ void shutdown()
     delete g.mainThrusterFlame;
     delete g.LunarLander;
     delete g.background;
+    delete g.iss;
+
+    if (g.terrainTexture.id != 0)
+    {
+        UnloadTexture(g.terrainTexture);
+        g.terrainTexture.id = 0;
+    }
 
     StopMusicStream(g.bgm);
     StopSound(g.engineLoopSound);
