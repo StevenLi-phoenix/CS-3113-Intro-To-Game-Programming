@@ -1,4 +1,19 @@
 #include "Entity.h"
+#include <cmath>
+
+namespace
+{
+Vector2 rotateVectorDeg(const Vector2& v, float degrees)
+{
+    float radians = degrees * DEG2RAD;
+    float cosTheta = std::cos(radians);
+    float sinTheta = std::sin(radians);
+    return Vector2{
+        v.x * cosTheta - v.y * sinTheta,
+        v.x * sinTheta + v.y * cosTheta
+    };
+}
+}
 
 Entity::Entity() : mPosition {0.0f, 0.0f}, mMovement {0.0f, 0.0f}, 
                    mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
@@ -44,11 +59,32 @@ void Entity::setParentEntity(Entity* parent)
     if (mParentEntity)
     {
         mParentOffset = mPosition - mParentEntity->getPosition();
+        mParentLocalOffset = rotateVectorDeg(mParentOffset, -mParentEntity->getAngle());
+        mHasParentLocalOffset = false;
+        mInheritParentRotation = false;
+        mParentAngleOffset = 0.0f;
     }
     else
     {
         mParentOffset = Vector2{0.0f, 0.0f};
+        mParentLocalOffset = Vector2{0.0f, 0.0f};
+        mHasParentLocalOffset = false;
+        mInheritParentRotation = false;
+        mParentAngleOffset = 0.0f;
     }
+}
+
+void Entity::setParentLocalOffset(Vector2 localOffset)
+{
+    mParentLocalOffset = localOffset;
+    mHasParentLocalOffset = true;
+    mParentOffset = {0.0f, 0.0f};
+}
+
+void Entity::setParentRotationInheritance(bool inheritRotation, float angleOffset)
+{
+    mInheritParentRotation = inheritRotation;
+    mParentAngleOffset = inheritRotation ? angleOffset : 0.0f;
 }
 
 void Entity::applyForce(Vector2 force)
@@ -238,7 +274,20 @@ void Entity::update(float deltaTime)
     if (mParentEntity)
     {
         mParentOffset = mParentOffset + delta;
-        mPosition = mParentEntity->getPosition() + mParentOffset;
+
+        Vector2 derivedOffset = mParentOffset;
+        if (mHasParentLocalOffset)
+        {
+            Vector2 rotatedLocal = rotateVectorDeg(mParentLocalOffset, mParentEntity->getAngle());
+            derivedOffset = derivedOffset + rotatedLocal;
+        }
+
+        mPosition = mParentEntity->getPosition() + derivedOffset;
+
+        if (mInheritParentRotation)
+        {
+            mAngle = mParentEntity->getAngle() + mParentAngleOffset;
+        }
     }
     else
     {

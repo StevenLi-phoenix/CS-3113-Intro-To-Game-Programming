@@ -11,16 +11,53 @@
 /**
 * Author: Steven Li
 * Time: 2025/10/22 15:19PM
+* Time: 2025/10/25 18:44PM
 * Assignment link: https://brightspace.nyu.edu/d2l/lms/dropbox/user/folder_submit_files.d2l?ou=501465&db=1079374
 * File UUID: 30c1d136-120c-4a38-96e5-817de24526df
 */
 
 #include "CS3113/Entity.h"
-#include "lib/pid_controller.h"
-#include "lib/vector_ops.h"
+#include "lib/vector_ops.h" // this was intentionally included
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <iostream>
+
+// Global Constants
+constexpr int SCREEN_WIDTH  = 1000,
+              SCREEN_HEIGHT = 600,
+              FPS           = 120;
+
+constexpr char    BG_COLOUR[]      = "#000718";
+constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
+
+constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth * 10 n/kg
+constexpr float END_GAME_THRESHOLD      = 800.0f;
+                  
+constexpr float   TRANSLATIONAL_THRUST = 200.0f;
+constexpr float   ROTATIONAL_THRUST = 50.0f;
+constexpr float   TRANSLATIONAL_STABILISER_THRUST = 10.0f;
+constexpr float   ROTATIONAL_STABILISER_THRUST = 10.0f;
+constexpr float   TRANSLATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
+constexpr float   ROTATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
+constexpr float   LUNAR_LANDER_MASS = 1.0f;
+constexpr float   LUNAR_LANDER_MOMENT = 1.0f;
+constexpr float   STABILISER_OVERRIDE_DURATION = 0.25f;
+constexpr float   MAIN_THRUSTER_GAP = 6.0f;
+constexpr float   MAIN_ENGINE_MIN_THROTTLE = 0.15f;
+constexpr float   MAIN_ENGINE_MAX_THROTTLE = 1.0f;
+constexpr float   MAIN_ENGINE_DEFAULT_THROTTLE = 0.35f;
+constexpr float   MAIN_ENGINE_MAX_THRUST = 800.0f;
+constexpr float   MAIN_ENGINE_FUEL_CAPACITY = 1200.0f;
+constexpr float   MAIN_ENGINE_MAX_FUEL_BURN_RATE = 5.0f;
+constexpr float   MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE = 0.30f;
+constexpr float   MAIN_ENGINE_FUEL_MASS_PER_UNIT = 0.02f;
+constexpr float   MAIN_ENGINE_THROTTLE_STEP = 0.05f;
+constexpr int     ENGINE_MAX_CHANGES = 3;
+constexpr float   ENGINE_START_TIME = 1.4f;
+constexpr float   ENGINE_CLOSE_TIME = 1.0f;
+constexpr float   ENGINE_CHANGE_RATE = 0.5f; // 50% per second
+constexpr float   FLAME_ANIMATION_BASE_FPS = 8.0f;
+constexpr float   MANUAL_THRUSTER_FLASH_DURATION = 0.12f;
 
 static float normaliseAngle(float angle)
 {
@@ -39,13 +76,6 @@ public:
     bool isRotationStabiliserEnabled()   const { return mRotationStabiliserEnabled;   }
     void resetControllers();
 
-    void setTranslationPIDGains(float kp, float ki, float kd);
-    void setRotationPIDGains(float kp, float ki, float kd);
-    void setTranslationIntegralLimit(float limit);
-    void setRotationIntegralLimit(float limit);
-    void setTranslationOutputLimit(float limit);
-    void setRotationOutputLimit(float limit);
-
     void update(float deltaTime) override;
 
 public:
@@ -62,6 +92,19 @@ public:
     Vector2 getTotalTranslationForce()  const;
     float   getTotalRotationTorque()    const;
     float   getDesiredAngle()           const { return mDesiredAngle; }
+    void toggleMainEngine();
+    void adjustMainEngineThrottle(float delta);
+    void setMainEngineThrottle(float throttle);
+    bool isMainEngineFiring()  const;
+    float getMainEngineThrottle() const { return mTargetThrottle; }
+    float getMainEngineThrottleNormalised() const;
+    float getMainEngineAppliedThrottle() const { return mCurrentThrottle; }
+    float getMainEngineAppliedThrottleNormalised() const;
+    float getMainEngineOutputLevel() const { return getEngineOutputScalar(); }
+    float getFuel() const { return mFuel; }
+    float getFuelCapacity() const { return mFuelCapacity; }
+    bool hasFuel() const { return mFuel > 0.0f; }
+    void setDryMass(float dryMass);
 
     float getLastTranslationCorrectionX() const { return mLastTranslationCorrectionX; }
     float getLastTranslationCorrectionY() const { return mLastTranslationCorrectionY; }
@@ -72,12 +115,7 @@ public:
     bool  isRotationStabiliserDesired()    const { return mRotationStabiliserDesired;  }
 
 private:
-    PIDController mVelocityPID_X;
-    PIDController mVelocityPID_Y;
-    PIDController mAngularPID;
-
-    float mTranslationOutputLimit  = 900.0f;
-    float mRotationOutputLimit     = 400.0f;
+    enum class MainEngineState { Off, Starting, Running, Stopping };
 
     bool mTranslationStabiliserEnabled = true;
     bool mRotationStabiliserEnabled    = true;
@@ -93,6 +131,23 @@ private:
     float mTranslationOverrideTimer    = 0.0f;
     float mRotationOverrideTimer       = 0.0f;
     float mDesiredAngle                = 0.0f;
+    MainEngineState mEngineState       = MainEngineState::Off;
+    float mFuelCapacity                = MAIN_ENGINE_FUEL_CAPACITY;
+    float mFuel                        = MAIN_ENGINE_FUEL_CAPACITY;
+    float mDryMass                     = LUNAR_LANDER_MASS;
+    float mTargetThrottle              = MAIN_ENGINE_DEFAULT_THROTTLE;
+    float mCurrentThrottle             = MAIN_ENGINE_MIN_THROTTLE;
+    float mEngineStateTimer            = 0.0f;
+    float mEngineStateDuration         = 0.0f;
+    int   mIgnitionsRemaining          = ENGINE_MAX_CHANGES;
+
+    void applyMainEngineThrust(float deltaTime);
+    void updateEffectiveMass();
+    void requestEngineStart();
+    void requestEngineShutdown();
+    void updateEngineState(float deltaTime);
+    float getEngineOutputScalar() const;
+    bool  canToggleEngine() const;
 };
 
 enum GameStatus { GAME_START, GAME_RUNNING, GAME_PAUSED, GAME_WON, GAME_OVER };
@@ -104,37 +159,15 @@ struct GameState
     // Entity *blocks;
     // Entity *ghost;
 
-    Lander *LunarLander;
+    Lander *LunarLander = nullptr;
 
     GameStatus gameStatus;
 
+    Entity *background = nullptr;
+    Entity *mainThrusterFlame = nullptr;
     Music bgm;
-    Sound burstSound;
+    Sound engineLoopSound;
 };
-
-// Global Constants
-constexpr int SCREEN_WIDTH  = 1000,
-              SCREEN_HEIGHT = 600,
-              FPS           = 120;
-
-constexpr char    BG_COLOUR[]      = "#000718";
-constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 },
-                  ATLAS_DIMENSIONS = { 6, 8 };
-constexpr float   TRANSLATIONAL_THRUST = 200.0f;
-constexpr float   ROTATIONAL_THRUST = 50.0f;
-constexpr float   LUNAR_LANDER_MASS = 1.0f;
-constexpr float   LUNAR_LANDER_MOMENT = 1.0f;
-constexpr float   VELOCITY_PID_KP        = 1.0f;
-constexpr float   VELOCITY_PID_KI        = 1.0f;
-constexpr float   VELOCITY_PID_KD        = 10.0f;
-constexpr float   VELOCITY_PID_INTEGRAL_LIMIT = 800.0f;
-constexpr float   VELOCITY_PID_MAX_OUTPUT     = 400.0f;
-constexpr float   ROTATION_PID_KP             = 1.0f;
-constexpr float   ROTATION_PID_KI             = 1.0f;
-constexpr float   ROTATION_PID_KD             = 10.0f;
-constexpr float   ROTATION_PID_INTEGRAL_LIMIT = 400.0f;
-constexpr float   ROTATION_PID_MAX_OUTPUT     = 200.0f;
-constexpr float   STABILISER_OVERRIDE_DURATION = 0.25f;
 
 // constexpr int   NUMBER_OF_TILES         = 20,
 //                 NUMBER_OF_BLOCKS        = 3;
@@ -142,21 +175,9 @@ constexpr float   STABILISER_OVERRIDE_DURATION = 0.25f;
 //                 // in m/ms², since delta time is in ms
 //                 ACCELERATION_OF_GRAVITY = 981.0f,
 //                 END_GAME_THRESHOLD      = 800.0f;
-
-constexpr float ACCELERATION_OF_GRAVITY = 163.5f; // 1/6 of gravity on Earth
-constexpr float END_GAME_THRESHOLD      = 800.0f;
-
 Lander::Lander(Vector2 position, Vector2 scale, const char *textureFilepath)
     : Entity(position, scale, textureFilepath, ENTITY_PLAYER)
 {
-    setTranslationPIDGains(VELOCITY_PID_KP, VELOCITY_PID_KI, VELOCITY_PID_KD);
-    setRotationPIDGains(ROTATION_PID_KP, ROTATION_PID_KI, ROTATION_PID_KD);
-
-    setTranslationIntegralLimit(VELOCITY_PID_INTEGRAL_LIMIT);
-    setRotationIntegralLimit(ROTATION_PID_INTEGRAL_LIMIT);
-
-    setTranslationOutputLimit(VELOCITY_PID_MAX_OUTPUT);
-    setRotationOutputLimit(ROTATION_PID_MAX_OUTPUT);
     resetControllers();
 }
 
@@ -189,9 +210,6 @@ void Lander::toggleRotationStabiliser()
 
 void Lander::resetControllers()
 {
-    mVelocityPID_X.reset();
-    mVelocityPID_Y.reset();
-    mAngularPID.reset();
     mTranslationOverrideActive = false;
     mRotationOverrideActive    = false;
     mTranslationOverrideTimer  = 0.0f;
@@ -204,26 +222,24 @@ void Lander::resetControllers()
     mLastTranslationCorrectionY = 0.0f;
     mLastRotationCorrection     = 0.0f;
     mDesiredAngle               = normaliseAngle(getAngle());
+    mEngineState                = MainEngineState::Off;
+    mEngineStateTimer           = 0.0f;
+    mEngineStateDuration        = 0.0f;
+    mTargetThrottle             = MAIN_ENGINE_DEFAULT_THROTTLE;
+    mCurrentThrottle            = MAIN_ENGINE_MIN_THROTTLE;
+    mIgnitionsRemaining         = ENGINE_MAX_CHANGES;
+    mFuel                       = mFuelCapacity;
+    updateEffectiveMass();
     setTranslationStabiliserEnabled(true);
     setRotationStabiliserEnabled(true);
 }
 
 void Lander::setTranslationStabiliserEnabled(bool enabled)
 {
-    if (mTranslationStabiliserEnabled != enabled)
+    bool stateChanged = (mTranslationStabiliserEnabled != enabled);
+    if (stateChanged)
     {
         mTranslationStabiliserEnabled = enabled;
-        mVelocityPID_X.reset();
-        mVelocityPID_Y.reset();
-    }
-
-    if (enabled)
-    {
-        mLastTranslationCorrectionX = 0.0f;
-        mLastTranslationCorrectionY = 0.0f;
-    }
-    else
-    {
         mLastTranslationCorrectionX = 0.0f;
         mLastTranslationCorrectionY = 0.0f;
     }
@@ -235,7 +251,6 @@ void Lander::setRotationStabiliserEnabled(bool enabled)
     if (stateChanged)
     {
         mRotationStabiliserEnabled = enabled;
-        mAngularPID.reset();
 
         if (enabled)
         {
@@ -299,6 +314,63 @@ void Lander::setManualRotationTorque(float torque)
     mLastManualTorque = torque;
 }
 
+bool Lander::canToggleEngine() const
+{
+    if (mEngineState == MainEngineState::Off || mEngineState == MainEngineState::Stopping)
+    {
+        return (mIgnitionsRemaining > 0) && (mFuel > 0.0f);
+    }
+    return true;
+}
+
+void Lander::toggleMainEngine()
+{
+    if (mEngineState == MainEngineState::Off || mEngineState == MainEngineState::Stopping)
+    {
+        if (!canToggleEngine()) return;
+        requestEngineStart();
+        if (mIgnitionsRemaining > 0) mIgnitionsRemaining--;
+    }
+    else
+    {
+        requestEngineShutdown();
+    }
+}
+
+void Lander::setMainEngineThrottle(float throttle)
+{
+    float clamped = std::max(MAIN_ENGINE_MIN_THROTTLE,
+                             std::min(MAIN_ENGINE_MAX_THROTTLE, throttle));
+    mTargetThrottle = clamped;
+}
+
+void Lander::adjustMainEngineThrottle(float delta)
+{
+    setMainEngineThrottle(mTargetThrottle + delta);
+}
+
+float Lander::getMainEngineThrottleNormalised() const
+{
+    float range = MAIN_ENGINE_MAX_THROTTLE - MAIN_ENGINE_MIN_THROTTLE;
+    if (range <= 0.0f) return 0.0f;
+    float normalised = (mTargetThrottle - MAIN_ENGINE_MIN_THROTTLE) / range;
+    return std::max(0.0f, std::min(1.0f, normalised));
+}
+
+float Lander::getMainEngineAppliedThrottleNormalised() const
+{
+    float range = MAIN_ENGINE_MAX_THROTTLE - MAIN_ENGINE_MIN_THROTTLE;
+    if (range <= 0.0f) return 0.0f;
+    float normalised = (mCurrentThrottle - MAIN_ENGINE_MIN_THROTTLE) / range;
+    return std::max(0.0f, std::min(1.0f, normalised));
+}
+
+void Lander::setDryMass(float dryMass)
+{
+    mDryMass = std::max(0.1f, dryMass);
+    updateEffectiveMass();
+}
+
 Vector2 Lander::getTotalTranslationForce() const
 {
     Vector2 total = mLastManualTranslationForce;
@@ -320,59 +392,187 @@ float Lander::getTotalRotationTorque() const
     return total;
 }
 
-void Lander::setTranslationPIDGains(float kp, float ki, float kd)
+void Lander::updateEffectiveMass()
 {
-    mVelocityPID_X.setGains(kp, ki, kd);
-    mVelocityPID_Y.setGains(kp, ki, kd);
+    float totalMass = mDryMass + (mFuel * MAIN_ENGINE_FUEL_MASS_PER_UNIT);
+    setMass(totalMass);
 }
 
-void Lander::setRotationPIDGains(float kp, float ki, float kd)
+void Lander::requestEngineStart()
 {
-    mAngularPID.setGains(kp, ki, kd);
+    if (mFuel <= 0.0f)
+    {
+        mEngineState = MainEngineState::Off;
+        return;
+    }
+    mEngineState = MainEngineState::Starting;
+    mEngineStateTimer = 0.0f;
+    mEngineStateDuration = std::max(ENGINE_START_TIME, 0.01f);
 }
 
-void Lander::setTranslationIntegralLimit(float limit)
+void Lander::requestEngineShutdown()
 {
-    float absLimit = std::fabs(limit);
-    mVelocityPID_X.setIntegralLimits(-absLimit, absLimit);
-    mVelocityPID_Y.setIntegralLimits(-absLimit, absLimit);
+    if (mEngineState == MainEngineState::Off) return;
+
+    mEngineState = MainEngineState::Stopping;
+    mEngineStateTimer = 0.0f;
+    mEngineStateDuration = std::max(ENGINE_CLOSE_TIME, 0.01f);
 }
 
-void Lander::setRotationIntegralLimit(float limit)
+void Lander::updateEngineState(float deltaTime)
 {
-    float absLimit = std::fabs(limit);
-    mAngularPID.setIntegralLimits(-absLimit, absLimit);
+    if (deltaTime < 0.0f) deltaTime = 0.0f;
+
+    // Smooth throttle transitions
+    float maxDelta = ENGINE_CHANGE_RATE * deltaTime;
+    float diff = mTargetThrottle - mCurrentThrottle;
+    if (std::fabs(diff) > maxDelta)
+    {
+        mCurrentThrottle += maxDelta * (diff > 0.0f ? 1.0f : -1.0f);
+    }
+    else
+    {
+        mCurrentThrottle = mTargetThrottle;
+    }
+
+    if (mEngineState == MainEngineState::Starting || mEngineState == MainEngineState::Stopping)
+    {
+        mEngineStateTimer += deltaTime;
+        if (mEngineStateTimer >= mEngineStateDuration)
+        {
+            if (mEngineState == MainEngineState::Starting)
+            {
+                mEngineState = MainEngineState::Running;
+            }
+            else
+            {
+                mEngineState = MainEngineState::Off;
+            }
+            mEngineStateTimer = 0.0f;
+            mEngineStateDuration = 0.0f;
+        }
+    }
+
+    if (mFuel <= 0.0f && mEngineState != MainEngineState::Off)
+    {
+        requestEngineShutdown();
+    }
 }
 
-void Lander::setTranslationOutputLimit(float limit)
+static float logEase(float t)
 {
-    float absLimit = std::fabs(limit);
-    mTranslationOutputLimit = absLimit;
-    mVelocityPID_X.setOutputLimits(-absLimit, absLimit);
-    mVelocityPID_Y.setOutputLimits(-absLimit, absLimit);
+    if (t <= 0.0f) return 0.0f;
+    if (t >= 1.0f) return 1.0f;
+    return std::log1p(t * 9.0f) / std::log(10.0f);
 }
 
-void Lander::setRotationOutputLimit(float limit)
+float Lander::getEngineOutputScalar() const
 {
-    float absLimit = std::fabs(limit);
-    mRotationOutputLimit = absLimit;
-    mAngularPID.setOutputLimits(-absLimit, absLimit);
+    switch (mEngineState)
+    {
+        case MainEngineState::Off:
+            return 0.0f;
+        case MainEngineState::Running:
+            return 1.0f;
+        case MainEngineState::Starting:
+            if (mEngineStateDuration <= 0.0f) return 1.0f;
+            return logEase(mEngineStateTimer / mEngineStateDuration);
+        case MainEngineState::Stopping:
+            if (mEngineStateDuration <= 0.0f) return 0.0f;
+            return 1.0f - logEase(mEngineStateTimer / mEngineStateDuration);
+        default:
+            return 0.0f;
+    }
+}
+
+bool Lander::isMainEngineFiring() const
+{
+    return (mFuel > 0.0f) && (getEngineOutputScalar() > 0.01f);
+}
+
+void Lander::applyMainEngineThrust(float deltaTime)
+{
+    if (deltaTime <= 0.0f) return;
+    if (mFuel <= 0.0f)
+    {
+        mFuel = 0.0f;
+        requestEngineShutdown();
+        return;
+    }
+
+    float engineScalar = getEngineOutputScalar();
+    float throttleRatio = (mCurrentThrottle / MAIN_ENGINE_MAX_THROTTLE) * engineScalar;
+    if (throttleRatio <= 0.0f) return;
+
+    float angleRad = getAngle() * DEG2RAD;
+    Vector2 thrustDirection { std::sin(angleRad), -std::cos(angleRad) };
+    Vector2 desiredThrust = Vector2Scale(thrustDirection, MAIN_ENGINE_MAX_THRUST * throttleRatio);
+
+    float throttleNormalised = getMainEngineAppliedThrottleNormalised() * engineScalar;
+    float fuelConsumptionScale = MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE +
+        throttleNormalised * (1.0f - MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE);
+    float requestedFuel = MAIN_ENGINE_MAX_FUEL_BURN_RATE * fuelConsumptionScale * deltaTime;
+    float consumedFuel = std::min(requestedFuel, mFuel);
+    float thrustScale = (requestedFuel > 0.0f) ? (consumedFuel / requestedFuel) : 1.0f;
+
+    if (thrustScale > 0.0f)
+    {
+        applyForce(Vector2Scale(desiredThrust, thrustScale));
+        setTranslationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+    }
+
+    mFuel -= consumedFuel;
+    if (mFuel < 0.0f) mFuel = 0.0f;
+    updateEffectiveMass();
+
+    if (consumedFuel < requestedFuel || mFuel <= 0.0f)
+    {
+        requestEngineShutdown();
+    }
 }
 
 void Lander::applyTranslationStabilisation(float deltaTime)
 {
+    (void) deltaTime;
+    constexpr float INPUT_EPSILON = 0.01f;
+    bool manualInputActive = (std::fabs(mLastManualTranslationForce.x) > INPUT_EPSILON) ||
+                             (std::fabs(mLastManualTranslationForce.y) > INPUT_EPSILON);
+
     Vector2 velocity = getVelocity();
-    mLastTranslationCorrectionX = mVelocityPID_X.compute(0.0f, velocity.x, deltaTime);
-    mLastTranslationCorrectionY = mVelocityPID_Y.compute(0.0f, velocity.y, deltaTime);
-    applyForce({mLastTranslationCorrectionX, mLastTranslationCorrectionY});
+    float speedSquared = velocity.x * velocity.x + velocity.y * velocity.y;
+    float minSpeed = TRANSLATIONAL_STABILISER_MINIMUM_SPEED;
+
+    if (!manualInputActive && speedSquared > (minSpeed * minSpeed))
+    {
+        float speed = std::sqrt(speedSquared);
+        Vector2 normalisedVelocity { velocity.x / speed, velocity.y / speed };
+        mLastTranslationCorrectionX = -normalisedVelocity.x * TRANSLATIONAL_STABILISER_THRUST;
+        mLastTranslationCorrectionY = -normalisedVelocity.y * TRANSLATIONAL_STABILISER_THRUST;
+        applyForce({mLastTranslationCorrectionX, mLastTranslationCorrectionY});
+    }
+    else
+    {
+        mLastTranslationCorrectionX = 0.0f;
+        mLastTranslationCorrectionY = 0.0f;
+    }
 }
 
 void Lander::applyRotationStabilisation(float deltaTime)
 {
-    float angle = normaliseAngle(getAngle());
-    float error = normaliseAngle(mDesiredAngle - angle);
-    mLastRotationCorrection = mAngularPID.compute(error, 0.0f, deltaTime);
-    applyTorque(mLastRotationCorrection);
+    (void) deltaTime;
+    constexpr float INPUT_EPSILON = 0.01f;
+    bool manualInputActive = std::fabs(mLastManualTorque) > INPUT_EPSILON;
+    float angularVelocity = getAngularVelocity();
+
+    if (!manualInputActive && std::fabs(angularVelocity) > ROTATIONAL_STABILISER_MINIMUM_SPEED)
+    {
+        mLastRotationCorrection = (angularVelocity > 0.0f ? -1.0f : 1.0f) * ROTATIONAL_STABILISER_THRUST;
+        applyTorque(mLastRotationCorrection);
+    }
+    else
+    {
+        mLastRotationCorrection = 0.0f;
+    }
 }
 
 void Lander::update(float deltaTime)
@@ -413,6 +613,9 @@ void Lander::update(float deltaTime)
         setRotationStabiliserEnabled(mRotationStabiliserDesired);
     }
 
+    updateEngineState(deltaTime);
+    applyMainEngineThrust(deltaTime);
+
     if (mTranslationStabiliserEnabled)
         applyTranslationStabilisation(deltaTime);
 
@@ -425,13 +628,16 @@ void Lander::update(float deltaTime)
 // Global Variables
 AppStatus gAppStatus   = RUNNING;
 float gPreviousTicks   = 0.0f;
+float gManualThrusterFlashTimer = 0.0f;
+Camera2D gCamera {};
+bool gRCSThrustersActive = false;
 
 GameState g;
 
 #ifdef DEBUG
 constexpr float DEBUG_DISPLAY_INTERVAL = 0.15f;
 float gDebugDisplayTimer = 0.0f;
-char gDebugMessage[128] = "PID Tx: 0.00 Ty: 0.00 R: 0.00";
+char gDebugMessage[128] = "Stab Tx: 0.00 Ty: 0.00 R: 0.00";
 #endif
 
 // Function Declarations
@@ -440,17 +646,26 @@ void processInput();
 void update();
 void render();
 void shutdown();
+void refreshMainThrusterFlameAppearance();
+void drawControlTooltips();
+void panCamera(Camera2D *camera, const Vector2 *targetPosition);
 
 void initialise()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "AI");
     InitAudioDevice();
 
+    gCamera.target = ORIGIN;
+    gCamera.offset = { SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f };
+    gCamera.rotation = 0.0f;
+    gCamera.zoom = 1.0f;
+
     g.bgm = LoadMusicStream("assets/game/01_Among_The_Ruins.wav");
     SetMusicVolume(g.bgm, 0.33f);
     PlayMusicStream(g.bgm);
 
-    g.burstSound = LoadSound("assets/game/sound_rocket_mini.wav");
+    g.engineLoopSound = LoadSound("assets/game/sound_rocket_mini.wav");
+    SetSoundVolume(g.engineLoopSound, 0.35f);
 
     // /*
     //     ----------- PROTAGONIST -----------
@@ -557,6 +772,15 @@ void initialise()
     // g.ghost->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
     // g.ghost->setDirection(LEFT);
 
+    // ----------- BACKGROUND -----------
+    g.background = new Entity(
+        {ORIGIN.x, ORIGIN.y},
+        {SCREEN_WIDTH, SCREEN_HEIGHT},
+        "assets/game/background.png",
+        ENTITY_BACKGROUND
+    );
+    g.background->setEntityType(ENTITY_BACKGROUND);
+
     // ----------- LUNAR LANDER -----------
     g.LunarLander = new Lander(
         {ORIGIN.x, ORIGIN.y},
@@ -565,18 +789,40 @@ void initialise()
     );
 
     g.LunarLander->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
-    g.LunarLander->setMass(LUNAR_LANDER_MASS);
+    g.LunarLander->setDryMass(LUNAR_LANDER_MASS);
     g.LunarLander->setMomentOfInertia(LUNAR_LANDER_MOMENT);
     g.LunarLander->setAngularVelocity(0.0f);
     g.LunarLander->setAngularAcceleration(0.0f);
 
-    g.LunarLander->setTranslationPIDGains(VELOCITY_PID_KP, VELOCITY_PID_KI, VELOCITY_PID_KD);
-    g.LunarLander->setRotationPIDGains(ROTATION_PID_KP, ROTATION_PID_KI, ROTATION_PID_KD);
-    g.LunarLander->setTranslationIntegralLimit(VELOCITY_PID_INTEGRAL_LIMIT);
-    g.LunarLander->setRotationIntegralLimit(ROTATION_PID_INTEGRAL_LIMIT);
-    g.LunarLander->setTranslationOutputLimit(VELOCITY_PID_MAX_OUTPUT);
-    g.LunarLander->setRotationOutputLimit(ROTATION_PID_MAX_OUTPUT);
     g.LunarLander->resetControllers();
+
+    Vector2 thrusterScale {
+        g.LunarLander->getScale().x * 0.45f,
+        g.LunarLander->getScale().y * 1.1f
+    };
+    std::vector<int> flameFrames {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    std::map<Direction, std::vector<int>> flameAtlas = {
+        {UP, flameFrames},
+        {DOWN, flameFrames},
+        {LEFT, flameFrames},
+        {RIGHT, flameFrames}
+    };
+    g.mainThrusterFlame = new Entity(
+        g.LunarLander->getPosition(),
+        thrusterScale,
+        "assets/game/flames_stacked.png",
+        ATLAS,
+        {10.0f, 1.0f},
+        flameAtlas,
+        ENTITY_BACKGROUND
+    );
+    g.mainThrusterFlame->setFrameSpeed(static_cast<int>(FLAME_ANIMATION_BASE_FPS));
+    g.mainThrusterFlame->setParentEntity(g.LunarLander);
+    float thrusterOffsetY = (g.LunarLander->getScale().y * 0.5f) +
+                            (thrusterScale.y * 0.5f) - MAIN_THRUSTER_GAP;
+    g.mainThrusterFlame->setParentLocalOffset({0.0f, thrusterOffsetY});
+    g.mainThrusterFlame->setParentRotationInheritance(true);
+    g.mainThrusterFlame->deactivate();
 
     g.gameStatus = GAME_START;
 
@@ -586,6 +832,7 @@ void initialise()
 
 void processInput()
 {
+    gRCSThrustersActive = false;
     // g.xochitl->resetMovement();
     // g.ghost->resetMovement();
 
@@ -611,6 +858,7 @@ void processInput()
     {
         case GAME_START:
             if (IsKeyPressed(KEY_ENTER)) g.gameStatus = GAME_RUNNING;
+            if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
             break;
         case GAME_RUNNING:
         {
@@ -628,6 +876,12 @@ void processInput()
                 g.LunarLander->setRotationOverrideActive(false);
             }
             g.LunarLander->setManualRotationTorque(manualTorque);
+
+            if (IsKeyPressed(KEY_SPACE)) g.LunarLander->toggleMainEngine();
+            if (IsKeyPressed(KEY_Z))     g.LunarLander->setMainEngineThrottle(MAIN_ENGINE_MAX_THROTTLE);
+            if (IsKeyPressed(KEY_X))     g.LunarLander->setMainEngineThrottle(MAIN_ENGINE_MIN_THROTTLE);
+            if (IsKeyPressed(KEY_W))     g.LunarLander->adjustMainEngineThrottle(MAIN_ENGINE_THROTTLE_STEP);
+            if (IsKeyPressed(KEY_S))     g.LunarLander->adjustMainEngineThrottle(-MAIN_ENGINE_THROTTLE_STEP);
 
             Vector2 translationalThrust {0.0f, 0.0f};
             bool translationInput = false;
@@ -663,7 +917,10 @@ void processInput()
             {
                 g.LunarLander->applyForce(translationalThrust);
                 g.LunarLander->setTranslationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+                gManualThrusterFlashTimer = MANUAL_THRUSTER_FLASH_DURATION;
             }
+
+            gRCSThrustersActive = translationInput;
 
             g.LunarLander->setManualTranslationForce(translationalThrust);
 
@@ -675,12 +932,15 @@ void processInput()
         }
         case GAME_PAUSED:
             if (IsKeyPressed(KEY_ENTER)) g.gameStatus = GAME_RUNNING;
+            if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
             break;
         case GAME_WON:
             if (IsKeyPressed(KEY_ENTER)) g.gameStatus = GAME_START;
+            if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
             break;
         case GAME_OVER:
             if (IsKeyPressed(KEY_ENTER)) g.gameStatus = GAME_START;
+            if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
             break;
     }
 }
@@ -694,6 +954,12 @@ void update()
 
     UpdateMusicStream(g.bgm);
 
+    if (gManualThrusterFlashTimer > 0.0f)
+    {
+        gManualThrusterFlashTimer -= deltaTime;
+        if (gManualThrusterFlashTimer < 0.0f) gManualThrusterFlashTimer = 0.0f;
+    }
+
     switch (g.gameStatus)
     {
         case GAME_START:
@@ -704,6 +970,8 @@ void update()
             g.LunarLander->setAngularVelocity(0.0f);
             g.LunarLander->setAngularAcceleration(0.0f);
             g.LunarLander->resetControllers();
+            if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
+            gManualThrusterFlashTimer = 0.0f;
             break;
         case GAME_RUNNING:
             if (g.LunarLander->getPosition().y > END_GAME_THRESHOLD) 
@@ -722,7 +990,7 @@ void update()
                     snprintf(
                         gDebugMessage,
                         sizeof(gDebugMessage),
-                        "Pos(%.1f,%.1f) Thrust Tx %.1f Ty %.1f R %.1f | PID Tx %.1f Ty %.1f R %.1f",
+                        "Pos(%.1f,%.1f) Thrust Tx %.1f Ty %.1f R %.1f | Stabiliser Tx %.1f Ty %.1f R %.1f",
                         pos.x,
                         pos.y,
                         totalForce.x,
@@ -744,6 +1012,52 @@ void update()
         case GAME_OVER:
             break;
     }
+
+    if (g.LunarLander)
+    {
+        Vector2 target = g.LunarLander->getPosition();
+        panCamera(&gCamera, &target);
+    }
+
+    bool flameShouldBeActive = false;
+    bool engineFiring = false;
+    float engineOutputLevel = 0.0f;
+    float engineThrottleOutput = 0.0f;
+    if (g.gameStatus == GAME_RUNNING && g.LunarLander)
+    {
+        engineFiring = g.LunarLander->isMainEngineFiring();
+        engineOutputLevel = g.LunarLander->getMainEngineOutputLevel();
+        engineThrottleOutput = g.LunarLander->getMainEngineAppliedThrottleNormalised() * engineOutputLevel;
+        flameShouldBeActive = engineFiring || gRCSThrustersActive || gManualThrusterFlashTimer > 0.0f;
+    }
+    else
+    {
+        gManualThrusterFlashTimer = 0.0f;
+        gRCSThrustersActive = false;
+        engineOutputLevel = 0.0f;
+        engineThrottleOutput = 0.0f;
+    }
+
+    if (engineFiring)
+    {
+        float throttleFactor = engineThrottleOutput;
+        float volume = 0.25f + 0.65f * throttleFactor;
+        SetSoundVolume(g.engineLoopSound, volume);
+        if (!IsSoundPlaying(g.engineLoopSound)) PlaySound(g.engineLoopSound);
+    }
+    else if (IsSoundPlaying(g.engineLoopSound))
+    {
+        StopSound(g.engineLoopSound);
+    }
+
+    if (g.mainThrusterFlame)
+    {
+        if (flameShouldBeActive) g.mainThrusterFlame->activate();
+        else                     g.mainThrusterFlame->deactivate();
+    }
+
+    refreshMainThrusterFlameAppearance();
+    if (g.mainThrusterFlame) g.mainThrusterFlame->update(deltaTime);
 
 
     // g.xochitl->update(deltaTime, nullptr, g.tiles, 
@@ -768,6 +1082,13 @@ void render()
 {
     BeginDrawing();
     ClearBackground(ColorFromHex(BG_COLOUR));
+    BeginMode2D(gCamera);
+    if (g.background) g.background->render();
+
+    if (g.mainThrusterFlame) g.mainThrusterFlame->render();
+    if (g.LunarLander) g.LunarLander->render();
+
+    EndMode2D();
 
     bool translationEnabled = g.LunarLander->isTranslationStabiliserEnabled();
     bool rotationEnabled    = g.LunarLander->isRotationStabiliserEnabled();
@@ -812,25 +1133,38 @@ void render()
 
     DrawText(rotationStatus, 20, 45, 20, rotationColor);
 
+    if (g.LunarLander)
+    {
+        float fuel        = g.LunarLander->getFuel();
+        float fuelCap     = g.LunarLander->getFuelCapacity();
+        float fuelPercent = (fuelCap > 0.0f) ? (fuel / fuelCap) * 100.0f : 0.0f;
+        DrawText(
+            TextFormat("Fuel: %05.1f / %.0f (%.0f%%)", fuel, fuelCap, fuelPercent),
+            20,
+            70,
+            18,
+            WHITE
+        );
+        DrawText(
+            TextFormat("Throttle: %.0f%%", g.LunarLander->getMainEngineThrottle() * 100.0f),
+            20,
+            92,
+            18,
+            WHITE
+        );
+    }
+
 #ifdef DEBUG
     if (g.LunarLander)
     {
-        DrawText(gDebugMessage, 20, 70, 18, YELLOW);
+        DrawText(gDebugMessage, 20, 120, 18, YELLOW);
     }
 #endif
 
-    // g.xochitl->render();
-    // g.ghost->render();
-
-    // for (int i = 0; i < NUMBER_OF_TILES;  i++) g.tiles[i].render();
-    // for (int i = 0; i < NUMBER_OF_BLOCKS; i++) g.blocks[i].render();
     switch (g.gameStatus)
     {
         case GAME_START:
             DrawText("Press Enter to Start", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 20, WHITE);
-            break;
-        case GAME_RUNNING:
-            g.LunarLander->render();
             break;
         case GAME_PAUSED:
             DrawText("Paused", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 20, WHITE);
@@ -844,9 +1178,75 @@ void render()
             DrawText("Game Over", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 20, WHITE);
             DrawText("Press Enter to Restart", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 20, 20, WHITE);
             break;
+        case GAME_RUNNING:
+        default:
+            break;
     }
 
+    drawControlTooltips();
+
     EndDrawing();
+}
+
+void refreshMainThrusterFlameAppearance()
+{
+    if (!g.mainThrusterFlame || !g.LunarLander) return;
+
+    float throttleNormalised = g.LunarLander->getMainEngineAppliedThrottleNormalised() *
+                               g.LunarLander->getMainEngineOutputLevel();
+    if (gRCSThrustersActive) throttleNormalised = std::max(throttleNormalised, 0.2f);
+    Vector2 newScale {
+        g.LunarLander->getScale().x * (0.4f + 0.1f * throttleNormalised),
+        g.LunarLander->getScale().y * (0.9f + 0.4f * throttleNormalised)
+    };
+    g.mainThrusterFlame->setScale(newScale);
+
+    float thrusterOffsetY = (g.LunarLander->getScale().y * 0.5f) +
+                            (newScale.y * 0.5f) - MAIN_THRUSTER_GAP;
+    g.mainThrusterFlame->setParentLocalOffset({0.0f, thrusterOffsetY});
+    g.mainThrusterFlame->setParentRotationInheritance(true);
+
+    int frameSpeed = static_cast<int>(FLAME_ANIMATION_BASE_FPS + throttleNormalised * FLAME_ANIMATION_BASE_FPS);
+    if (frameSpeed < 4) frameSpeed = 4;
+    g.mainThrusterFlame->setFrameSpeed(frameSpeed);
+}
+
+void drawControlTooltips()
+{
+    const int baseY = SCREEN_HEIGHT - 75;
+    switch (g.gameStatus)
+    {
+        case GAME_START:
+            DrawText("Enter: Start mission   |   Q: Quit", 20, baseY, 18, LIGHTGRAY);
+            DrawText("Space: Ignite main engine (cannot shut down)   |   W/S: Adjust throttle   |   Z/X: Max/Min", 20, baseY + 22, 16, LIGHTGRAY);
+            DrawText("A/D: Rotate   |   IJKL: RCS translation   |   G/T: Stabiliser toggles", 20, baseY + 42, 16, LIGHTGRAY);
+            break;
+        case GAME_RUNNING:
+            DrawText("Space: Ignite engine   |   W/S: Throttle +/-   |   Z: Max   |   X: Min", 20, baseY, 16, LIGHTGRAY);
+            DrawText("IJKL: RCS translation   |   A/D: Rotate   |   P: Pause   |   Q: Quit", 20, baseY + 20, 16, LIGHTGRAY);
+            DrawText("G/T: Toggle stabilisers", 20, baseY + 40, 16, LIGHTGRAY);
+            break;
+        case GAME_PAUSED:
+            DrawText("Paused: Enter resumes   |   Q quits", 20, baseY, 18, LIGHTGRAY);
+            break;
+        case GAME_WON:
+        case GAME_OVER:
+            DrawText("Enter: Restart   |   Q: Quit", 20, baseY, 18, LIGHTGRAY);
+            break;
+    }
+}
+
+void panCamera(Camera2D *camera, const Vector2 *targetPosition)
+{
+    Vector2 positionDifference = Vector2Subtract(
+        *targetPosition,
+        camera->target
+    );
+
+    camera->target = Vector2Add(
+        camera->target,
+        Vector2Scale(positionDifference, 0.1f)
+    );
 }
 
 void shutdown() 
@@ -856,11 +1256,14 @@ void shutdown()
     // delete[] g.blocks;
     // delete   g.ghost;
 
+    delete g.mainThrusterFlame;
     delete g.LunarLander;
+    delete g.background;
 
     StopMusicStream(g.bgm);
+    StopSound(g.engineLoopSound);
     UnloadMusicStream(g.bgm);
-    UnloadSound(g.burstSound);
+    UnloadSound(g.engineLoopSound);
 
     CloseAudioDevice();
     CloseWindow();
