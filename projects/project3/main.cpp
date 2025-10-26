@@ -46,18 +46,23 @@ constexpr float   MAIN_THRUSTER_GAP = 6.0f;
 constexpr float   MAIN_ENGINE_MIN_THROTTLE = 0.15f;
 constexpr float   MAIN_ENGINE_MAX_THROTTLE = 1.0f;
 constexpr float   MAIN_ENGINE_DEFAULT_THROTTLE = 0.35f;
-constexpr float   MAIN_ENGINE_MAX_THRUST = 800.0f;
+constexpr float   MAIN_ENGINE_MAX_THRUST = 8000.0f;
 constexpr float   MAIN_ENGINE_FUEL_CAPACITY = 1200.0f;
 constexpr float   MAIN_ENGINE_MAX_FUEL_BURN_RATE = 5.0f;
 constexpr float   MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE = 0.30f;
 constexpr float   MAIN_ENGINE_FUEL_MASS_PER_UNIT = 0.02f;
 constexpr float   MAIN_ENGINE_THROTTLE_STEP = 0.05f;
+constexpr float   BACKGROUND_PARALLAX_FACTOR = 0.25f;
+constexpr float   BACKGROUND_VELOCITY_OFFSET_SCALE = 0.08f;
+constexpr float   CAMERA_ZOOM_MIN = 0.35f;
+constexpr float   CAMERA_ZOOM_MAX = 2.0f;
+constexpr float   CAMERA_ZOOM_SCROLL_STEP = 0.08f;
+constexpr float   CAMERA_MAP_VIEW_ZOOM = 0.45f;
 constexpr int     ENGINE_MAX_CHANGES = 3;
 constexpr float   ENGINE_START_TIME = 1.4f;
 constexpr float   ENGINE_CLOSE_TIME = 1.0f;
 constexpr float   ENGINE_CHANGE_RATE = 0.5f; // 50% per second
 constexpr float   FLAME_ANIMATION_BASE_FPS = 8.0f;
-constexpr float   MANUAL_THRUSTER_FLASH_DURATION = 0.12f;
 
 static float normaliseAngle(float angle)
 {
@@ -105,6 +110,8 @@ public:
     float getFuelCapacity() const { return mFuelCapacity; }
     bool hasFuel() const { return mFuel > 0.0f; }
     void setDryMass(float dryMass);
+    int getIgnitionsRemaining() const { return mIgnitionsRemaining; }
+    int getMaxIgnitions() const { return ENGINE_MAX_CHANGES; }
 
     float getLastTranslationCorrectionX() const { return mLastTranslationCorrectionX; }
     float getLastTranslationCorrectionY() const { return mLastTranslationCorrectionY; }
@@ -628,9 +635,9 @@ void Lander::update(float deltaTime)
 // Global Variables
 AppStatus gAppStatus   = RUNNING;
 float gPreviousTicks   = 0.0f;
-float gManualThrusterFlashTimer = 0.0f;
 Camera2D gCamera {};
-bool gRCSThrustersActive = false;
+bool gMapViewActive = false;
+float gStoredZoomBeforeMap = 1.0f;
 
 GameState g;
 
@@ -649,6 +656,8 @@ void shutdown();
 void refreshMainThrusterFlameAppearance();
 void drawControlTooltips();
 void panCamera(Camera2D *camera, const Vector2 *targetPosition);
+void handleCameraZoomInput();
+void updateBackgroundParallax();
 
 void initialise()
 {
@@ -832,7 +841,7 @@ void initialise()
 
 void processInput()
 {
-    gRCSThrustersActive = false;
+    handleCameraZoomInput();
     // g.xochitl->resetMovement();
     // g.ghost->resetMovement();
 
@@ -917,10 +926,7 @@ void processInput()
             {
                 g.LunarLander->applyForce(translationalThrust);
                 g.LunarLander->setTranslationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
-                gManualThrusterFlashTimer = MANUAL_THRUSTER_FLASH_DURATION;
             }
-
-            gRCSThrustersActive = translationInput;
 
             g.LunarLander->setManualTranslationForce(translationalThrust);
 
@@ -954,12 +960,6 @@ void update()
 
     UpdateMusicStream(g.bgm);
 
-    if (gManualThrusterFlashTimer > 0.0f)
-    {
-        gManualThrusterFlashTimer -= deltaTime;
-        if (gManualThrusterFlashTimer < 0.0f) gManualThrusterFlashTimer = 0.0f;
-    }
-
     switch (g.gameStatus)
     {
         case GAME_START:
@@ -971,7 +971,6 @@ void update()
             g.LunarLander->setAngularAcceleration(0.0f);
             g.LunarLander->resetControllers();
             if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
-            gManualThrusterFlashTimer = 0.0f;
             break;
         case GAME_RUNNING:
             if (g.LunarLander->getPosition().y > END_GAME_THRESHOLD) 
@@ -1018,6 +1017,7 @@ void update()
         Vector2 target = g.LunarLander->getPosition();
         panCamera(&gCamera, &target);
     }
+    updateBackgroundParallax();
 
     bool flameShouldBeActive = false;
     bool engineFiring = false;
@@ -1028,12 +1028,10 @@ void update()
         engineFiring = g.LunarLander->isMainEngineFiring();
         engineOutputLevel = g.LunarLander->getMainEngineOutputLevel();
         engineThrottleOutput = g.LunarLander->getMainEngineAppliedThrottleNormalised() * engineOutputLevel;
-        flameShouldBeActive = engineFiring || gRCSThrustersActive || gManualThrusterFlashTimer > 0.0f;
+        flameShouldBeActive = engineFiring;
     }
     else
     {
-        gManualThrusterFlashTimer = 0.0f;
-        gRCSThrustersActive = false;
         engineOutputLevel = 0.0f;
         engineThrottleOutput = 0.0f;
     }
@@ -1152,6 +1150,17 @@ void render()
             18,
             WHITE
         );
+        DrawText(
+            TextFormat(
+                "Ignitions: %d / %d",
+                g.LunarLander->getIgnitionsRemaining(),
+                g.LunarLander->getMaxIgnitions()
+            ),
+            20,
+            114,
+            18,
+            WHITE
+        );
     }
 
 #ifdef DEBUG
@@ -1194,7 +1203,6 @@ void refreshMainThrusterFlameAppearance()
 
     float throttleNormalised = g.LunarLander->getMainEngineAppliedThrottleNormalised() *
                                g.LunarLander->getMainEngineOutputLevel();
-    if (gRCSThrustersActive) throttleNormalised = std::max(throttleNormalised, 0.2f);
     Vector2 newScale {
         g.LunarLander->getScale().x * (0.4f + 0.1f * throttleNormalised),
         g.LunarLander->getScale().y * (0.9f + 0.4f * throttleNormalised)
@@ -1214,17 +1222,39 @@ void refreshMainThrusterFlameAppearance()
 void drawControlTooltips()
 {
     const int baseY = SCREEN_HEIGHT - 75;
+    int ignitionsRemaining = g.LunarLander ? g.LunarLander->getIgnitionsRemaining() : ENGINE_MAX_CHANGES;
+    int ignitionsMax = g.LunarLander ? g.LunarLander->getMaxIgnitions() : ENGINE_MAX_CHANGES;
     switch (g.gameStatus)
     {
         case GAME_START:
             DrawText("Enter: Start mission   |   Q: Quit", 20, baseY, 18, LIGHTGRAY);
-            DrawText("Space: Ignite main engine (cannot shut down)   |   W/S: Adjust throttle   |   Z/X: Max/Min", 20, baseY + 22, 16, LIGHTGRAY);
-            DrawText("A/D: Rotate   |   IJKL: RCS translation   |   G/T: Stabiliser toggles", 20, baseY + 42, 16, LIGHTGRAY);
+            DrawText(
+                TextFormat(
+                    "Space: Ignite main engine (%d/%d ignitions)   |   W/S: Adjust throttle   |   Z/X: Max/Min",
+                    ignitionsRemaining,
+                    ignitionsMax
+                ),
+                20,
+                baseY + 22,
+                16,
+                LIGHTGRAY
+            );
+            DrawText("A/D: Rotate   |   IJKL: RCS translation   |   G/T: Stabiliser toggles   |   Scroll: Zoom   |   M: Map view", 20, baseY + 42, 16, LIGHTGRAY);
             break;
         case GAME_RUNNING:
-            DrawText("Space: Ignite engine   |   W/S: Throttle +/-   |   Z: Max   |   X: Min", 20, baseY, 16, LIGHTGRAY);
+            DrawText(
+                TextFormat(
+                    "Space: Ignite engine (%d/%d left)   |   W/S: Throttle +/-   |   Z: Max   |   X: Min",
+                    ignitionsRemaining,
+                    ignitionsMax
+                ),
+                20,
+                baseY,
+                16,
+                LIGHTGRAY
+            );
             DrawText("IJKL: RCS translation   |   A/D: Rotate   |   P: Pause   |   Q: Quit", 20, baseY + 20, 16, LIGHTGRAY);
-            DrawText("G/T: Toggle stabilisers", 20, baseY + 40, 16, LIGHTGRAY);
+            DrawText("G/T: Toggle stabilisers   |   Scroll: Zoom   |   M: Map view", 20, baseY + 40, 16, LIGHTGRAY);
             break;
         case GAME_PAUSED:
             DrawText("Paused: Enter resumes   |   Q quits", 20, baseY, 18, LIGHTGRAY);
@@ -1247,6 +1277,72 @@ void panCamera(Camera2D *camera, const Vector2 *targetPosition)
         camera->target,
         Vector2Scale(positionDifference, 0.1f)
     );
+}
+
+void updateBackgroundParallax()
+{
+    if (!g.background || !g.LunarLander) return;
+
+    Vector2 parallaxPosition {
+        ORIGIN.x + (gCamera.target.x - ORIGIN.x) * BACKGROUND_PARALLAX_FACTOR,
+        ORIGIN.y + (gCamera.target.y - ORIGIN.y) * BACKGROUND_PARALLAX_FACTOR
+    };
+
+    Vector2 velocityOffset = Vector2Scale(
+        g.LunarLander->getVelocity(),
+        BACKGROUND_VELOCITY_OFFSET_SCALE
+    );
+
+    g.background->setPosition(Vector2Add(parallaxPosition, velocityOffset));
+}
+
+static float clampCameraZoom(float value)
+{
+    return std::clamp(value, CAMERA_ZOOM_MIN, CAMERA_ZOOM_MAX);
+}
+
+void handleCameraZoomInput()
+{
+    float wheelDelta = GetMouseWheelMove();
+    if (wheelDelta != 0.0f)
+    {
+        if (gMapViewActive)
+        {
+            gStoredZoomBeforeMap = clampCameraZoom(
+                gStoredZoomBeforeMap + wheelDelta * CAMERA_ZOOM_SCROLL_STEP
+            );
+        }
+        else
+        {
+            gCamera.zoom = clampCameraZoom(
+                gCamera.zoom + wheelDelta * CAMERA_ZOOM_SCROLL_STEP
+            );
+            gStoredZoomBeforeMap = gCamera.zoom;
+        }
+    }
+
+    if (IsKeyPressed(KEY_M))
+    {
+        gMapViewActive = !gMapViewActive;
+        if (gMapViewActive)
+        {
+            gStoredZoomBeforeMap = clampCameraZoom(gCamera.zoom);
+            gCamera.zoom = clampCameraZoom(CAMERA_MAP_VIEW_ZOOM);
+        }
+        else
+        {
+            gCamera.zoom = clampCameraZoom(gStoredZoomBeforeMap);
+        }
+    }
+
+    if (gMapViewActive)
+    {
+        gCamera.zoom = clampCameraZoom(CAMERA_MAP_VIEW_ZOOM);
+    }
+    else
+    {
+        gCamera.zoom = clampCameraZoom(gCamera.zoom);
+    }
 }
 
 void shutdown() 
