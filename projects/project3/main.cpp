@@ -32,7 +32,7 @@ constexpr char    BG_COLOUR[]      = "#000718";
 constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 
 constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth
-constexpr float END_GAME_THRESHOLD      = 800.0f;
+constexpr float END_GAME_THRESHOLD      = -800.0f
                   
 constexpr float   TRANSLATIONAL_THRUST = 200.0f;
 constexpr float   ROTATIONAL_THRUST = 50.0f;
@@ -78,15 +78,18 @@ constexpr float   ENGINE_CLOSE_TIME = 1.0f;
 constexpr float   ENGINE_CHANGE_RATE = 0.5f; // 50% per second
 constexpr float   FLAME_ANIMATION_BASE_FPS = 8.0f;
 constexpr float   CONTACT_EPSILON = 5.0f;
+constexpr float   LANDER_FOOT_SPAN_RATIO = 0.65f;
+constexpr float   CAMERA_PAN_LERP_SPEED = 0.1f;
+constexpr float   MAX_SAFE_LANDING_SPEED = 25.0f;
 
 static float normaliseAngle(float angle)
 {
-    while (angle > 180.0f) angle -= 360.0f;
-    while (angle < -180.0f) angle += 360.0f;
-    return angle;
+    angle = std::fmod(angle + 180.0f, 360.0f);
+    if (angle < 0.0f) angle += 360.0f;
+    return angle - 180.0f;
 }
 
-static Vector2 rotatePoint(Vector2 point, float angleDegrees)
+static Vector2 rotatePoint(const Vector2 &point, float angleDegrees)
 {
     float radians = angleDegrees * DEG2RAD;
     float cosA = cosf(radians);
@@ -555,9 +558,8 @@ void Lander::applyMainEngineThrust(float deltaTime)
     }
 }
 
-void Lander::applyTranslationStabilisation(float deltaTime)
+void Lander::applyTranslationStabilisation(float /* deltaTime */)
 {
-    (void) deltaTime;
     constexpr float INPUT_EPSILON = 0.01f;
     bool manualInputActive = (std::fabs(mLastManualTranslationForce.x) > INPUT_EPSILON) ||
                              (std::fabs(mLastManualTranslationForce.y) > INPUT_EPSILON);
@@ -581,9 +583,8 @@ void Lander::applyTranslationStabilisation(float deltaTime)
     }
 }
 
-void Lander::applyRotationStabilisation(float deltaTime)
+void Lander::applyRotationStabilisation(float /* deltaTime */)
 {
-    (void) deltaTime;
     constexpr float INPUT_EPSILON = 0.01f;
     bool manualInputActive = std::fabs(mLastManualTorque) > INPUT_EPSILON;
     float angularVelocity = getAngularVelocity();
@@ -672,25 +673,25 @@ void processInput();
 void update();
 void render();
 void shutdown();
-void refreshMainThrusterFlameAppearance();
-void drawControlTooltips();
-void panCamera(Camera2D *camera, const Vector2 *targetPosition);
-void handleCameraZoomInput();
-void updateBackgroundParallax();
-void renderBackground();
-void renderTerrain();
-void updateISS(float deltaTime);
-Vector2 getCameraViewExtents();
-float sampleTerrainHeight(float worldX);
-float sampleTerrainHeight(const Vector2 &worldPosition);
+static void refreshMainThrusterFlameAppearance();
+static void drawControlTooltips();
+static void panCamera(Camera2D *camera, const Vector2 *targetPosition);
+static void handleCameraZoomInput();
+static void updateBackgroundParallax();
+static void renderBackground();
+static void renderTerrain();
+static void updateISS(float deltaTime);
+static Vector2 getCameraViewExtents();
+static float sampleTerrainHeight(float worldX);
+static float sampleTerrainHeight(const Vector2 &worldPosition);
 struct TerrainContactInfo
 {
     bool leftContact = false;
     bool rightContact = false;
     float impactSpeed = 0.0f;
 };
-TerrainContactInfo resolveTerrainCollision(Lander *lander);
-void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander);
+static TerrainContactInfo resolveTerrainCollision(Lander *lander);
+static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander);
 
 void initialise()
 {
@@ -710,111 +711,6 @@ void initialise()
     SetSoundVolume(g.engineLoopSound, 0.35f);
     g.terrainTexture = LoadTexture("assets/game/moon_8x6.png");
     SetTextureFilter(g.terrainTexture, TEXTURE_FILTER_POINT);
-
-    // /*
-    //     ----------- PROTAGONIST -----------
-    // */
-    // std::map<Direction, std::vector<int>> xochitlAnimationAtlas = {
-    //     {DOWN,  {  0,  1,  2,  3,  4,  5,  6,  7 }},
-    //     {LEFT,  {  8,  9, 10, 11, 12, 13, 14, 15 }},
-    //     {UP,    { 24, 25, 26, 27, 28, 29, 30, 31 }},
-    //     {RIGHT, { 40, 41, 42, 43, 44, 45, 46, 47 }},
-    // };
-
-    // float sizeRatio  = 48.0f / 64.0f;
-
-    // // Assets from @see https://sscary.itch.io/the-adventurer-female
-    // g.xochitl = new Entity(
-    //     {ORIGIN.x - 300.0f, ORIGIN.y - 200.0f}, // position
-    //     {250.0f * sizeRatio, 250.0f},           // scale
-    //     "assets/game/walk.png",                 // texture file address
-    //     ATLAS,                                  // single image or atlas?
-    //     ATLAS_DIMENSIONS,                       // atlas dimensions
-    //     xochitlAnimationAtlas,                  // actual atlas
-    //     PLAYER                                  // entity type
-    // );
-
-    // g.xochitl->setJumpingPower(450.0f);
-    // g.xochitl->setColliderDimensions({
-    //     g.xochitl->getScale().x / 3.0f,
-    //     g.xochitl->getScale().y / 3.0f
-    // });
-    // g.xochitl->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
-
-    /*
-        ----------- TILES -----------
-    */
-    // g.tiles = new Entity[NUMBER_OF_TILES];
-
-    // // Compute the left‑most x coordinate so that the entire row is centred
-    // float leftMostX = ORIGIN.x - (NUMBER_OF_TILES * TILE_DIMENSION) / 2.0f;
-
-    // for (int i = 0; i < NUMBER_OF_TILES; i++) 
-    // {
-    //     // @see https://kenney.nl/assets/pixel-platformer-industrial-expansion
-    //     g.tiles[i].setTexture("assets/game/tile_0000.png");
-    //     g.tiles[i].setEntityType(PLATFORM);
-    //     g.tiles[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
-    //     g.tiles[i].setColliderDimensions({TILE_DIMENSION, TILE_DIMENSION});
-    //     g.tiles[i].setPosition({
-    //         leftMostX + i * TILE_DIMENSION, 
-    //         ORIGIN.y + TILE_DIMENSION
-    //     });
-    // }
-
-    /*
-        ----------- BLOCKS -----------
-    */
-    // g.blocks = new Entity[NUMBER_OF_BLOCKS];
-
-    // for (int i = 0; i < NUMBER_OF_BLOCKS; i++) 
-    // {
-    //     // @see https://kenney.nl/assets/pixel-platformer-industrial-expansion
-    //     g.blocks[i].setTexture("assets/game/tile_0061.png");
-    //     g.blocks[i].setEntityType(BLOCK);
-    //     g.blocks[i].setScale({TILE_DIMENSION, TILE_DIMENSION});
-    //     g.blocks[i].setColliderDimensions(
-    //         {TILE_DIMENSION, TILE_DIMENSION});
-    // }
-
-    // g.blocks[0].setPosition(
-    //     {ORIGIN.x - TILE_DIMENSION * 3, ORIGIN.y - TILE_DIMENSION * 2.5f});
-    // g.blocks[1].setPosition(
-    //     {ORIGIN.x, ORIGIN.y - TILE_DIMENSION * 2.5f});
-    // g.blocks[2].setPosition(
-    //     {ORIGIN.x + TILE_DIMENSION * 3, ORIGIN.y - TILE_DIMENSION * 2.5f});
-
-
-    /*
-        ----------- GHOST -----------
-    */
-    // std::map<Direction, std::vector<int>> ghostAnimationAtlas = {
-    //     {LEFT,  { 1, 9, 17, 25 }},
-    //     {RIGHT, { 0, 8, 16, 24 }},
-    // };
-
-    // // @see dyru.itch.io/pixel-ghost-template
-    // g.ghost = new Entity(
-    //     {ORIGIN.x + 300.0f, ORIGIN.y - 200.0f}, // position
-    //     {100.0f, 100.0f},                       // scale
-    //     "assets/game/gosth.png",                // texture file address
-    //     ATLAS,                                  // single image or atlas?
-    //     ATLAS_DIMENSIONS,                       // atlas dimensions
-    //     ghostAnimationAtlas,                    // actual atlas
-    //     NPC                                     // entity type
-    // );
-
-    // g.ghost->setAIType(FOLLOWER);
-    // g.ghost->setAIState(IDLE);
-    // g.ghost->setSpeed(Entity::DEFAULT_SPEED * 0.50f);
-
-    // g.ghost->setColliderDimensions({
-    //     g.ghost->getScale().x / 2.0f,
-    //     g.ghost->getScale().y
-    // });
-
-    // g.ghost->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
-    // g.ghost->setDirection(LEFT);
 
     // ----------- BACKGROUND -----------
     g.background = new Entity(
@@ -879,31 +775,12 @@ void initialise()
 
     g.gameStatus = GAME_START;
 
-    // g.ghost->render(); // calling render once at the beginning to switch ghost's direction
     SetTargetFPS(FPS);
 }
 
 void processInput()
 {
     handleCameraZoomInput();
-    // g.xochitl->resetMovement();
-    // g.ghost->resetMovement();
-
-    // if      (IsKeyDown(KEY_A)) g.xochitl->moveLeft();
-    // else if (IsKeyDown(KEY_D)) g.xochitl->moveRight();
-
-    // if (IsKeyPressed(KEY_W) && g.xochitl->isCollidingBottom())
-    // {
-    //     g.xochitl->jump();
-    //     PlaySound(g.burstSound);
-    // }
-
-    // Sample keypress for sound effect
-    // if (IsKeyPressed(KEY_SPACE)) PlaySound(g.burstSound);
-
-    // // to avoid faster diagonal speed
-    // if (GetLength(g.xochitl->getMovement()) > 1.0f) 
-    //     g.xochitl->normaliseMovement();
 
     if (IsKeyPressed(KEY_Q) || WindowShouldClose()) gAppStatus = TERMINATED;
 
@@ -1021,7 +898,7 @@ void update()
             gLandingOutcomeLocked = false;
             break;
         case GAME_RUNNING:
-            if (g.LunarLander->getPosition().y > END_GAME_THRESHOLD) 
+            if (g.LunarLander->getPosition().y < END_GAME_THRESHOLD) 
                 g.gameStatus = GAME_OVER;
             g.LunarLander->update(deltaTime);
             if (g.gameStatus == GAME_RUNNING)
@@ -1067,7 +944,7 @@ void update()
 
     if (g.LunarLander)
     {
-        Vector2 target = g.LunarLander->getPosition();
+        const Vector2 target = g.LunarLander->getPosition();
         panCamera(&gCamera, &target);
     }
     updateBackgroundParallax();
@@ -1110,24 +987,6 @@ void update()
 
     refreshMainThrusterFlameAppearance();
     if (g.mainThrusterFlame) g.mainThrusterFlame->update(deltaTime);
-
-
-    // g.xochitl->update(deltaTime, nullptr, g.tiles, 
-    //     NUMBER_OF_TILES, g.blocks, NUMBER_OF_BLOCKS);
-
-    // g.ghost->update(deltaTime, g.xochitl, g.tiles, 
-    //     NUMBER_OF_TILES, g.blocks, NUMBER_OF_BLOCKS);
-
-    // for (int i = 0; i < NUMBER_OF_BLOCKS; i++) 
-    //     g.blocks[i].update(deltaTime, nullptr, nullptr, 0, 
-    //         nullptr, 0);
-
-    // for (int i = 0; i < NUMBER_OF_TILES; i++) 
-    //     g.tiles[i].update(deltaTime, nullptr, nullptr, 0, 
-    //         nullptr, 0);
-
-    // if (g.xochitl->getPosition().y > END_GAME_THRESHOLD) 
-    //     gAppStatus = TERMINATED;
 }
 
 void render()
@@ -1253,7 +1112,7 @@ void render()
     EndDrawing();
 }
 
-void refreshMainThrusterFlameAppearance()
+static void refreshMainThrusterFlameAppearance()
 {
     if (!g.mainThrusterFlame || !g.LunarLander) return;
 
@@ -1275,7 +1134,7 @@ void refreshMainThrusterFlameAppearance()
     g.mainThrusterFlame->setFrameSpeed(frameSpeed);
 }
 
-void drawControlTooltips()
+static void drawControlTooltips()
 {
     const int baseY = SCREEN_HEIGHT - 75;
     int ignitionsRemaining = g.LunarLander ? g.LunarLander->getIgnitionsRemaining() : ENGINE_MAX_CHANGES;
@@ -1322,7 +1181,7 @@ void drawControlTooltips()
     }
 }
 
-void panCamera(Camera2D *camera, const Vector2 *targetPosition)
+static void panCamera(Camera2D *camera, const Vector2 *targetPosition)
 {
     Vector2 positionDifference = Vector2Subtract(
         *targetPosition,
@@ -1331,11 +1190,11 @@ void panCamera(Camera2D *camera, const Vector2 *targetPosition)
 
     camera->target = Vector2Add(
         camera->target,
-        Vector2Scale(positionDifference, 0.1f)
+        Vector2Scale(positionDifference, CAMERA_PAN_LERP_SPEED)
     );
 }
 
-void updateBackgroundParallax()
+static void updateBackgroundParallax()
 {
     if (!g.background || !g.LunarLander) return;
 
@@ -1352,7 +1211,7 @@ static float clampCameraZoom(float value)
     return value;
 }
 
-void handleCameraZoomInput()
+static void handleCameraZoomInput()
 {
     float wheelDelta = GetMouseWheelMove();
     if (wheelDelta != 0.0f)
@@ -1396,7 +1255,7 @@ void handleCameraZoomInput()
     }
 }
 
-Vector2 getCameraViewExtents()
+static Vector2 getCameraViewExtents()
 {
     float zoom = (gCamera.zoom <= 0.0f) ? 0.0001f : gCamera.zoom;
     return {
@@ -1414,7 +1273,7 @@ static unsigned int terrainHash(int column, int depth)
     return h;
 }
 
-float sampleTerrainHeight(float worldX)
+static float sampleTerrainHeight(float worldX)
 {
     float primary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_PRIMARY) * TERRAIN_NOISE_AMPLITUDE_PRIMARY;
     float secondary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_SECONDARY + 1.3f) * TERRAIN_NOISE_AMPLITUDE_SECONDARY;
@@ -1426,7 +1285,7 @@ float sampleTerrainHeight(float worldX)
     return snappedTopOfTile;
 }
 
-float sampleTerrainHeight(const Vector2 &worldPosition)
+static float sampleTerrainHeight(const Vector2 &worldPosition)
 {
     return sampleTerrainHeight(worldPosition.x);
 }
@@ -1440,56 +1299,56 @@ static Rectangle getTerrainSourceRect(int row, int col)
     return getUVRectangle(&g.terrainTexture, index, TERRAIN_ATLAS_ROWS, TERRAIN_ATLAS_COLUMNS);
 }
 
-TerrainContactInfo resolveTerrainCollision(Lander *lander)
+static TerrainContactInfo resolveTerrainCollision(Lander *lander)
 {
     TerrainContactInfo info;
     if (!lander) return info;
 
-    Vector2 scale = lander->getScale();
+    const Vector2 scale = lander->getScale();
     Vector2 position = lander->getPosition();
-    float angle = lander->getAngle();
-    float halfWidth  = scale.x * 0.5f;
-    float halfHeight = scale.y * 0.5f;
-    const float FOOT_SPAN = 0.65f;
+    const float angle = lander->getAngle();
+    const float halfWidth  = scale.x * 0.5f;
+    const float halfHeight = scale.y * 0.5f;
 
-    Vector2 leftLocal  { -halfWidth * FOOT_SPAN,  halfHeight };
-    Vector2 rightLocal {  halfWidth * FOOT_SPAN,  halfHeight };
+    const Vector2 leftLocal  { -halfWidth * LANDER_FOOT_SPAN_RATIO,  halfHeight };
+    const Vector2 rightLocal {  halfWidth * LANDER_FOOT_SPAN_RATIO,  halfHeight };
 
-Vector2 leftFootWorld  = position + rotatePoint(leftLocal, angle);
-Vector2 rightFootWorld = position + rotatePoint(rightLocal, angle);
+    Vector2 leftFootWorld  = position + rotatePoint(leftLocal, angle);
+    Vector2 rightFootWorld = position + rotatePoint(rightLocal, angle);
 
-float leftSurfaceHeight  = sampleTerrainHeight(leftFootWorld);
-float rightSurfaceHeight = sampleTerrainHeight(rightFootWorld);
-float leftPenetration    = leftFootWorld.y  - leftSurfaceHeight;
-float rightPenetration   = rightFootWorld.y - rightSurfaceHeight;
-float penetration        = std::max(leftPenetration, rightPenetration);
-Vector2 velocityBefore   = lander->getVelocity();
-float impactSpeed        = std::sqrt(velocityBefore.x * velocityBefore.x +
-                                     velocityBefore.y * velocityBefore.y);
+    const float leftSurfaceHeight  = sampleTerrainHeight(leftFootWorld);
+    const float rightSurfaceHeight = sampleTerrainHeight(rightFootWorld);
+    const float leftPenetration    = leftFootWorld.y  - leftSurfaceHeight;
+    const float rightPenetration   = rightFootWorld.y - rightSurfaceHeight;
+    const float penetration        = std::max(leftPenetration, rightPenetration);
 
-if (penetration > 0.0f)
-{
-    position.y -= penetration;
-    leftFootWorld.y  -= penetration;
-    rightFootWorld.y -= penetration;
-    lander->setPosition(position);
+    const Vector2 velocityBefore = lander->getVelocity();
+    const float impactSpeed = std::sqrt(velocityBefore.x * velocityBefore.x +
+                                        velocityBefore.y * velocityBefore.y);
 
-    Vector2 velocity = lander->getVelocity();
-    if (velocity.y > 0.0f) velocity.y = 0.0f;
-    lander->setVelocity(velocity);
+    if (penetration > 0.0f)
+    {
+        position.y -= penetration;
+        leftFootWorld.y  -= penetration;
+        rightFootWorld.y -= penetration;
+        lander->setPosition(position);
+
+        Vector2 velocity = lander->getVelocity();
+        if (velocity.y > 0.0f) velocity.y = 0.0f;
+        lander->setVelocity(velocity);
+    }
+
+    const float leftOffsetAfter  = leftFootWorld.y  - leftSurfaceHeight;
+    const float rightOffsetAfter = rightFootWorld.y - rightSurfaceHeight;
+    info.leftContact  = std::fabs(leftOffsetAfter)  <= CONTACT_EPSILON;
+    info.rightContact = std::fabs(rightOffsetAfter) <= CONTACT_EPSILON;
+    if (info.leftContact || info.rightContact)
+        info.impactSpeed = impactSpeed;
+
+    return info;
 }
 
-float leftOffsetAfter  = leftFootWorld.y  - leftSurfaceHeight;
-float rightOffsetAfter = rightFootWorld.y - rightSurfaceHeight;
-info.leftContact  = std::fabs(leftOffsetAfter)  <= CONTACT_EPSILON;
-info.rightContact = std::fabs(rightOffsetAfter) <= CONTACT_EPSILON;
-if (info.leftContact || info.rightContact)
-    info.impactSpeed = impactSpeed;
-
-return info;
-}
-
-void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander)
+static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander)
 {
     if (!lander || gLandingOutcomeLocked || g.gameStatus != GAME_RUNNING) return;
 
@@ -1506,7 +1365,7 @@ void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lande
         Vector2 velocity = lander->getVelocity();
         speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
     }
-    if (contactInfo.leftContact && contactInfo.rightContact && speed < 25.0f)
+    if (contactInfo.leftContact && contactInfo.rightContact && speed < MAX_SAFE_LANDING_SPEED)
     {
         g.gameStatus = GAME_WON;
     }
@@ -1516,7 +1375,7 @@ void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lande
     }
 }
 
-void renderTerrain()
+static void renderTerrain()
 {
     if (g.terrainTexture.id == 0) return;
 
@@ -1568,7 +1427,7 @@ void renderTerrain()
     }
 }
 
-void updateISS(float deltaTime)
+static void updateISS(float deltaTime)
 {
     if (!g.iss) return;
 
@@ -1619,7 +1478,7 @@ void updateISS(float deltaTime)
     }
 }
 
-void renderBackground()
+static void renderBackground()
 {
     if (!g.background) return;
 
@@ -1675,13 +1534,8 @@ void renderBackground()
     }
 }
 
-void shutdown() 
+void shutdown()
 {
-    // delete   g.xochitl;
-    // delete[] g.tiles;
-    // delete[] g.blocks;
-    // delete   g.ghost;
-
     delete g.mainThrusterFlame;
     delete g.LunarLander;
     delete g.background;
