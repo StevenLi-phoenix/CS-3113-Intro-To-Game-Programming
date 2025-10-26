@@ -42,8 +42,8 @@ constexpr float   TRANSLATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
 constexpr float   ROTATIONAL_STABILISER_MINIMUM_SPEED = 0.25f;
 constexpr float   LUNAR_LANDER_MASS = 1.0f;
 constexpr float   LUNAR_LANDER_MOMENT = 1.0f;
-constexpr Vector2 LUNAR_LANDER_INIT_POSITION = {ORIGIN.x, ORIGIN.y - 400.0f};
-constexpr Vector2 LUNAR_LANDER_INIT_VELOCITY = {50.0f, 50.0f};
+constexpr Vector2 LUNAR_LANDER_INIT_POSITION = {ORIGIN.x, ORIGIN.y - 600.0f};
+constexpr Vector2 LUNAR_LANDER_INIT_VELOCITY = {200.0f, 00.0f};
 constexpr float   STABILISER_OVERRIDE_DURATION = 0.25f;
 constexpr float   MAIN_THRUSTER_GAP = 6.0f;
 constexpr float   MAIN_ENGINE_MIN_THROTTLE = 0.15f;
@@ -55,6 +55,7 @@ constexpr float   MAIN_ENGINE_MAX_FUEL_BURN_RATE = 5.0f;
 constexpr float   MAIN_ENGINE_MIN_FUEL_CONSUMPTION_SCALE = 0.30f;
 constexpr float   MAIN_ENGINE_FUEL_MASS_PER_UNIT = 0.02f;
 constexpr float   MAIN_ENGINE_THROTTLE_STEP = 0.05f;
+constexpr float   RCS_FUEL_BURN_RATE = 0.5f;
 constexpr float   BACKGROUND_PARALLAX_FACTOR = 0.25f;
 constexpr float   BACKGROUND_VELOCITY_OFFSET_SCALE = 0.08f;
 constexpr float   CAMERA_ZOOM_MIN = 0.35f;
@@ -79,13 +80,17 @@ constexpr float   ENGINE_START_TIME = 1.4f;
 constexpr float   ENGINE_CLOSE_TIME = 1.0f;
 constexpr float   ENGINE_CHANGE_RATE = 0.5f; // 50% per second
 constexpr float   FLAME_ANIMATION_BASE_FPS = 8.0f;
-constexpr float   CONTACT_EPSILON = 5.0f;
+constexpr float   CONTACT_EPSILON = 16.0f;
 constexpr float   LANDER_FOOT_SPAN_RATIO = 0.65f;
 constexpr float   CAMERA_PAN_LERP_SPEED = 0.1f;
 constexpr float   MAX_SAFE_LANDING_SPEED = 25.0f;
 constexpr float   INPUT_EPSILON = 0.01f;
-constexpr float DEBUG_DISPLAY_INTERVAL = 0.15f;
+constexpr float   DEBUG_DISPLAY_INTERVAL = 0.15f;
 
+// Leaderboard Configuration
+constexpr bool    LEADERBOARD_ENABLED = true;
+constexpr char    LEADERBOARD_URL[] = "https://api.lishuyu.top/api/project/lunarlanderleaderboard/";
+constexpr float   LEADERBOARD_TIMEOUT = 2.0f;
 
 static float normaliseAngle(float angle)
 {
@@ -103,6 +108,112 @@ static Vector2 rotatePoint(const Vector2 &point, float angleDegrees)
         point.x * cosA - point.y * sinA,
         point.x * sinA + point.y * cosA
     };
+}
+
+static void escapeJsonString(const char *src, char *dest, size_t destSize)
+{
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j < destSize - 1; i++)
+    {
+        if (src[i] == '"' || src[i] == '\\')
+        {
+            if (j < destSize - 2)
+            {
+                dest[j++] = '\\';
+                dest[j++] = src[i];
+            }
+        }
+        else
+        {
+            dest[j++] = src[i];
+        }
+    }
+    dest[j] = '\0';
+}
+
+static void submitToLeaderboard(
+    const char *translationStabiliser,
+    const char *rotationStabiliser,
+    float fuel,
+    float fuelCapacity,
+    float fuelPercent,
+    float throttle,
+    int ignitionsUsed,
+    int ignitionsTotal,
+    float positionX,
+    float positionY,
+    float speedTotal,
+    float speedVx,
+    float speedVy,
+    float angle,
+    const char *contactLeft,
+    const char *contactRight,
+    float impactSpeed
+)
+{
+    if (!LEADERBOARD_ENABLED) return;
+
+    // Escape strings for JSON
+    char transStabEsc[100];
+    char rotStabEsc[100];
+    char contactLeftEsc[20];
+    char contactRightEsc[20];
+
+    escapeJsonString(translationStabiliser, transStabEsc, sizeof(transStabEsc));
+    escapeJsonString(rotationStabiliser, rotStabEsc, sizeof(rotStabEsc));
+    escapeJsonString(contactLeft, contactLeftEsc, sizeof(contactLeftEsc));
+    escapeJsonString(contactRight, contactRightEsc, sizeof(contactRightEsc));
+
+    // Build JSON payload
+    char jsonPayload[2048];
+    snprintf(jsonPayload, sizeof(jsonPayload),
+        "{"
+        "\"translation_stabiliser\":\"%s\","
+        "\"rotation_stabiliser\":\"%s\","
+        "\"fuel\":%.2f,"
+        "\"fuel_capacity\":%.2f,"
+        "\"fuel_percent\":%.2f,"
+        "\"throttle\":%.2f,"
+        "\"ignitions_used\":%d,"
+        "\"ignitions_total\":%d,"
+        "\"position_x\":%.2f,"
+        "\"position_y\":%.2f,"
+        "\"speed_total\":%.2f,"
+        "\"speed_vx\":%.2f,"
+        "\"speed_vy\":%.2f,"
+        "\"angle\":%.2f,"
+        "\"contact_lyes\":\"%s\","
+        "\"contact_ryes\":\"%s\","
+        "\"impact_speed\":%.2f"
+        "}",
+        transStabEsc, rotStabEsc,
+        fuel, fuelCapacity, fuelPercent, throttle * 100.0f,
+        ignitionsUsed, ignitionsTotal,
+        positionX, positionY,
+        speedTotal, speedVx, speedVy, angle,
+        contactLeftEsc, contactRightEsc, impactSpeed
+    );
+
+    // Build curl command (fail-open: run in background, ignore errors)
+    char curlCommand[4096];
+    snprintf(curlCommand, sizeof(curlCommand),
+        "curl -X POST '%s' "
+        "-H 'Content-Type: application/json' "
+        "-d '%s' "
+        "--max-time %.0f "
+        "--silent --show-error "
+        "> /dev/null 2>&1 &",
+        LEADERBOARD_URL, jsonPayload, LEADERBOARD_TIMEOUT
+    );
+
+    // Execute in background (fail-open)
+    int result = system(curlCommand);
+    (void)result; // Intentionally ignore result for fail-open behavior
+
+#ifdef DEBUG
+    printf("[Leaderboard] Submission initiated (fail-open)\n");
+    printf("[Leaderboard] Payload: %s\n", jsonPayload);
+#endif
 }
 
 class Lander : public Entity
@@ -143,6 +254,7 @@ public:
     float getFuel() const { return mFuel; }
     float getFuelCapacity() const { return mFuelCapacity; }
     bool hasFuel() const { return mFuel > 0.0f; }
+    bool consumeRCSFuel(float amount);
     void setDryMass(float dryMass);
     int getIgnitionsRemaining() const { return mIgnitionsRemaining; }
     int getMaxIgnitions() const { return ENGINE_MAX_CHANGES; }
@@ -395,6 +507,18 @@ float Lander::getMainEngineAppliedThrottleNormalised() const
     if (range <= 0.0f) return 0.0f;
     float normalised = (mCurrentThrottle - MAIN_ENGINE_MIN_THROTTLE) / range;
     return std::max(0.0f, std::min(1.0f, normalised));
+}
+
+bool Lander::consumeRCSFuel(float amount)
+{
+    if (mFuel <= 0.0f) return false;
+
+    float consumed = std::min(amount, mFuel);
+    mFuel -= consumed;
+    if (mFuel < 0.0f) mFuel = 0.0f;
+    updateEffectiveMass();
+
+    return consumed > 0.0f;
 }
 
 void Lander::setDryMass(float dryMass)
@@ -695,6 +819,8 @@ struct TerrainContactInfo
 static TerrainContactInfo resolveTerrainCollision(Lander *lander);
 static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander *lander);
 
+TerrainContactInfo gLastContactInfo;
+
 void initialise()
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "AI");
@@ -725,10 +851,11 @@ void initialise()
 
     // ----------- LUNAR LANDER -----------
     g.LunarLander = new Lander(
-        {ORIGIN.x, ORIGIN.y - 400.0f},
+        LUNAR_LANDER_INIT_POSITION,
         {50.0f, 50.0f},
         "assets/game/lunar_lander.png"
     );
+    g.LunarLander->setVelocity(LUNAR_LANDER_INIT_VELOCITY);
     g.LunarLander->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
     g.LunarLander->setDryMass(LUNAR_LANDER_MASS);
     g.LunarLander->setMomentOfInertia(LUNAR_LANDER_MOMENT);
@@ -794,13 +921,20 @@ void processInput()
         case GAME_RUNNING:
         {
             float manualTorque = 0.0f;
-            if (IsKeyDown(KEY_A)) manualTorque -= ROTATIONAL_THRUST;
-            if (IsKeyDown(KEY_D)) manualTorque += ROTATIONAL_THRUST;
+            if ((IsKeyDown(KEY_A) || IsKeyDown(KEY_D)) && g.LunarLander->hasFuel())
+            {
+                if (IsKeyDown(KEY_A)) manualTorque -= ROTATIONAL_THRUST;
+                if (IsKeyDown(KEY_D)) manualTorque += ROTATIONAL_THRUST;
+            }
 
             if (manualTorque != 0.0f)
             {
-                g.LunarLander->applyTorque(manualTorque);
-                g.LunarLander->setRotationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+                float deltaTime = GetFrameTime();
+                if (g.LunarLander->consumeRCSFuel(RCS_FUEL_BURN_RATE * deltaTime))
+                {
+                    g.LunarLander->applyTorque(manualTorque);
+                    g.LunarLander->setRotationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+                }
             }
             else if (g.LunarLander->isRotationOverrideActive())
             {
@@ -818,36 +952,43 @@ void processInput()
             bool translationInput = false;
             if (IsKeyDown(KEY_I) || IsKeyDown(KEY_J) || IsKeyDown(KEY_K) || IsKeyDown(KEY_L))
             {
-                float angleRad = g.LunarLander->getAngle() * DEG2RAD;
-                float cosA = cosf(angleRad);
-                float sinA = sinf(angleRad);
+                if (g.LunarLander->hasFuel())
+                {
+                    float angleRad = g.LunarLander->getAngle() * DEG2RAD;
+                    float cosA = cosf(angleRad);
+                    float sinA = sinf(angleRad);
 
-                if (IsKeyDown(KEY_I))
-                {
-                    translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{ sinA, -cosA });
-                    translationInput = true;
-                }
-                if (IsKeyDown(KEY_K))
-                {
-                    translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{-sinA,  cosA });
-                    translationInput = true;
-                }
-                if (IsKeyDown(KEY_J))
-                {
-                    translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{-cosA, -sinA });
-                    translationInput = true;
-                }
-                if (IsKeyDown(KEY_L))
-                {
-                    translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{ cosA,  sinA });
-                    translationInput = true;
+                    if (IsKeyDown(KEY_I))
+                    {
+                        translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{ sinA, -cosA });
+                        translationInput = true;
+                    }
+                    if (IsKeyDown(KEY_K))
+                    {
+                        translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{-sinA,  cosA });
+                        translationInput = true;
+                    }
+                    if (IsKeyDown(KEY_J))
+                    {
+                        translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{-cosA, -sinA });
+                        translationInput = true;
+                    }
+                    if (IsKeyDown(KEY_L))
+                    {
+                        translationalThrust = translationalThrust + (TRANSLATIONAL_THRUST * Vector2{ cosA,  sinA });
+                        translationInput = true;
+                    }
                 }
             }
 
             if (translationInput)
             {
-                g.LunarLander->applyForce(translationalThrust);
-                g.LunarLander->setTranslationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+                float deltaTime = GetFrameTime();
+                if (g.LunarLander->consumeRCSFuel(RCS_FUEL_BURN_RATE * deltaTime))
+                {
+                    g.LunarLander->applyForce(translationalThrust);
+                    g.LunarLander->setTranslationOverrideActive(true, STABILISER_OVERRIDE_DURATION);
+                }
             }
 
             g.LunarLander->setManualTranslationForce(translationalThrust);
@@ -888,8 +1029,8 @@ void update()
     switch (g.gameStatus)
     {
         case GAME_START:
-            g.LunarLander->setPosition({ORIGIN.x, ORIGIN.y});
-            g.LunarLander->setVelocity({0.0f, 0.0f});
+            g.LunarLander->setPosition(LUNAR_LANDER_INIT_POSITION);
+            g.LunarLander->setVelocity(LUNAR_LANDER_INIT_VELOCITY);
             g.LunarLander->setAcceleration({0.0f, ACCELERATION_OF_GRAVITY});
             g.LunarLander->setAngle(0.0f);
             g.LunarLander->setAngularVelocity(0.0f);
@@ -899,13 +1040,13 @@ void update()
             gLandingOutcomeLocked = false;
             break;
         case GAME_RUNNING:
-            if (g.LunarLander->getPosition().y < END_GAME_THRESHOLD) 
+            if (g.LunarLander->getPosition().y < END_GAME_THRESHOLD)
                 g.gameStatus = GAME_OVER;
             g.LunarLander->update(deltaTime);
             if (g.gameStatus == GAME_RUNNING)
             {
-                TerrainContactInfo contactInfo = resolveTerrainCollision(g.LunarLander);
-                evaluateLandingOutcome(contactInfo, g.LunarLander);
+                gLastContactInfo = resolveTerrainCollision(g.LunarLander);
+                evaluateLandingOutcome(gLastContactInfo, g.LunarLander);
             }
 #ifdef DEBUG
             if (g.LunarLander)
@@ -1077,12 +1218,52 @@ void render()
             18,
             WHITE
         );
+
+        Vector2 pos = g.LunarLander->getPosition();
+        Vector2 vel = g.LunarLander->getVelocity();
+        float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        float angle = normaliseAngle(g.LunarLander->getAngle());
+
+        DrawText(
+            TextFormat("Position: (%.1f, %.1f)", pos.x, pos.y),
+            20,
+            136,
+            18,
+            YELLOW
+        );
+        DrawText(
+            TextFormat("Speed: %.1f (Vx: %.1f, Vy: %.1f)", speed, vel.x, vel.y),
+            20,
+            158,
+            18,
+            speed < MAX_SAFE_LANDING_SPEED ? GREEN : (speed < MAX_SAFE_LANDING_SPEED * 1.5f ? ORANGE : RED)
+        );
+        DrawText(
+            TextFormat("Angle: %.1f deg", angle),
+            320,
+            136,
+            18,
+            std::fabs(angle) < 15.0f ? GREEN : (std::fabs(angle) < 30.0f ? ORANGE : RED)
+        );
+
+        Color contactColor = (gLastContactInfo.leftContact && gLastContactInfo.rightContact) ? GREEN :
+                            (gLastContactInfo.leftContact || gLastContactInfo.rightContact) ? ORANGE : RED;
+        DrawText(
+            TextFormat("Contact: L:%s R:%s | Impact: %.1f",
+                gLastContactInfo.leftContact ? "YES" : "NO",
+                gLastContactInfo.rightContact ? "YES" : "NO",
+                gLastContactInfo.impactSpeed),
+            20,
+            180,
+            16,
+            contactColor
+        );
     }
 
 #ifdef DEBUG
     if (g.LunarLander)
     {
-        DrawText(gDebugMessage, 20, 140, 18, YELLOW);
+        DrawText(gDebugMessage, 20, 200, 14, GRAY);
     }
 #endif
 
@@ -1356,17 +1537,54 @@ static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander
     bool anyContact = contactInfo.leftContact || contactInfo.rightContact;
     if (!anyContact) return;
 
+    // Only evaluate if BOTH feet are in contact
+    if (!contactInfo.leftContact || !contactInfo.rightContact) return;
+
+    // Get current speed (not just impact speed)
+    Vector2 velocity = lander->getVelocity();
+    float currentSpeed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+
+    // Use the higher of impact speed or current speed
+    float speed = std::max(contactInfo.impactSpeed, currentSpeed);
+
+    // Check angle - lander should be relatively upright
+    float angle = normaliseAngle(lander->getAngle());
+    constexpr float MAX_SAFE_LANDING_ANGLE = 15.0f; // degrees
+
     if (lander->isMainEngineFiring()) lander->toggleMainEngine();
     lander->setMainEngineThrottle(MAIN_ENGINE_MIN_THROTTLE);
     gLandingOutcomeLocked = true;
 
-    float speed = contactInfo.impactSpeed;
-    if (speed <= 0.0f)
-    {
-        Vector2 velocity = lander->getVelocity();
-        speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
-    }
-    if (contactInfo.leftContact && contactInfo.rightContact && speed < MAX_SAFE_LANDING_SPEED)
+    // Collect telemetry for leaderboard
+    bool translationEnabled = lander->isTranslationStabiliserEnabled();
+    bool rotationEnabled = lander->isRotationStabiliserEnabled();
+
+    const char *translationStatus;
+    if (translationEnabled)
+        translationStatus = "ON";
+    else if (lander->isTranslationOverrideActive() && lander->isTranslationStabiliserDesired())
+        translationStatus = "OFF (override)";
+    else
+        translationStatus = "OFF";
+
+    const char *rotationStatus;
+    if (rotationEnabled)
+        rotationStatus = "ON";
+    else if (lander->isRotationOverrideActive() && lander->isRotationStabiliserDesired())
+        rotationStatus = "OFF (override)";
+    else
+        rotationStatus = "OFF";
+
+    Vector2 position = lander->getPosition();
+    float fuel = lander->getFuel();
+    float fuelCapacity = lander->getFuelCapacity();
+    float fuelPercent = (fuelCapacity > 0.0f) ? (fuel / fuelCapacity) * 100.0f : 0.0f;
+    int ignitionsUsed = lander->getMaxIgnitions() - lander->getIgnitionsRemaining();
+
+    // Win condition: both feet down, low speed, and relatively upright
+    if (contactInfo.leftContact && contactInfo.rightContact &&
+        speed < MAX_SAFE_LANDING_SPEED &&
+        std::fabs(angle) < MAX_SAFE_LANDING_ANGLE)
     {
         g.gameStatus = GAME_WON;
     }
@@ -1374,6 +1592,27 @@ static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander
     {
         g.gameStatus = GAME_OVER;
     }
+
+    // Submit to leaderboard (fail-open)
+    submitToLeaderboard(
+        translationStatus,
+        rotationStatus,
+        fuel,
+        fuelCapacity,
+        fuelPercent,
+        lander->getMainEngineThrottle(),
+        ignitionsUsed,
+        lander->getMaxIgnitions(),
+        position.x,
+        position.y,
+        speed,
+        velocity.x,
+        velocity.y,
+        angle,
+        contactInfo.leftContact ? "YES" : "NO",
+        contactInfo.rightContact ? "YES" : "NO",
+        contactInfo.impactSpeed
+    );
 }
 
 static void renderTerrain()
