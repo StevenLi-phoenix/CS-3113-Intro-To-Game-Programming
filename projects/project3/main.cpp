@@ -208,7 +208,8 @@ static void submitToLeaderboard(
 
     // Execute in background (fail-open)
     int result = system(curlCommand);
-    (void)result; // Intentionally ignore result for fail-open behavior
+    // (void)result; // Intentionally ignore result for fail-open behavior
+    log(result);
 
 #ifdef DEBUG
     printf("[Leaderboard] Submission initiated (fail-open)\n");
@@ -305,6 +306,8 @@ private:
 
 enum GameStatus { GAME_START, GAME_RUNNING, GAME_PAUSED, GAME_WON, GAME_OVER };
 
+enum FlameState { FLAME_OFF, FLAME_START, FLAME_LOOP, FLAME_END };
+
 struct GameState
 {
     Lander *LunarLander = nullptr;
@@ -315,8 +318,16 @@ struct GameState
     Entity *mainThrusterFlame = nullptr;
     Entity *iss = nullptr;
     Texture2D terrainTexture {};
+    Texture2D flameStartTexture {};
+    Texture2D flameLoopTexture {};
+    Texture2D flameEndTexture {};
     Music bgm;
     Sound engineLoopSound;
+
+    FlameState flameState = FLAME_OFF;
+    float flameAnimationTimer = 0.0f;
+    int flameCurrentFrame = 0;
+    Vector2 flameScale {0.0f, 0.0f};
 };
 
 Lander::Lander(Vector2 position, Vector2 scale, const char *textureFilepath)
@@ -799,6 +810,8 @@ void processInput();
 void update();
 void render();
 void shutdown();
+static void updateFlameAnimation(float deltaTime, bool engineFiring);
+static void renderFlameAnimation();
 static void refreshMainThrusterFlameAppearance();
 static void drawControlTooltips();
 static void panCamera(Camera2D *camera, const Vector2 *targetPosition);
@@ -840,6 +853,14 @@ void initialise()
     g.terrainTexture = LoadTexture("assets/game/moon_8x6.png");
     SetTextureFilter(g.terrainTexture, TEXTURE_FILTER_POINT);
 
+    // Load flame textures
+    g.flameStartTexture = LoadTexture("assets/game/fire/burning_start_1x4.png");
+    g.flameLoopTexture = LoadTexture("assets/game/fire/burning_loop_1x8.png");
+    g.flameEndTexture = LoadTexture("assets/game/fire/burning_end_1x5.png");
+    SetTextureFilter(g.flameStartTexture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(g.flameLoopTexture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(g.flameEndTexture, TEXTURE_FILTER_BILINEAR);
+
     // ----------- BACKGROUND -----------
     g.background = new Entity(
         {ORIGIN.x, ORIGIN.y},
@@ -864,33 +885,29 @@ void initialise()
 
     g.LunarLander->resetControllers();
 
-    Vector2 thrusterScale {
+    // ----------- FLAME ANIMATION (Position tracker) -----------
+    g.flameScale = {
         g.LunarLander->getScale().x * 0.45f,
         g.LunarLander->getScale().y * 1.1f
     };
-    std::vector<int> flameFrames {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-    std::map<Direction, std::vector<int>> flameAtlas = {
-        {UP, flameFrames},
-        {DOWN, flameFrames},
-        {LEFT, flameFrames},
-        {RIGHT, flameFrames}
-    };
+
+    // Dummy entity for position tracking (we'll do custom rendering)
     g.mainThrusterFlame = new Entity(
         g.LunarLander->getPosition(),
-        thrusterScale,
-        "assets/game/flames_stacked.png",
-        ATLAS,
-        {10.0f, 1.0f},
-        flameAtlas,
+        g.flameScale,
+        "assets/game/lunar_lander.png",  // Dummy texture, won't be rendered
         ENTITY_BACKGROUND
     );
-    g.mainThrusterFlame->setFrameSpeed(static_cast<int>(FLAME_ANIMATION_BASE_FPS));
     g.mainThrusterFlame->setParentEntity(g.LunarLander);
     float thrusterOffsetY = (g.LunarLander->getScale().y * 0.5f) +
-                            (thrusterScale.y * 0.5f) - MAIN_THRUSTER_GAP;
+                            (g.flameScale.y * 0.5f) - MAIN_THRUSTER_GAP;
     g.mainThrusterFlame->setParentLocalOffset({0.0f, thrusterOffsetY});
     g.mainThrusterFlame->setParentRotationInheritance(true);
     g.mainThrusterFlame->deactivate();
+
+    g.flameState = FLAME_OFF;
+    g.flameAnimationTimer = 0.0f;
+    g.flameCurrentFrame = 0;
 
     g.iss = new Entity(
         {ORIGIN.x - SCREEN_WIDTH, ORIGIN.y + ISS_VERTICAL_OFFSET},
@@ -1037,6 +1054,9 @@ void update()
             g.LunarLander->setAngularAcceleration(0.0f);
             g.LunarLander->resetControllers();
             if (g.mainThrusterFlame) g.mainThrusterFlame->deactivate();
+            g.flameState = FLAME_OFF;
+            g.flameAnimationTimer = 0.0f;
+            g.flameCurrentFrame = 0;
             gLandingOutcomeLocked = false;
             break;
         case GAME_RUNNING:
@@ -1092,7 +1112,6 @@ void update()
     updateBackgroundParallax();
     updateISS(deltaTime);
 
-    bool flameShouldBeActive = false;
     bool engineFiring = false;
     float engineOutputLevel = 0.0f;
     float engineThrottleOutput = 0.0f;
@@ -1101,7 +1120,6 @@ void update()
         engineFiring = g.LunarLander->isMainEngineFiring();
         engineOutputLevel = g.LunarLander->getMainEngineOutputLevel();
         engineThrottleOutput = g.LunarLander->getMainEngineAppliedThrottleNormalised() * engineOutputLevel;
-        flameShouldBeActive = engineFiring;
     }
     else
     {
@@ -1121,14 +1139,8 @@ void update()
         StopSound(g.engineLoopSound);
     }
 
-    if (g.mainThrusterFlame)
-    {
-        if (flameShouldBeActive) g.mainThrusterFlame->activate();
-        else                     g.mainThrusterFlame->deactivate();
-    }
-
+    updateFlameAnimation(deltaTime, engineFiring);
     refreshMainThrusterFlameAppearance();
-    if (g.mainThrusterFlame) g.mainThrusterFlame->update(deltaTime);
 }
 
 void render()
@@ -1140,7 +1152,7 @@ void render()
     renderTerrain();
     if (g.iss) g.iss->render();
 
-    if (g.mainThrusterFlame) g.mainThrusterFlame->render();
+    renderFlameAnimation();
     if (g.LunarLander) g.LunarLander->render();
 
     EndMode2D();
@@ -1294,26 +1306,184 @@ void render()
     EndDrawing();
 }
 
+static void updateFlameAnimation(float deltaTime, bool engineFiring)
+{
+    if (!g.mainThrusterFlame) return;
+
+    // Update animation timer
+    g.flameAnimationTimer += deltaTime;
+
+    float throttleNormalised = 0.0f;
+    if (g.LunarLander)
+    {
+        throttleNormalised = g.LunarLander->getMainEngineAppliedThrottleNormalised() *
+                           g.LunarLander->getMainEngineOutputLevel();
+    }
+    float frameSpeed = FLAME_ANIMATION_BASE_FPS + throttleNormalised * FLAME_ANIMATION_BASE_FPS;
+    if (frameSpeed < 4.0f) frameSpeed = 4.0f;
+    float frameDuration = 1.0f / frameSpeed;
+
+    switch (g.flameState)
+    {
+        case FLAME_OFF:
+            if (engineFiring)
+            {
+                g.flameState = FLAME_START;
+                g.flameAnimationTimer = 0.0f;
+                g.flameCurrentFrame = 0;
+                g.mainThrusterFlame->activate();
+            }
+            break;
+
+        case FLAME_START:
+        {
+            // Cycle through 4 start frames
+            if (g.flameAnimationTimer >= frameDuration)
+            {
+                g.flameAnimationTimer -= frameDuration;
+                g.flameCurrentFrame++;
+
+                if (g.flameCurrentFrame >= 4)
+                {
+                    // Transition to LOOP
+                    g.flameState = FLAME_LOOP;
+                    g.flameCurrentFrame = 0;
+                }
+            }
+
+            if (!engineFiring)
+            {
+                // Engine stopped - go to END
+                g.flameState = FLAME_END;
+                g.flameAnimationTimer = 0.0f;
+                g.flameCurrentFrame = 0;
+            }
+            break;
+        }
+
+        case FLAME_LOOP:
+        {
+            // Cycle through 8 loop frames
+            if (g.flameAnimationTimer >= frameDuration)
+            {
+                g.flameAnimationTimer -= frameDuration;
+                g.flameCurrentFrame = (g.flameCurrentFrame + 1) % 8;
+            }
+
+            if (!engineFiring)
+            {
+                // Engine stopped - go to END
+                g.flameState = FLAME_END;
+                g.flameAnimationTimer = 0.0f;
+                g.flameCurrentFrame = 0;
+            }
+            break;
+        }
+
+        case FLAME_END:
+        {
+            // Cycle through 5 end frames
+            if (g.flameAnimationTimer >= frameDuration)
+            {
+                g.flameAnimationTimer -= frameDuration;
+                g.flameCurrentFrame++;
+
+                if (g.flameCurrentFrame >= 5)
+                {
+                    // Animation complete - turn off
+                    g.flameState = FLAME_OFF;
+                    g.flameCurrentFrame = 0;
+                    g.mainThrusterFlame->deactivate();
+                }
+            }
+
+            if (engineFiring && g.flameCurrentFrame < 5)
+            {
+                // Engine restarted - go back to START
+                g.flameState = FLAME_START;
+                g.flameAnimationTimer = 0.0f;
+                g.flameCurrentFrame = 0;
+            }
+            break;
+        }
+    }
+
+    // Update position from parent
+    if (g.mainThrusterFlame) g.mainThrusterFlame->update(deltaTime);
+}
+
+static void renderFlameAnimation()
+{
+    if (!g.mainThrusterFlame || !g.mainThrusterFlame->isActive()) return;
+
+    Texture2D currentTexture;
+    int frameCount = 0;
+
+    switch (g.flameState)
+    {
+        case FLAME_START:
+            currentTexture = g.flameStartTexture;
+            frameCount = 4;
+            break;
+        case FLAME_LOOP:
+            currentTexture = g.flameLoopTexture;
+            frameCount = 8;
+            break;
+        case FLAME_END:
+            currentTexture = g.flameEndTexture;
+            frameCount = 5;
+            break;
+        default:
+            return;
+    }
+
+    if (currentTexture.id == 0 || frameCount == 0) return;
+
+    // Calculate source rectangle from sprite sheet
+    float frameWidth = (float)currentTexture.width / frameCount;
+    float frameHeight = (float)currentTexture.height;
+    Rectangle source = {
+        g.flameCurrentFrame * frameWidth,
+        0.0f,
+        frameWidth,
+        frameHeight
+    };
+
+    // Get world position and rotation
+    Vector2 position = g.mainThrusterFlame->getPosition();
+    float angle = g.LunarLander ? g.LunarLander->getAngle() : 0.0f;
+
+    // Calculate destination rectangle
+    Rectangle dest = {
+        position.x,
+        position.y,
+        g.flameScale.x,
+        g.flameScale.y
+    };
+
+    Vector2 origin = { g.flameScale.x / 2.0f, g.flameScale.y / 2.0f };
+
+    // Draw the current frame
+    DrawTexturePro(currentTexture, source, dest, origin, angle, WHITE);
+}
+
 static void refreshMainThrusterFlameAppearance()
 {
     if (!g.mainThrusterFlame || !g.LunarLander) return;
 
     float throttleNormalised = g.LunarLander->getMainEngineAppliedThrottleNormalised() *
                                g.LunarLander->getMainEngineOutputLevel();
-    Vector2 newScale {
+    g.flameScale = {
         g.LunarLander->getScale().x * (0.4f + 0.1f * throttleNormalised),
         g.LunarLander->getScale().y * (0.9f + 0.4f * throttleNormalised)
     };
-    g.mainThrusterFlame->setScale(newScale);
 
     float thrusterOffsetY = (g.LunarLander->getScale().y * 0.5f) +
-                            (newScale.y * 0.5f) - MAIN_THRUSTER_GAP;
+                            (g.flameScale.y * 0.5f) - MAIN_THRUSTER_GAP;
+
+    g.mainThrusterFlame->setScale(g.flameScale);
     g.mainThrusterFlame->setParentLocalOffset({0.0f, thrusterOffsetY});
     g.mainThrusterFlame->setParentRotationInheritance(true);
-
-    int frameSpeed = static_cast<int>(FLAME_ANIMATION_BASE_FPS + throttleNormalised * FLAME_ANIMATION_BASE_FPS);
-    if (frameSpeed < 4) frameSpeed = 4;
-    g.mainThrusterFlame->setFrameSpeed(frameSpeed);
 }
 
 static void drawControlTooltips()
@@ -1785,6 +1955,24 @@ void shutdown()
     {
         UnloadTexture(g.terrainTexture);
         g.terrainTexture.id = 0;
+    }
+
+    if (g.flameStartTexture.id != 0)
+    {
+        UnloadTexture(g.flameStartTexture);
+        g.flameStartTexture.id = 0;
+    }
+
+    if (g.flameLoopTexture.id != 0)
+    {
+        UnloadTexture(g.flameLoopTexture);
+        g.flameLoopTexture.id = 0;
+    }
+
+    if (g.flameEndTexture.id != 0)
+    {
+        UnloadTexture(g.flameEndTexture);
+        g.flameEndTexture.id = 0;
     }
 
     StopMusicStream(g.bgm);
