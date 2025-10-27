@@ -1635,8 +1635,8 @@ static unsigned int terrainHash(int column, int depth)
 
 static float sampleTerrainHeight(float worldX)
 {
-    float primary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_PRIMARY) * TERRAIN_NOISE_AMPLITUDE_PRIMARY;
-    float secondary = std::sinf(worldX * TERRAIN_NOISE_FREQUENCY_SECONDARY + 1.3f) * TERRAIN_NOISE_AMPLITUDE_SECONDARY;
+    float primary = std::sin(worldX * TERRAIN_NOISE_FREQUENCY_PRIMARY) * TERRAIN_NOISE_AMPLITUDE_PRIMARY;
+    float secondary = std::sin(worldX * TERRAIN_NOISE_FREQUENCY_SECONDARY + 1.3f) * TERRAIN_NOISE_AMPLITUDE_SECONDARY;
     float height = TERRAIN_BASE_HEIGHT + primary + secondary;
     if (height < TERRAIN_MIN_HEIGHT) height = TERRAIN_MIN_HEIGHT;
     if (height > TERRAIN_MAX_HEIGHT) height = TERRAIN_MAX_HEIGHT;
