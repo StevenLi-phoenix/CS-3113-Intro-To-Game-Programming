@@ -34,7 +34,7 @@ constexpr Vector2 ORIGIN           = { SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 };
 constexpr float ACCELERATION_OF_GRAVITY = 16.35f; // 1/6 of gravity on Earth
 constexpr float END_GAME_THRESHOLD      = -800.0f;
                   
-constexpr float   TRANSLATIONAL_THRUST = 200.0f;
+constexpr float   TRANSLATIONAL_THRUST = 50.0f;
 constexpr float   ROTATIONAL_THRUST = 50.0f;
 constexpr float   TRANSLATIONAL_STABILISER_THRUST = 10.0f;
 constexpr float   ROTATIONAL_STABILISER_THRUST = 10.0f;
@@ -59,7 +59,7 @@ constexpr float   RCS_FUEL_BURN_RATE = 0.5f;
 constexpr float   BACKGROUND_PARALLAX_FACTOR = 0.25f;
 constexpr float   BACKGROUND_VELOCITY_OFFSET_SCALE = 0.08f;
 constexpr float   CAMERA_ZOOM_MIN = 0.35f;
-constexpr float   CAMERA_ZOOM_MAX = 2.0f;
+constexpr float   CAMERA_ZOOM_MAX = 4.0f;
 constexpr float   CAMERA_ZOOM_SCROLL_STEP = 0.08f;
 constexpr float   CAMERA_MAP_VIEW_ZOOM = 0.45f;
 constexpr float   TERRAIN_TILE_WORLD_SIZE = 64.0f;
@@ -89,7 +89,9 @@ constexpr float   DEBUG_DISPLAY_INTERVAL = 0.15f;
 
 // Leaderboard Configuration
 constexpr bool    LEADERBOARD_ENABLED = true;
-constexpr char    LEADERBOARD_URL[] = "https://api.lishuyu.top/api/project/lunarlanderleaderboard/";
+// https://api.lishuyu.top/project/lunarlanderleaderboard/
+// This submission is fully anonymous, no personal information is collected.
+constexpr char    LEADERBOARD_URL[] = "https://api.lishuyu.top/api/project/lunarlanderleaderboard/"; 
 constexpr float   LEADERBOARD_TIMEOUT = 2.0f;
 
 static float normaliseAngle(float angle)
@@ -132,6 +134,7 @@ static void escapeJsonString(const char *src, char *dest, size_t destSize)
 }
 
 static void submitToLeaderboard(
+    bool won,
     const char *translationStabiliser,
     const char *rotationStabiliser,
     float fuel,
@@ -168,6 +171,7 @@ static void submitToLeaderboard(
     char jsonPayload[2048];
     snprintf(jsonPayload, sizeof(jsonPayload),
         "{"
+        "\"won\":%s,"
         "\"translation_stabiliser\":\"%s\","
         "\"rotation_stabiliser\":\"%s\","
         "\"fuel\":%.2f,"
@@ -186,6 +190,7 @@ static void submitToLeaderboard(
         "\"contact_ryes\":\"%s\","
         "\"impact_speed\":%.2f"
         "}",
+        won ? "true" : "false",
         transStabEsc, rotStabEsc,
         fuel, fuelCapacity, fuelPercent, throttle * 100.0f,
         ignitionsUsed, ignitionsTotal,
@@ -1752,9 +1757,11 @@ static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander
     int ignitionsUsed = lander->getMaxIgnitions() - lander->getIgnitionsRemaining();
 
     // Win condition: both feet down, low speed, and relatively upright
-    if (contactInfo.leftContact && contactInfo.rightContact &&
-        speed < MAX_SAFE_LANDING_SPEED &&
-        std::fabs(angle) < MAX_SAFE_LANDING_ANGLE)
+    bool won = (contactInfo.leftContact && contactInfo.rightContact &&
+                speed < MAX_SAFE_LANDING_SPEED &&
+                std::fabs(angle) < MAX_SAFE_LANDING_ANGLE);
+    
+    if (won)
     {
         g.gameStatus = GAME_WON;
     }
@@ -1765,6 +1772,7 @@ static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander
 
     // Submit to leaderboard (fail-open)
     submitToLeaderboard(
+        won,
         translationStatus,
         rotationStatus,
         fuel,
