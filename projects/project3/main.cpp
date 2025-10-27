@@ -94,6 +94,9 @@ constexpr bool    LEADERBOARD_ENABLED = true;
 constexpr char    LEADERBOARD_URL[] = "https://api.lishuyu.top/api/project/lunarlanderleaderboard/"; 
 constexpr float   LEADERBOARD_TIMEOUT = 2.0f;
 
+// landing
+constexpr float MAX_SAFE_LANDING_ANGLE = 15.0f; // degrees
+
 static float normaliseAngle(float angle)
 {
     angle = std::fmod(angle + 180.0f, 360.0f);
@@ -1724,7 +1727,6 @@ static void evaluateLandingOutcome(const TerrainContactInfo &contactInfo, Lander
 
     // Check angle - lander should be relatively upright
     float angle = normaliseAngle(lander->getAngle());
-    constexpr float MAX_SAFE_LANDING_ANGLE = 15.0f; // degrees
 
     if (lander->isMainEngineFiring()) lander->toggleMainEngine();
     lander->setMainEngineThrottle(MAIN_ENGINE_MIN_THROTTLE);
