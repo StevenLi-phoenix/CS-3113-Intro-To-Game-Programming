@@ -1,4 +1,5 @@
-#pragma once
+#ifndef PID_CONTROLLER_H
+#define PID_CONTROLLER_H
 
 class PIDController
 {
@@ -39,3 +40,5 @@ private:
     float mIntegralTerm;
     float mDerivativeTerm;
 };
+
+#endif // PID_CONTROLLER_H
