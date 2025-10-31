@@ -23,6 +23,9 @@
 
 #include "vector_ops.h" // overload for simplify vector operations
 
+enum AppStatus   { TERMINATED, RUNNING };
+enum TextureType { SINGLE, ATLAS       };
+
 // logging helper functions
 void init_log_level(int argc, char *argv[]);
 
