@@ -1,4 +1,6 @@
-#pragma once
+#ifndef VECTOR_OPS_H
+#define VECTOR_OPS_H
+
 #include "raylib.h"
 
 // Component-wise arithmetic between scalar and Vector2
@@ -32,3 +34,5 @@ Vector3 operator+(const Vector3& a, const Vector3& b);
 Vector3 operator-(const Vector3& a, const Vector3& b);
 Vector3 operator*(const Vector3& a, const Vector3& b);
 Vector3 operator/(const Vector3& a, const Vector3& b);
+
+#endif // VECTOR_OPS_H
