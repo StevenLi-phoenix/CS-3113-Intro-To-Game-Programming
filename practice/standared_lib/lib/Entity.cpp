@@ -4,7 +4,7 @@ Entity::Entity() : mPosition {0.0f, 0.0f}, mMovement {0.0f, 0.0f},
                    mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
                    mScale {DEFAULT_SIZE, DEFAULT_SIZE},
                    mColliderDimensions {DEFAULT_SIZE, DEFAULT_SIZE}, 
-                   mTexture {NULL}, mTextureType {SINGLE}, mAngle {0.0f},
+                   mTexture {0}, mTextureType {SINGLE}, mAngle {0.0f},
                    mSpriteSheetDimensions {}, mDirection {RIGHT}, 
                    mAnimationAtlas {{}}, mAnimationIndices {}, mFrameSpeed {0},
                    mEntityType {NONE} { }
@@ -147,20 +147,14 @@ void Entity::checkCollisionX(Map *map)
     if (map == nullptr) return;
 
     Vector2 leftCentreProbe   = { mPosition.x - (mColliderDimensions.x / 2.0f), mPosition.y };
-    Vector2 leftTopProbe      = { mPosition.x - (mColliderDimensions.x / 2.0f), mPosition.y - (mColliderDimensions.y / 2.0f) };
-    Vector2 leftBottomProbe   = { mPosition.x - (mColliderDimensions.x / 2.0f), mPosition.y + (mColliderDimensions.y / 2.0f) };
 
     Vector2 rightCentreProbe  = { mPosition.x + (mColliderDimensions.x / 2.0f), mPosition.y };
-    Vector2 rightTopProbe     = { mPosition.x + (mColliderDimensions.x / 2.0f), mPosition.y - (mColliderDimensions.y / 2.0f) };
-    Vector2 rightBottomProbe  = { mPosition.x + (mColliderDimensions.x / 2.0f), mPosition.y + (mColliderDimensions.y / 2.0f) };
 
     float xOverlap = 0.0f;
     float yOverlap = 0.0f;
 
     // COLLISION ON RIGHT (moving right)
-    if ((map->isSolidTileAt(rightCentreProbe, &xOverlap, &yOverlap) ||
-         map->isSolidTileAt(rightTopProbe, &xOverlap, &yOverlap)    ||
-         map->isSolidTileAt(rightBottomProbe, &xOverlap, &yOverlap)) 
+    if (map->isSolidTileAt(rightCentreProbe, &xOverlap, &yOverlap) 
          && mVelocity.x > 0.0f && yOverlap >= 0.5f)
     {
         mPosition.x -= xOverlap * 1.01f;   // push left
@@ -169,9 +163,7 @@ void Entity::checkCollisionX(Map *map)
     }
 
     // COLLISION ON LEFT (moving left)
-    if ((map->isSolidTileAt(leftCentreProbe, &xOverlap, &yOverlap) ||
-         map->isSolidTileAt(leftTopProbe, &xOverlap, &yOverlap)    ||
-         map->isSolidTileAt(leftBottomProbe, &xOverlap, &yOverlap)) 
+    if (map->isSolidTileAt(leftCentreProbe, &xOverlap, &yOverlap) 
          && mVelocity.x < 0.0f && yOverlap >= 0.5f)
     {
         mPosition.x += xOverlap * 1.01;   // push right
@@ -210,11 +202,52 @@ void Entity::animate(float deltaTime)
     }
 }
 
+void Entity::AIWander() { moveLeft(); }
+
+void Entity::AIFollow(Entity *target)
+{
+    switch (mAIState)
+    {
+    case IDLE:
+        if (Vector2Distance(mPosition, target->getPosition()) < 250.0f) 
+            mAIState = WALKING;
+        break;
+
+    case WALKING:
+        // Depending on where the player is in respect to their x-position
+        // Change direction of the enemy
+        if (mPosition.x > target->getPosition().x) moveLeft();
+        else                                       moveRight();
+    
+    default:
+        break;
+    }
+}
+
+void Entity::AIActivate(Entity *target)
+{
+    switch (mAIType)
+    {
+    case WANDERER:
+        AIWander();
+        break;
+
+    case FOLLOWER:
+        AIFollow(target);
+        break;
+    
+    default:
+        break;
+    }
+}
+
 void Entity::update(float deltaTime, Entity *player, Map *map, 
     Entity *collidableEntities, int collisionCheckCount)
 {
     if (mEntityStatus == INACTIVE) return;
     
+    if (mEntityType == NPC) AIActivate(player);
+
     resetColliderFlags();
 
     mVelocity.x = mMovement.x * mSpeed;
@@ -231,8 +264,6 @@ void Entity::update(float deltaTime, Entity *player, Map *map,
         // STEP 2: The player now acquires an upward velocity
         mVelocity.y -= mJumpingPower;
     }
-
-    if (mEnableAI) updateAI(deltaTime);
 
     mPosition.y += mVelocity.y * deltaTime;
     checkCollisionY(collidableEntities, collisionCheckCount);

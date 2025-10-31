@@ -1,46 +1,53 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
-#include "helper.h"
+#include "Map.h"
 
-enum Direction    { DIRECTION_LEFT, DIRECTION_UP, DIRECTION_RIGHT, DIRECTION_DOWN               };
-enum EntityStatus { ENTITY_STATUS_ACTIVE, ENTITY_STATUS_INACTIVE                                };
+enum Direction    { LEFT, UP, RIGHT, DOWN              }; // For walking
+enum EntityStatus { ACTIVE, INACTIVE                   };
+enum EntityType   { PLAYER, BLOCK, PLATFORM, NPC, NONE };
+enum AIType       { WANDERER, FOLLOWER                 };
+enum AIState      { WALKING, IDLE, FOLLOWING           };
 
 class Entity
 {
 private:
     Vector2 mPosition;
+    Vector2 mMovement;
     Vector2 mVelocity;
     Vector2 mAcceleration;
-    Vector2 mPendingForce;
 
     Vector2 mScale;
     Vector2 mColliderDimensions;
     
     Texture2D mTexture;
-    bool mTextureAtlas; // false = single texture, true = texture atlas
+    TextureType mTextureType;
     Vector2 mSpriteSheetDimensions;
-
+    
     std::map<Direction, std::vector<int>> mAnimationAtlas;
     std::vector<int> mAnimationIndices;
     Direction mDirection;
     int mFrameSpeed;
+
     int mCurrentFrameIndex = 0;
-    Vector2 mMovement {0.0f, 0.0f};
-    float mAngle = 0.0f;
     float mAnimationTime = 0.0f;
-    bool mEnableAI = false;
+
     bool mIsJumping = false;
+    float mJumpingPower = 0.0f;
 
-    int mSpeed() { return GetLength(mVelocity); }
-    float mAngle() { return getAngle(mVelocity); }
+    int mSpeed;
+    float mAngle;
 
-    bool mIsCollidingTop = false;
+    bool mIsCollidingTop    = false;
     bool mIsCollidingBottom = false;
-    bool mIsCollidingRight = false;
-    bool mIsCollidingLeft = false;
+    bool mIsCollidingRight  = false;
+    bool mIsCollidingLeft   = false;
 
-    EntityStatus mEntityStatus = ENTITY_STATUS_ACTIVE;
+    EntityStatus mEntityStatus = ACTIVE;
+    EntityType   mEntityType;
+
+    AIType  mAIType;
+    AIState mAIState;
 
     bool isColliding(Entity *other) const;
 
@@ -49,7 +56,7 @@ private:
 
     void checkCollisionX(Entity *collidableEntities, int collisionCheckCount);
     void checkCollisionX(Map *map);
-
+    
     void resetColliderFlags() 
     {
         mIsCollidingTop    = false;
@@ -59,21 +66,24 @@ private:
     }
 
     void animate(float deltaTime);
+    void AIActivate(Entity *target);
+    void AIWander();
+    void AIFollow(Entity *target);
 
 public:
     static constexpr int   DEFAULT_SIZE          = 250;
     static constexpr int   DEFAULT_SPEED         = 200;
     static constexpr int   DEFAULT_FRAME_SPEED   = 14;
     static constexpr float Y_COLLISION_THRESHOLD = 0.5f;
-    
+
     Entity();
-    Entity(Vector2 position, Vector2 scale, const char *textureFilepath);
+    Entity(Vector2 position, Vector2 scale, const char *textureFilepath, 
+        EntityType entityType);
     Entity(Vector2 position, Vector2 scale, const char *textureFilepath, 
         TextureType textureType, Vector2 spriteSheetDimensions, 
-        std::map<Direction, std::vector<int>> animationAtlas);
+        std::map<Direction, std::vector<int>> animationAtlas, 
+        EntityType entityType);
     ~Entity();
-
-    virtual void updateAI(float deltaTime) {};
 
     void update(float deltaTime, Entity *player, Map *map, 
         Entity *collidableEntities, int collisionCheckCount);
@@ -81,16 +91,16 @@ public:
     void normaliseMovement() { Normalise(&mMovement); }
 
     void jump()       { mIsJumping = true;  }
-    void activate()   { mEntityStatus  = ENTITY_STATUS_ACTIVE;   }
-    void deactivate() { mEntityStatus  = ENTITY_STATUS_INACTIVE; }
+    void activate()   { mEntityStatus  = ACTIVE;   }
+    void deactivate() { mEntityStatus  = INACTIVE; }
     void displayCollider();
 
-    bool isActive() { return mEntityStatus == ENTITY_STATUS_ACTIVE ? true : false; }
+    bool isActive() { return mEntityStatus == ACTIVE ? true : false; }
 
-    void moveUp()    { mMovement.y = -1; mDirection = DIRECTION_UP;    }
-    void moveDown()  { mMovement.y =  1; mDirection = DIRECTION_DOWN;  }
-    void moveLeft()  { mMovement.x = -1; mDirection = DIRECTION_LEFT;  }
-    void moveRight() { mMovement.x =  1; mDirection = DIRECTION_RIGHT; }
+    void moveUp()    { mMovement.y = -1; mDirection = UP;    }
+    void moveDown()  { mMovement.y =  1; mDirection = DOWN;  }
+    void moveLeft()  { mMovement.x = -1; mDirection = LEFT;  }
+    void moveRight() { mMovement.x =  1; mDirection = RIGHT; }
 
     void resetMovement() { mMovement = { 0.0f, 0.0f }; }
 
@@ -110,6 +120,8 @@ public:
     int         getSpeed()                 const { return mSpeed;                 }
     float       getAngle()                 const { return mAngle;                 }
     EntityType  getEntityType()            const { return mEntityType;            }
+    AIType      getAIType()                const { return mAIType;                }
+    AIState     getAIState()               const { return mAIState;               }
 
     
     bool isCollidingTop()    const { return mIsCollidingTop;    }
@@ -147,8 +159,10 @@ public:
 
         if (mTextureType == ATLAS) mAnimationIndices = mAnimationAtlas.at(mDirection);
     }
-    void setEnableAI(bool enableAI)
-        { mEnableAI = enableAI;                    }
+    void setAIState(AIState newState)
+        { mAIState = newState;                     }
+    void setAIType(AIType newType)
+        { mAIType = newType;                       }
 };
 
-#endif // ENTITY_H
+#endif // ENTITY_CPP

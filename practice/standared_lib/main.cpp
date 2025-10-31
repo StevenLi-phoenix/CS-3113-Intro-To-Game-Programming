@@ -3,9 +3,6 @@
 // #include "lib/pid_controller.h"
 #include "lib/helper.h"
 
-// Enums
-enum AppStatus { TERMINATED, RUNNING };
-
 // Global Constants
 struct Constants {
     const char *TITLE = "Hello raylib!";
