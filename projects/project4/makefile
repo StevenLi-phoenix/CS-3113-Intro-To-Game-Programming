@@ -1,5 +1,5 @@
 # Source and target
-SRCS = main.cpp $(wildcard lib/*.cpp) $(wildcard CS3113/*.cpp)
+SRCS = main.cpp $(wildcard lib/*.cpp) $(wildcard CS3113/*.cpp) $(wildcard levels/*.cpp)
 TARGET = raylib_app
 
 # OS detection (macOS = Darwin, Windows via MinGW = MINGW*)

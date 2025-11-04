@@ -6,3 +6,5 @@ Scene::Scene(Vector2 origin, const char *bgHexCode) : mOrigin{origin}, mBGColour
 {
     ClearBackground(ColorFromHex(bgHexCode));
 }
+
+Scene::~Scene() = default;

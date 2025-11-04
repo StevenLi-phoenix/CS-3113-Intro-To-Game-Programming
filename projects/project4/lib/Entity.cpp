@@ -188,7 +188,12 @@ bool Entity::isColliding(Entity *other) const
 
 void Entity::animate(float deltaTime)
 {
-    mAnimationIndices = mAnimationAtlas.at(mDirection);
+    auto atlasIt = mAnimationAtlas.find(mDirection);
+    if (atlasIt == mAnimationAtlas.end() || atlasIt->second.empty()) return;
+
+    mAnimationIndices = atlasIt->second;
+    if (mCurrentFrameIndex >= static_cast<int>(mAnimationIndices.size()))
+        mCurrentFrameIndex = 0;
 
     mAnimationTime += deltaTime;
     float framesPerSecond = 1.0f / mFrameSpeed;
@@ -273,8 +278,8 @@ void Entity::update(float deltaTime, Entity *player, Map *map,
     checkCollisionX(collidableEntities, collisionCheckCount);
     checkCollisionX(map);
 
-    if (mTextureType == ATLAS && GetLength(mMovement) != 0 && mIsCollidingBottom) 
-        animate(deltaTime);
+    bool hasAtlas = mTextureType == ATLAS && !mAnimationAtlas.empty() && mFrameSpeed > 0;
+    if (hasAtlas) animate(deltaTime);
 }
 
 void Entity::render()
@@ -308,6 +313,13 @@ void Entity::render()
     }
 
     // Destination rectangle – centred on gPosition
+    Rectangle sourceArea = textureArea;
+
+    if (mDirection == LEFT)
+    {
+        sourceArea.width = -sourceArea.width;
+    }
+
     Rectangle destinationArea = {
         mPosition.x,
         mPosition.y,
@@ -315,18 +327,25 @@ void Entity::render()
         static_cast<float>(mScale.y)
     };
 
-    // Origin inside the source texture (centre of the texture)
+    Vector2 renderOffset = getRenderOffset();
+    destinationArea.x += renderOffset.x;
+    destinationArea.y += renderOffset.y;
+
     Vector2 originOffset = {
         static_cast<float>(mScale.x) / 2.0f,
         static_cast<float>(mScale.y) / 2.0f
     };
 
-    // Render the texture on screen
     DrawTexturePro(
-        mTexture, 
-        textureArea, destinationArea, originOffset,
-        mAngle, WHITE
+        mTexture,
+        sourceArea,
+        destinationArea,
+        originOffset,
+        mAngle,
+        WHITE
     );
+
+    displayCollider();
 
     // displayCollider();
 }
