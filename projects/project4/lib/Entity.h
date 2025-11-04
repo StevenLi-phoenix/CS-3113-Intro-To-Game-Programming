@@ -88,6 +88,7 @@ public:
     void update(float deltaTime, Entity *player, Map *map, 
         Entity *collidableEntities, int collisionCheckCount);
     void render();
+    virtual Vector2 getRenderOffset() const { return {0.0f, 0.0f}; }
     void normaliseMovement() { Normalise(&mMovement); }
 
     void jump()       { mIsJumping = true;  }
@@ -109,7 +110,7 @@ public:
     Vector2     getVelocity()              const { return mVelocity;              }
     Vector2     getAcceleration()          const { return mAcceleration;          }
     Vector2     getScale()                 const { return mScale;                 }
-    Vector2     getColliderDimensions()    const { return mScale;                 }
+    Vector2     getColliderDimensions()    const { return mColliderDimensions;    }
     Vector2     getSpriteSheetDimensions() const { return mSpriteSheetDimensions; }
     Texture2D   getTexture()               const { return mTexture;               }
     TextureType getTextureType()           const { return mTextureType;           }
@@ -133,6 +134,8 @@ public:
         { mPosition = newPosition;                 }
     void setMovement(Vector2 newMovement)
         { mMovement = newMovement;                 }
+    void setVelocity(Vector2 newVelocity)
+        { mVelocity = newVelocity;                 }
     void setAcceleration(Vector2 newAcceleration)
         { mAcceleration = newAcceleration;         }
     void setScale(Vector2 newScale)
@@ -149,15 +152,38 @@ public:
         { mFrameSpeed = newSpeed;                  }
     void setJumpingPower(float newJumpingPower)
         { mJumpingPower = newJumpingPower;         }
-    void setAngle(float newAngle) 
+    void setAngle(float newAngle)
         { mAngle = newAngle;                       }
     void setEntityType(EntityType entityType)
         { mEntityType = entityType;                }
+    void setTextureType(TextureType newType)
+        { mTextureType = newType;                  }
+    void setAnimationAtlas(const std::map<Direction, std::vector<int>> &newAtlas)
+    {
+        mAnimationAtlas = newAtlas;
+        mAnimationIndices.clear();
+        mCurrentFrameIndex = 0;
+        mAnimationTime = 0.0f;
+    }
     void setDirection(Direction newDirection)
-    { 
+    {
         mDirection = newDirection;
 
-        if (mTextureType == ATLAS) mAnimationIndices = mAnimationAtlas.at(mDirection);
+        if (mTextureType == ATLAS)
+        {
+            auto it = mAnimationAtlas.find(mDirection);
+            if (it != mAnimationAtlas.end())
+            {
+                mAnimationIndices = it->second;
+                if (mCurrentFrameIndex >= static_cast<int>(mAnimationIndices.size()))
+                    mCurrentFrameIndex = 0;
+            }
+            else
+            {
+                mAnimationIndices.clear();
+                mCurrentFrameIndex = 0;
+            }
+        }
     }
     void setAIState(AIState newState)
         { mAIState = newState;                     }

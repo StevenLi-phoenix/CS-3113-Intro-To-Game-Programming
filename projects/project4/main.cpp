@@ -1,24 +1,24 @@
 #include "raylib.h"
-// #include "lib/vector_ops.h"
-// #include "lib/pid_controller.h"
 #include "lib/helper.h"
+#include "lib/Scene.h"
+#include "levels/level_witchdemo.h"
+#include "levels/level0.h"
+
 
 // Global Constants
 struct Constants {
-    const char *TITLE = "Hello raylib!";
-    int SCREEN_WIDTH = 800 * 1.5f;
-    int SCREEN_HEIGHT = 450 * 1.5f;
-    int FPS = 60;
+    const char *TITLE = "Witch Character Demo";
+    constexpr static int SCREEN_WIDTH = 800 * 1.5f;
+    constexpr static int SCREEN_HEIGHT = 450 * 1.5f;
+    constexpr static int FPS = 60;
 };
 
-// Global State
-struct GameState {
-};
 
 // Global Variables
 AppStatus gAppStatus   = RUNNING;
-GameState g;
 Constants c;
+Scene* gCurrentScene = nullptr;
+float gDeltaTime = 0.0f;
 
 // Function Declarations
 void initialise();
@@ -31,30 +31,44 @@ void shutdown();
 void initialise()
 {
     InitWindow(c.SCREEN_WIDTH, c.SCREEN_HEIGHT, c.TITLE);
-
     SetTargetFPS(c.FPS);
+
+    gCurrentScene = new Level0();
+    gCurrentScene->initialise();
 }
 
-void processInput() 
+void processInput()
 {
     if (WindowShouldClose()) gAppStatus = TERMINATED;
 }
 
-void update() {
-    LOG("Hello from LOG()");
+void update()
+{
+    gDeltaTime = GetFrameTime();
+
+    if (gCurrentScene) {
+        gCurrentScene->update(gDeltaTime);
+    }
 }
 
 void render()
 {
     BeginDrawing();
 
-    ClearBackground(RAYWHITE);
+    if (gCurrentScene) {
+        gCurrentScene->render();
+    }
 
     EndDrawing();
 }
 
-void shutdown() 
-{ 
+void shutdown()
+{
+    if (gCurrentScene) {
+        delete gCurrentScene;
+        gCurrentScene = nullptr;
+    }
+
     CloseWindow(); // Close window and OpenGL context
 }
 

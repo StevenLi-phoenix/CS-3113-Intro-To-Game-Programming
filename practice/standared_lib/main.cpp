@@ -2,22 +2,20 @@
 // #include "lib/vector_ops.h"
 // #include "lib/pid_controller.h"
 #include "lib/helper.h"
+#include "lib/Scene.h"
+
 
 // Global Constants
 struct Constants {
     const char *TITLE = "Hello raylib!";
-    int SCREEN_WIDTH = 800 * 1.5f;
-    int SCREEN_HEIGHT = 450 * 1.5f;
-    int FPS = 60;
+    constexpr int SCREEN_WIDTH = 800 * 1.5f;
+    constexpr int SCREEN_HEIGHT = 450 * 1.5f;
+    constexpr int FPS = 60;
 };
 
-// Global State
-struct GameState {
-};
 
 // Global Variables
 AppStatus gAppStatus   = RUNNING;
-GameState g;
 Constants c;
 
 // Function Declarations

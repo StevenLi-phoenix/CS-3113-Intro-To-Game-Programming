@@ -1,0 +1,74 @@
+{
+  "square_size": 49,
+  "grid": {
+    "columns": 11,
+    "rows": 13
+  },
+  "animations": {
+    "attack": {
+      "row": 0,
+      "frame_count": 11,
+      "source": "atack.png"
+    },
+    "back_start_run": {
+      "row": 1,
+      "frame_count": 3,
+      "source": "back_start_run.png"
+    },
+    "death": {
+      "row": 2,
+      "frame_count": 7,
+      "source": "death.png"
+    },
+    "fall": {
+      "row": 3,
+      "frame_count": 4,
+      "source": "fall.png"
+    },
+    "hit": {
+      "row": 4,
+      "frame_count": 4,
+      "source": "hit.png"
+    },
+    "idle_attack": {
+      "row": 5,
+      "frame_count": 4,
+      "source": "idle_atack.png"
+    },
+    "idle_back": {
+      "row": 6,
+      "frame_count": 4,
+      "source": "idle_back.png"
+    },
+    "idle": {
+      "row": 7,
+      "frame_count": 4,
+      "source": "idle.png"
+    },
+    "jump": {
+      "row": 8,
+      "frame_count": 5,
+      "source": "jump.png"
+    },
+    "run": {
+      "row": 9,
+      "frame_count": 8,
+      "source": "run.png"
+    },
+    "start_run": {
+      "row": 10,
+      "frame_count": 3,
+      "source": "start_run.png"
+    },
+    "stop_run": {
+      "row": 11,
+      "frame_count": 8,
+      "source": "stop_run.png"
+    },
+    "turn": {
+      "row": 12,
+      "frame_count": 5,
+      "source": "turn.png"
+    }
+  }
+}

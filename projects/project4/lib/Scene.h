@@ -26,6 +26,7 @@ protected:
 public:
     Scene();
     Scene(Vector2 origin, const char *bgHexCode);
+    virtual ~Scene();
 
     virtual void initialise() = 0;
     virtual void update(float deltaTime) = 0;
