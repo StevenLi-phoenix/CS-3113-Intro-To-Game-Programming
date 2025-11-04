@@ -8,9 +8,9 @@
 // Global Constants
 struct Constants {
     const char *TITLE = "Hello raylib!";
-    constexpr int SCREEN_WIDTH = 800 * 1.5f;
-    constexpr int SCREEN_HEIGHT = 450 * 1.5f;
-    constexpr int FPS = 60;
+    constexpr static int SCREEN_WIDTH = 800 * 1.5f;
+    constexpr static int SCREEN_HEIGHT = 450 * 1.5f;
+    constexpr static int FPS = 60;
 };
 
 
