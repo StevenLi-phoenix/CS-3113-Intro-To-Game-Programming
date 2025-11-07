@@ -10,6 +10,7 @@ enum class SceneID
     LEVEL_ONE,
     LEVEL_TWO,
     LEVEL_THREE,
+    BOSS_FIGHT,
     GAME_OVER,
     VICTORY,
     QUIT
@@ -27,6 +28,8 @@ struct GameContext
     std::string selectedVariant = "Fire";
 
     bool paused = false;
+    bool reloadScene = false;
+    bool audioReady = false;
 };
 
 GameContext &GetGameContext();

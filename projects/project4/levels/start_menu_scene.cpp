@@ -39,18 +39,15 @@ void StartMenuScene::render()
 
     const char *title = "Witch Platformer";
     const int titleFontSize = 64;
-    const int titleWidth = MeasureText(title, titleFontSize);
-    DrawText(title, static_cast<int>(mOrigin.x) - titleWidth / 2, static_cast<int>(mOrigin.y) - 180, titleFontSize, RAYWHITE);
+    DrawText(title, static_cast<int>(mOrigin.x) - 220, static_cast<int>(mOrigin.y) - 180, titleFontSize, RAYWHITE);
 
     const char *subtitle = "Press Enter to Start";
     const int subtitleFont = 32;
-    const int subtitleWidth = MeasureText(subtitle, subtitleFont);
-    DrawText(subtitle, static_cast<int>(mOrigin.x) - subtitleWidth / 2, static_cast<int>(mOrigin.y) - 100, subtitleFont, LIGHTGRAY);
+    DrawText(subtitle, static_cast<int>(mOrigin.x) - 160, static_cast<int>(mOrigin.y) - 100, subtitleFont, LIGHTGRAY);
 
     const char *instructions = "Use arrow keys in-game. Esc quits.";
     const int instructionFont = 20;
-    const int instructionWidth = MeasureText(instructions, instructionFont);
-    DrawText(instructions, static_cast<int>(mOrigin.x) - instructionWidth / 2, static_cast<int>(mOrigin.y) + 40, instructionFont, GRAY);
+    DrawText(instructions, static_cast<int>(mOrigin.x) - 190, static_cast<int>(mOrigin.y) + 40, instructionFont, GRAY);
 }
 
 void StartMenuScene::shutdown()

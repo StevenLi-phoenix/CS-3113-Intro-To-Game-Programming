@@ -1,5 +1,8 @@
 #include "Entity.h"
 
+#include <algorithm>
+#include <cmath>
+
 Entity::Entity() : mPosition {0.0f, 0.0f}, mMovement {0.0f, 0.0f}, 
                    mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
                    mScale {DEFAULT_SIZE, DEFAULT_SIZE},
@@ -7,7 +10,10 @@ Entity::Entity() : mPosition {0.0f, 0.0f}, mMovement {0.0f, 0.0f},
                    mTexture {0}, mTextureType {SINGLE}, mAngle {0.0f},
                    mSpriteSheetDimensions {}, mDirection {RIGHT}, 
                    mAnimationAtlas {{}}, mAnimationIndices {}, mFrameSpeed {0},
-                   mEntityType {NONE} { }
+                   mEntityType {NONE} 
+{
+    mFlyAnchor = mPosition;
+}
 
 Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, 
     EntityType entityType) : mPosition {position}, mVelocity {0.0f, 0.0f}, 
@@ -15,7 +21,10 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath,
     mColliderDimensions {scale}, mTexture {LoadTexture(textureFilepath)}, 
     mTextureType {SINGLE}, mDirection {RIGHT}, mAnimationAtlas {{}}, 
     mAnimationIndices {}, mFrameSpeed {0}, mSpeed {DEFAULT_SPEED}, 
-    mAngle {0.0f}, mEntityType {entityType} { }
+    mAngle {0.0f}, mEntityType {entityType} 
+{
+    mFlyAnchor = mPosition;
+}
 
 Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, 
         TextureType textureType, Vector2 spriteSheetDimensions, std::map<Direction, 
@@ -27,7 +36,10 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath,
         mAnimationAtlas {animationAtlas}, mDirection {RIGHT},
         mAnimationIndices {animationAtlas.at(RIGHT)}, 
         mFrameSpeed {DEFAULT_FRAME_SPEED}, mAngle { 0.0f }, 
-        mSpeed { DEFAULT_SPEED }, mEntityType {entityType} { }
+        mSpeed { DEFAULT_SPEED }, mEntityType {entityType} 
+{
+    mFlyAnchor = mPosition;
+}
 
 Entity::~Entity() { UnloadTexture(mTexture); };
 
@@ -186,6 +198,18 @@ bool Entity::isColliding(Entity *other) const
     return false;
 }
 
+bool Entity::intersects(const Entity &other) const
+{
+    if (&other == this || !other.isActive()) return false;
+
+    float xDistance = fabs(mPosition.x - other.getPosition().x) -
+        ((mColliderDimensions.x + other.getColliderDimensions().x) / 2.0f);
+    float yDistance = fabs(mPosition.y - other.getPosition().y) -
+        ((mColliderDimensions.y + other.getColliderDimensions().y) / 2.0f);
+
+    return (xDistance < 0.0f && yDistance < 0.0f);
+}
+
 void Entity::animate(float deltaTime)
 {
     auto atlasIt = mAnimationAtlas.find(mDirection);
@@ -207,29 +231,128 @@ void Entity::animate(float deltaTime)
     }
 }
 
-void Entity::AIWander() { moveLeft(); }
-
 void Entity::AIFollow(Entity *target)
 {
-    switch (mAIState)
+    if (!target)
     {
-    case IDLE:
-        if (Vector2Distance(mPosition, target->getPosition()) < 250.0f) 
-            mAIState = WALKING;
-        break;
+        resetMovement();
+        return;
+    }
 
-    case WALKING:
-        // Depending on where the player is in respect to their x-position
-        // Change direction of the enemy
-        if (mPosition.x > target->getPosition().x) moveLeft();
-        else                                       moveRight();
-    
-    default:
-        break;
+    const float distanceToTarget = Vector2Distance(mPosition, target->getPosition());
+    if (distanceToTarget <= mFollowRadius) mAIState = FOLLOWING;
+    else if (distanceToTarget > mFollowRadius * 1.2f) mAIState = WALKING;
+
+    resetMovement();
+
+    if (mAIState == FOLLOWING)
+    {
+        const float dx = target->getPosition().x - mPosition.x;
+        if (fabsf(dx) > mFollowStopRadius)
+        {
+            if (dx > 0.0f) moveRight();
+            else          moveLeft();
+        }
+
+        // Encourage jumps when the player is horizontally close but higher up.
+        const float dy = target->getPosition().y - mPosition.y;
+        if (dy < -mColliderDimensions.y * 0.5f && mIsCollidingBottom)
+        {
+            jump();
+        }
+    }
+    else if (mHasPatrolBounds)
+    {
+        if (mPosition.x <= mPatrolLeft) mWanderDirection = 1;
+        if (mPosition.x >= mPatrolRight) mWanderDirection = -1;
+
+        if (mWanderDirection < 0) moveLeft();
+        else                      moveRight();
     }
 }
 
-void Entity::AIActivate(Entity *target)
+void Entity::AIWander()
+{
+    if (!mHasPatrolBounds)
+    {
+        if (mMovement.x == 0.0f) moveLeft();
+        return;
+    }
+
+    const float margin = 4.0f;
+    if (mPosition.x <= (mPatrolLeft + margin)) mWanderDirection = 1;
+    if (mPosition.x >= (mPatrolRight - margin)) mWanderDirection = -1;
+
+    if (mCurrentMap)
+    {
+        const float halfWidth = mColliderDimensions.x * 0.5f;
+        const float heading = (mWanderDirection < 0) ? -1.0f : 1.0f;
+        const float aheadOffset = halfWidth + std::max(6.0f, static_cast<float>(mSpeed) * 0.015f);
+        const Vector2 probe = {
+            mPosition.x + heading * aheadOffset,
+            mPosition.y + (mColliderDimensions.y * 0.5f) + 4.0f
+        };
+        float xOverlap = 0.0f;
+        float yOverlap = 0.0f;
+        if (!mCurrentMap->isSolidTileAt(probe, &xOverlap, &yOverlap))
+        {
+            mWanderDirection *= -1;
+        }
+    }
+
+    resetMovement();
+    if (mWanderDirection < 0) moveLeft();
+    else                      moveRight();
+}
+
+void Entity::AIFly(float deltaTime)
+{
+    if (!mFlyConfigured) return;
+
+    if (!mFlyAnchorInitialised)
+    {
+        mFlyAnchor = mPosition;
+        mFlyAnchorInitialised = true;
+        mFlyTimer = 0.0f;
+    }
+
+    const float leftLimit = mFlyAnchor.x - mFlyHorizontalRange;
+    const float rightLimit = mFlyAnchor.x + mFlyHorizontalRange;
+    if (mPosition.x <= leftLimit) mFlyDirection = 1.0f;
+    else if (mPosition.x >= rightLimit) mFlyDirection = -1.0f;
+
+    resetMovement();
+    if (mFlyHorizontalRange > 0.0f)
+    {
+        if (mFlyDirection < 0.0f) moveLeft();
+        else                      moveRight();
+    }
+
+    mSpeed = static_cast<int>(mFlyHorizontalSpeed);
+    mAcceleration.y = 0.0f;
+    mVelocity.y = 0.0f;
+
+    mFlyTimer += deltaTime;
+    const float oscillation = sinf(mFlyTimer * mFlyVerticalFrequency * 6.2831853f) * mFlyVerticalAmplitude;
+    mPosition.y = mFlyAnchor.y + oscillation;
+}
+
+void Entity::resetFlyAnchor()
+{
+    mFlyAnchorInitialised = false;
+    mFlyTimer = 0.0f;
+}
+
+void Entity::clampToPatrolBounds()
+{
+    if (!mHasPatrolBounds) return;
+    if (mPatrolLeft > mPatrolRight) return;
+
+    if (mPosition.x < mPatrolLeft)      mPosition.x = mPatrolLeft;
+    else if (mPosition.x > mPatrolRight) mPosition.x = mPatrolRight;
+}
+
+void Entity::AIActivate(Entity *target, float deltaTime)
 {
     switch (mAIType)
     {
@@ -239,6 +362,10 @@ void Entity::AIActivate(Entity *target)
 
     case FOLLOWER:
         AIFollow(target);
+        break;
+
+    case FLYER:
+        AIFly(deltaTime);
         break;
     
     default:
@@ -251,11 +378,17 @@ void Entity::update(float deltaTime, Entity *player, Map *map,
 {
     if (mEntityStatus == INACTIVE) return;
     
-    if (mEntityType == NPC) AIActivate(player);
+    mCurrentMap = map;
+
+    if (mEntityType == NPC) AIActivate(player, deltaTime);
 
     resetColliderFlags();
 
     mVelocity.x = mMovement.x * mSpeed;
+    if (mMovement.y != 0.0f)
+    {
+        mVelocity.y = mMovement.y * mSpeed;
+    }
 
     mVelocity.x += mAcceleration.x * deltaTime;
     mVelocity.y += mAcceleration.y * deltaTime;
@@ -280,6 +413,11 @@ void Entity::update(float deltaTime, Entity *player, Map *map,
 
     bool hasAtlas = mTextureType == ATLAS && !mAnimationAtlas.empty() && mFrameSpeed > 0;
     if (hasAtlas) animate(deltaTime);
+
+    if (mEntityType == NPC)
+    {
+        clampToPatrolBounds();
+    }
 }
 
 void Entity::render()
@@ -345,9 +483,6 @@ void Entity::render()
         WHITE
     );
 
-    displayCollider();
-
-    // displayCollider();
 }
 
 void Entity::displayCollider() 

@@ -13,6 +13,12 @@ CXXFLAGS = -std=c++11
 RAYLIB_CFLAGS = $(shell pkg-config --cflags raylib)
 RAYLIB_LIBS = $(shell pkg-config --libs raylib)
 
+ifeq ($(DEBUG),1)
+    CXXFLAGS += -g -DDEBUG_BUILD=1
+else
+    CXXFLAGS += -DDEBUG_BUILD=0
+endif
+
 ifeq ($(UNAME_S), Darwin)
     # macOS configuration
     CXXFLAGS += -arch arm64 $(RAYLIB_CFLAGS)
