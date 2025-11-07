@@ -113,6 +113,7 @@ void render()
 
     gCurrentScene->render();
     gShader.setVector2("lightPosition", gLightPosition);
+    gShader.setInt("isCharging", gCurrentScene->getState().hinako->isCharging());
 
     gShader.end();
     gEffects->render();
