@@ -5,7 +5,7 @@
 
 enum Direction    { LEFT, UP, RIGHT, DOWN              }; // For walking
 enum EntityStatus { ACTIVE, INACTIVE                   };
-enum EntityType   { PLAYER, BLOCK, PLATFORM, NPC, NONE };
+enum EntityType   { PLAYER, BLOCK, PLATFORM, NPC, EMPTY };
 enum AIType       { WANDERER, FOLLOWER                 };
 enum AIState      { WALKING, IDLE, FOLLOWING           };
 
@@ -165,4 +165,4 @@ public:
         { mAIType = newType;                       }
 };
 
-#endif // ENTITY_H
+#endif // ENTITY_CPP
