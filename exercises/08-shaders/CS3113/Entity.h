@@ -118,6 +118,7 @@ public:
     Texture2D   getCurrentTexture()        const { return mCurrentTexture;        }
     TextureType getTextureType()           const { return mTextureType;           }
     Animation   getAnimation()             const { return mAnimation;             }
+    int         isCharging()               const { return mAnimation == CHARGING ? 1 : 0; }
     int         getFrameSpeed()            const { return mFrameSpeed;            }
     float       getJumpingPower()          const { return mJumpingPower;          }
     bool        isJumping()                const { return mIsJumping;             }
