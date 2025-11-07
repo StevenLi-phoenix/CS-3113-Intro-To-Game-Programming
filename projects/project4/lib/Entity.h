@@ -1,12 +1,14 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
+#include <algorithm>
+
 #include "Map.h"
 
 enum Direction    { LEFT, UP, RIGHT, DOWN              }; // For walking
 enum EntityStatus { ACTIVE, INACTIVE                   };
 enum EntityType   { PLAYER, BLOCK, PLATFORM, NPC, NONE };
-enum AIType       { WANDERER, FOLLOWER                 };
+enum AIType       { WANDERER, FOLLOWER, FLYER          };
 enum AIState      { WALKING, IDLE, FOLLOWING           };
 
 class Entity
@@ -46,8 +48,28 @@ private:
     EntityStatus mEntityStatus = ACTIVE;
     EntityType   mEntityType;
 
-    AIType  mAIType;
-    AIState mAIState;
+    AIType  mAIType = WANDERER;
+    AIState mAIState = IDLE;
+
+    // AI behaviour configuration
+    float mPatrolLeft = 0.0f;
+    float mPatrolRight = 0.0f;
+    bool mHasPatrolBounds = false;
+    int mWanderDirection = -1;
+
+    float mFollowRadius = 250.0f;
+    float mFollowStopRadius = 40.0f;
+
+    Vector2 mFlyAnchor {0.0f, 0.0f};
+    float mFlyHorizontalRange = 0.0f;
+    float mFlyHorizontalSpeed = DEFAULT_SPEED;
+    float mFlyVerticalAmplitude = 0.0f;
+    float mFlyVerticalFrequency = 1.0f;
+    float mFlyDirection = -1.0f;
+    float mFlyTimer = 0.0f;
+    bool mFlyConfigured = false;
+    bool mFlyAnchorInitialised = false;
+    Map *mCurrentMap = nullptr;
 
     bool isColliding(Entity *other) const;
 
@@ -56,7 +78,7 @@ private:
 
     void checkCollisionX(Entity *collidableEntities, int collisionCheckCount);
     void checkCollisionX(Map *map);
-    
+
     void resetColliderFlags() 
     {
         mIsCollidingTop    = false;
@@ -66,9 +88,11 @@ private:
     }
 
     void animate(float deltaTime);
-    void AIActivate(Entity *target);
+    void AIActivate(Entity *target, float deltaTime);
     void AIWander();
     void AIFollow(Entity *target);
+    void AIFly(float deltaTime);
+    void clampToPatrolBounds();
 
 public:
     static constexpr int   DEFAULT_SIZE          = 250;
@@ -90,13 +114,15 @@ public:
     void render();
     virtual Vector2 getRenderOffset() const { return {0.0f, 0.0f}; }
     void normaliseMovement() { Normalise(&mMovement); }
+    bool intersects(const Entity &other) const;
+    void resetFlyAnchor();
 
     void jump()       { mIsJumping = true;  }
     void activate()   { mEntityStatus  = ACTIVE;   }
     void deactivate() { mEntityStatus  = INACTIVE; }
     void displayCollider();
 
-    bool isActive() { return mEntityStatus == ACTIVE ? true : false; }
+    bool isActive() const { return mEntityStatus == ACTIVE; }
 
     void moveUp()    { mMovement.y = -1; mDirection = UP;    }
     void moveDown()  { mMovement.y =  1; mDirection = DOWN;  }
@@ -189,6 +215,34 @@ public:
         { mAIState = newState;                     }
     void setAIType(AIType newType)
         { mAIType = newType;                       }
+    void setPatrolBounds(float left, float right)
+    {
+        if (left > right) std::swap(left, right);
+        mPatrolLeft = left;
+        mPatrolRight = right;
+        mHasPatrolBounds = true;
+    }
+    void clearPatrolBounds()
+    {
+        mHasPatrolBounds = false;
+        mPatrolLeft = mPatrolRight = mPosition.x;
+    }
+    void setWanderDirection(int direction) { mWanderDirection = (direction < 0) ? -1 : 1; }
+    void setFollowRadius(float radius) { mFollowRadius = radius; }
+    void setFollowStopRadius(float radius) { mFollowStopRadius = radius; }
+    void setFlyParameters(Vector2 anchor, float horizontalRange, float horizontalSpeed,
+        float verticalAmplitude, float verticalFrequency)
+    {
+        mFlyAnchor = anchor;
+        mFlyHorizontalRange = fabs(horizontalRange);
+        mFlyHorizontalSpeed = horizontalSpeed;
+        mFlyVerticalAmplitude = fabs(verticalAmplitude);
+        mFlyVerticalFrequency = (verticalFrequency <= 0.0f) ? 1.0f : verticalFrequency;
+        mFlyConfigured = true;
+        mFlyAnchorInitialised = false;
+        mFlyTimer = 0.0f;
+        mFlyDirection = -1.0f;
+    }
 };
 
 #endif // ENTITY_CPP

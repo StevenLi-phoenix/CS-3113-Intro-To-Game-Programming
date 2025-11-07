@@ -54,7 +54,7 @@ Witch::Witch(const std::string &variant)
     setFrameSpeed(DEFAULT_FRAME_SPEED);
     setJumpingPower(500.0f);
     setAcceleration(Vector2{0.0f, 900.0f});
-    setColliderDimensions(Vector2{80.0f, 90.0f});
+    setColliderDimensions(Vector2{48.0f, 82.0f});
     setEntityType(PLAYER);
 
     if (!setVariant(variant))
@@ -186,7 +186,7 @@ bool Witch::applyVariantMetadata(const std::string &variant, const VariantMetada
 
     const float renderScale = baseSize * 2.0f;
     setScale(Vector2{renderScale, renderScale});
-    setColliderDimensions(Vector2{renderScale * 0.55f, renderScale * 0.9f});
+    setColliderDimensions(Vector2{renderScale * 0.48f, renderScale * 0.82f});
     mAtlasPixelScale = (baseSize > 0.0f) ? (renderScale / baseSize) : 1.0f;
 
     mVariant = variant;
@@ -427,16 +427,17 @@ void Witch::finalizeInputFrame()
     }
 }
 
-void Witch::tryJump()
+bool Witch::tryJump()
 {
     if (controlsLocked() || mIsAirborne)
     {
-        return;
+        return false;
     }
 
     jump();
     mIsAirborne = true;
     playAnimation(WITCH_STATE_JUMP);
+    return true;
 }
 
 void Witch::setGroundPlane(float y)

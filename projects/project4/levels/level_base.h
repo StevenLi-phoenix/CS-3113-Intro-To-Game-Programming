@@ -1,13 +1,21 @@
-#ifndef PLATFORM_LEVEL_BASE_H
-#define PLATFORM_LEVEL_BASE_H
+#ifndef LEVEL_BASE_H
+#define LEVEL_BASE_H
+
+#include <vector>
 
 #include "../lib/Scene.h"
 #include "../lib/game_context.h"
 #include "witch.h"
 
-class PlatformLevelBase : public Scene
+class LevelBase : public Scene
 {
 protected:
+    struct EnemyRecord
+    {
+        Entity *entity = nullptr;
+        Vector2 spawnPosition {0.0f, 0.0f};
+    };
+
     static constexpr float TILE_PIXEL_SIZE = 64.0f;
     static constexpr int TILESET_COLUMNS = 16;
     static constexpr int TILESET_ROWS = 16;
@@ -19,6 +27,17 @@ protected:
     Rectangle mGoalTileArea {0.0f, 0.0f, 1.0f, 1.0f};
     Rectangle mGoalWorldArea {0.0f, 0.0f, 0.0f, 0.0f};
     std::string mLevelName;
+    std::vector<EnemyRecord> mEnemies;
+    Sound mHitSound {};
+    Sound mDeathSound {};
+    Sound mJumpSound {};
+    bool mHitSoundLoaded = false;
+    bool mDeathSoundLoaded = false;
+    bool mJumpSoundLoaded = false;
+    bool mResetPending = false;
+    bool mGameOverPending = false;
+    float mGameOverTimer = 0.0f;
+    static constexpr float GAME_OVER_DELAY = 0.9f;
 
     SceneID mSceneID;
     SceneID mNextSceneID;
@@ -26,8 +45,8 @@ protected:
     float mCameraZoom = 1.6f;
 
 protected:
-    PlatformLevelBase(SceneID sceneID, SceneID nextSceneID, const char *levelName);
-    ~PlatformLevelBase() override;
+    LevelBase(SceneID sceneID, SceneID nextSceneID, const char *levelName);
+    ~LevelBase() override;
 
     virtual const unsigned int *getLevelData() const = 0;
     virtual int getLevelWidth() const = 0;
@@ -42,10 +61,28 @@ protected:
     void respawnPlayer();
     bool hasReachedGoal() const;
     Vector2 tileToWorld(const Vector2 &tile) const;
+    Vector2 tileCenter(int tileX, int tileY) const;
+    void updateEnemies(float deltaTime);
+    void renderEnemies();
+    bool handlePlayerEnemyCollisions();
+    void clearEnemies();
+    void registerEnemy(Entity *enemy);
+    static void configureSlimeSprite(Entity *slime);
+    void resetEnemyPosition(EnemyRecord &record);
+    void resetLevelState();
+    void loadHitSound();
+    void unloadHitSound();
+    void loadDeathSound();
+    void unloadDeathSound();
+    void loadJumpSound();
+    void unloadJumpSound();
+    virtual bool onPlayerEnemyCollision(Entity &enemy);
+    virtual void onLevelReset();
 
     virtual void onLevelCompleted();
     virtual void renderForeground();
     virtual void renderHUD() const;
+    virtual void setupEnemies();
 
 public:
     void initialise() override;
@@ -54,4 +91,4 @@ public:
     void shutdown() override;
 };
 
-#endif // PLATFORM_LEVEL_BASE_H
+#endif // LEVEL_BASE_H

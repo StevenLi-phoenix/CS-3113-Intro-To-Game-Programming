@@ -55,7 +55,7 @@ private:
     bool mWasMoving = false;
 
     static constexpr float LANDING_LOCK_DURATION = 0.18f;
-    static constexpr float TURN_LOCK_DURATION = 0.18f;
+    static constexpr float TURN_LOCK_DURATION = 0.10f;
     static constexpr float TEXTURE_OFFSET_X = 0.0f;              // Manual world-space X tweak
     static constexpr float TEXTURE_OFFSET_Y_WORLD = 0.0f;        // Manual world-space Y tweak
     static constexpr float TEXTURE_BOTTOM_PADDING_PIXELS = 9.0f; // Empty pixels below the feet in atlas frames
@@ -99,7 +99,7 @@ public:
     void moveRight();
     void moveUp();
     void moveDown();
-    void tryJump();
+    bool tryJump();
     void setGroundPlane(float y);
     bool isAirborne() const { return mIsAirborne; }
     bool controlsLocked() const { return mControlLockReason != ControlLockReason::None; }

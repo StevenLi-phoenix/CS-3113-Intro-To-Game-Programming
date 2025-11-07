@@ -71,15 +71,13 @@ void CharacterSelectScene::render()
 
     const char *title = "Select Your Witch";
     const int titleFont = 48;
-    const int titleWidth = MeasureText(title, titleFont);
-    DrawText(title, static_cast<int>(mOrigin.x) - titleWidth / 2, static_cast<int>(mOrigin.y) - 180, titleFont, RAYWHITE);
+    DrawText(title, static_cast<int>(mOrigin.x) - 210, static_cast<int>(mOrigin.y) - 180, titleFont, RAYWHITE);
 
     if (!mVariants.empty())
     {
         const std::string &displayName = mVariants[mCurrentIndex].second;
         const int fontSize = 42;
-        const int textWidth = MeasureText(displayName.c_str(), fontSize);
-        DrawText(displayName.c_str(), static_cast<int>(mOrigin.x) - textWidth / 2, static_cast<int>(mOrigin.y) - 60, fontSize, SKYBLUE);
+        DrawText(displayName.c_str(), static_cast<int>(mOrigin.x) - 180, static_cast<int>(mOrigin.y) - 60, fontSize, SKYBLUE);
     }
 
     DrawText("<- / -> to switch", static_cast<int>(mOrigin.x) - 150, static_cast<int>(mOrigin.y) + 20, 24, LIGHTGRAY);
@@ -93,4 +91,3 @@ void CharacterSelectScene::shutdown()
     mGameState.xochitl = nullptr;
     mGameState.map = nullptr;
 }
-

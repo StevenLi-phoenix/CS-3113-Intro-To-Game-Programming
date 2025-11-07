@@ -29,18 +29,15 @@ void GameOverScene::render()
 
     const char *title = "You Lose!";
     const int titleFont = 64;
-    const int titleWidth = MeasureText(title, titleFont);
-    DrawText(title, static_cast<int>(mOrigin.x) - titleWidth / 2, static_cast<int>(mOrigin.y) - 120, titleFont, RED);
+    DrawText(title, static_cast<int>(mOrigin.x) - 170, static_cast<int>(mOrigin.y) - 120, titleFont, RED);
 
     const char *message = "You ran out of lives.";
     const int messageFont = 28;
-    const int messageWidth = MeasureText(message, messageFont);
-    DrawText(message, static_cast<int>(mOrigin.x) - messageWidth / 2, static_cast<int>(mOrigin.y) - 40, messageFont, RAYWHITE);
+    DrawText(message, static_cast<int>(mOrigin.x) - 160, static_cast<int>(mOrigin.y) - 40, messageFont, RAYWHITE);
 
     const char *prompt = "Press Enter to return to the main menu";
     const int promptFont = 24;
-    const int promptWidth = MeasureText(prompt, promptFont);
-    DrawText(prompt, static_cast<int>(mOrigin.x) - promptWidth / 2, static_cast<int>(mOrigin.y) + 40, promptFont, LIGHTGRAY);
+    DrawText(prompt, static_cast<int>(mOrigin.x) - 230, static_cast<int>(mOrigin.y) + 40, promptFont, LIGHTGRAY);
 }
 
 void GameOverScene::shutdown()

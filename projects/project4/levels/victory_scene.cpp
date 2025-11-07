@@ -29,18 +29,15 @@ void VictoryScene::render()
 
     const char *title = "You Win!";
     const int titleFont = 64;
-    const int titleWidth = MeasureText(title, titleFont);
-    DrawText(title, static_cast<int>(mOrigin.x) - titleWidth / 2, static_cast<int>(mOrigin.y) - 130, titleFont, LIME);
+    DrawText(title, static_cast<int>(mOrigin.x) - 150, static_cast<int>(mOrigin.y) - 130, titleFont, LIME);
 
     const char *message = "You cleared every stage.";
     const int messageFont = 28;
-    const int messageWidth = MeasureText(message, messageFont);
-    DrawText(message, static_cast<int>(mOrigin.x) - messageWidth / 2, static_cast<int>(mOrigin.y) - 40, messageFont, RAYWHITE);
+    DrawText(message, static_cast<int>(mOrigin.x) - 180, static_cast<int>(mOrigin.y) - 40, messageFont, RAYWHITE);
 
     const char *prompt = "Press Enter to return to the main menu";
     const int promptFont = 24;
-    const int promptWidth = MeasureText(prompt, promptFont);
-    DrawText(prompt, static_cast<int>(mOrigin.x) - promptWidth / 2, static_cast<int>(mOrigin.y) + 40, promptFont, LIGHTGRAY);
+    DrawText(prompt, static_cast<int>(mOrigin.x) - 220, static_cast<int>(mOrigin.y) + 40, promptFont, LIGHTGRAY);
 }
 
 void VictoryScene::shutdown()
