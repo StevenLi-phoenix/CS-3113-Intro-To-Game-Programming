@@ -136,3 +136,16 @@ jobs:
             Conclude with a concise summary of your actions and include the PR URL when applicable.
           claude_args: >-
             --allowed-tools "Bash(git fetch:*),Bash(git remote add:*),Bash(git remote set-url:*),Bash(git remote -v),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git switch:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git merge:*),Bash(git cherry-pick:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(git rev-list:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
+     
+      - name: Open/Update PR from auto_fix → main
+        if: steps.delta.outputs.needs_sync == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: auto_fix
+          base: main
+          title: Sync upstream updates
+          body: This PR merges upstream improvements while preserving local coursework.
+          labels: sync, upstream
+          delete-branch: false
+          draft: false
