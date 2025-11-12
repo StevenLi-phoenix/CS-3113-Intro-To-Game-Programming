@@ -139,7 +139,7 @@ jobs:
      
       - name: Open/Update PR from auto_fix → main
         if: steps.delta.outputs.needs_sync == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: auto_fix
