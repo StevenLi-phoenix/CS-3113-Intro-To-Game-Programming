@@ -103,7 +103,7 @@ jobs:
             You are automating the upstream sync triage for repository ${{ github.repository }}.
 
             Context:
-            - Source branch: "${{ env.UPSTREAM_REMOTE }}/{{ env.UPSTREAM_BRANCH }}"
+            - Source branch: "${{ env.UPSTREAM_REMOTE }}/${{ env.UPSTREAM_BRANCH }}"
             - Working sync branch (push target): "${{ env.SYNC_BRANCH }}" on origin
             - Base branch for PR: "${{ env.TARGET_BRANCH }}"
             - Preliminary merge status: `${{ steps.prepare_merge.outputs.merge_state }}` (merge applied via `git merge --no-commit --no-ff`)
@@ -137,15 +137,34 @@ jobs:
           claude_args: >-
             --allowed-tools "Bash(git fetch:*),Bash(git remote add:*),Bash(git remote set-url:*),Bash(git remote -v),Bash(git diff:*),Bash(git status),Bash(git checkout:*),Bash(git switch:*),Bash(git reset:*),Bash(git add:*),Bash(git commit:*),Bash(git merge:*),Bash(git cherry-pick:*),Bash(git push:*),Bash(git branch),Bash(git log:*),Bash(git rev-parse:*),Bash(git rev-list:*),Bash(gh auth status),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr edit:*),Bash(gh pr status),Bash(gh pr comment:*),Bash(gh repo view:*),Bash(gh api *),Bash(ls),Bash(ls *),Bash(cat *),Bash(printf *),Bash(jq *)"
      
-      - name: Open/Update PR from auto_fix → main
+      - name: Ensure PR from auto_fix → main
         if: steps.delta.outputs.needs_sync == 'true'
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: auto_fix
-          base: main
-          title: Sync upstream updates
-          body: This PR merges upstream improvements while preserving local coursework.
-          labels: sync, upstream
-          delete-branch: false
-          draft: false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${SYNC_BRANCH}"
+          git checkout "${SYNC_BRANCH}"
+          git reset --hard "origin/${SYNC_BRANCH}"
+
+          if [ "$(git rev-list --count "origin/${TARGET_BRANCH}..${SYNC_BRANCH}")" -eq 0 ]; then
+            echo "No new commits on ${SYNC_BRANCH}; skipping PR creation."
+            exit 0
+          fi
+
+          if gh pr view --base "${TARGET_BRANCH}" --head "${SYNC_BRANCH}" >/dev/null 2>&1; then
+            echo "Updating existing PR for ${SYNC_BRANCH}."
+            gh pr edit --base "${TARGET_BRANCH}" --head "${SYNC_BRANCH}" \
+              --title "Sync upstream updates" \
+              --body "This PR merges upstream improvements while preserving local coursework." \
+              --add-label "sync" \
+              --add-label "upstream"
+          else
+            echo "Creating PR for ${SYNC_BRANCH} → ${TARGET_BRANCH}."
+            gh pr create --base "${TARGET_BRANCH}" --head "${SYNC_BRANCH}" \
+              --title "Sync upstream updates" \
+              --body "This PR merges upstream improvements while preserving local coursework." \
+              --label "sync" \
+              --label "upstream"
+          fi

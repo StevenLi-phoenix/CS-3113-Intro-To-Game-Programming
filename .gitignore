@@ -158,3 +158,5 @@ lectures/*
 exercises/01-transformations/SOLUTION.cpp
 
 **/raylib_app
+
+output.txt
