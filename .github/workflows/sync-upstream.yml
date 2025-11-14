@@ -148,18 +148,6 @@ jobs:
           git checkout "${SYNC_BRANCH}"
           git reset --hard "origin/${SYNC_BRANCH}"
 
-          ensure_label() {
-            local label="$1"
-            local color="$2"
-            local desc="$3"
-            if ! gh label list --limit 1000 | grep -q "^${label}\b"; then
-              gh label create "${label}" --color "${color}" --description "${desc}" || true
-            fi
-          }
-
-          ensure_label "sync" "0E8A16" "Upstream synchronization changes"
-          ensure_label "upstream" "5319E7" "Updates pulled from upstream repository"
-
           if [ "$(git rev-list --count "origin/${TARGET_BRANCH}..${SYNC_BRANCH}")" -eq 0 ]; then
             echo "No new commits on ${SYNC_BRANCH}; skipping PR creation."
             exit 0
