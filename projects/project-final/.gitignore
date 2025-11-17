@@ -1,0 +1,23 @@
+# LibTorch binaries and libraries (too large for git)
+libtorch/
+
+# Build artifacts
+*.o
+*.dylib
+*.so
+*.dll
+*.exe
+raylib_app
+*.dSYM/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
