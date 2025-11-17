@@ -1,43 +1,32 @@
 #include "uiBase.h"
 
-UIBase::UIBase() = default;
-
-UIBase::UIBase(Entity *entity) : mEntity(entity) {}
+UIBase::UIBase()
+{
+    setIsActive(true);
+    setCanCollide(false);
+}
 
 UIBase::~UIBase() = default;
 
-void UIBase::setEntity(Entity *entity)
+Rectangle UIBase::getBounds() const
 {
-    mEntity = entity;
+    Vector2 position = getPosition();
+    Vector2 size = getScale();
+    return {
+        position.x - size.x / 2.0f,
+        position.y - size.y / 2.0f,
+        size.x,
+        size.y
+    };
 }
 
-Entity* UIBase::getEntity()
+bool UIBase::containsPoint(Vector2 point) const
 {
-    return mEntity;
+    return PointInRectangle(point, getBounds());
 }
 
-const Entity* UIBase::getEntity() const
+bool UIBase::isMouseOver() const
 {
-    return mEntity;
-}
-
-void UIBase::update(float deltaTime)
-{
-    if (mEntity) {
-        mEntity->update(deltaTime);
-    }
-}
-
-void UIBase::render()
-{
-    if (mEntity) {
-        mEntity->render();
-    }
-}
-
-void UIBase::shutdown()
-{
-    if (mEntity) {
-        mEntity->shutdown();
-    }
+    if (!getIsActive()) return false;
+    return containsPoint(GetMousePosition());
 }

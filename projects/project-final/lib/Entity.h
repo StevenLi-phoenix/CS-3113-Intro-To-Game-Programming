@@ -20,13 +20,18 @@ class Entity
 {
 private:
     Entity *mParent = nullptr;
-
-    Vector2 mPosition;
+    
+    // does not implemnted here, just a placeholder for future implementation
     int zIndex = 5; // 0 is the lowest, 10 is the highest (not enforced) // used for rendering order
-    Vector2 mMovement;
-    Vector2 mVelocity;
-    Vector2 mAcceleration;
+    
+    Vector2 mMovement; // instant movement
+    Vector2 mPosition; // position of the entity
+    Vector2 mVelocity; // velocity of the entity
+    Vector2 mAcceleration; // acceleration of the entity
+    Vector2 mForce; // force applied to the entity, pending force, will be applied in the update function
 
+    float mMass = 0.0f; // default disabled for forced-based movement
+    
     Vector2 mScale;
     Vector2 mColliderDimensions;
 
@@ -88,9 +93,12 @@ public:
     void displayCollider();
 
     // setters and getters
+    void setZIndex(int zIndex) { zIndex = zIndex; }
     void setPosition(Vector2 position) { mPosition = position; }
     void setMovement(Vector2 movement) { mMovement = movement; }
     void setVelocity(Vector2 velocity) { mVelocity = velocity; }
+    void setForce(Vector2 force) { mForce = force; }
+    void addForce(Vector2 force) { mForce += force; }
     void setAcceleration(Vector2 acceleration) { mAcceleration = acceleration; }
     void setScale(Vector2 scale) { mScale = scale; }
     void setColliderDimensions(Vector2 colliderDimensions) { mColliderDimensions = colliderDimensions; }
@@ -119,10 +127,12 @@ public:
     void resetColliderFlags() { mIsCollidingTop = false; mIsCollidingBottom = false; mIsCollidingRight = false; mIsCollidingLeft = false; }
     
     // getters
+    int getZIndex() const { return zIndex; }
     Vector2 getPosition() const { return mPosition; }
     Vector2 getMovement() const { return mMovement; }
     Vector2 getVelocity() const { return mVelocity; }
     Vector2 getAcceleration() const { return mAcceleration; }
+    Vector2 getForce() const { return mForce; }
     Vector2 getScale() const { return mScale; }
     Vector2 getColliderDimensions() const { return mColliderDimensions; }
     Texture2D getTexture() const { return mTexture; }

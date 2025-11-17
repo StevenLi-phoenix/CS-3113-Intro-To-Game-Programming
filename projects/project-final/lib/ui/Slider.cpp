@@ -9,7 +9,8 @@ Slider::Slider()
     : mMinValue(0.0f), mMaxValue(1.0f), mValue(0.0f), mIsDragging(false),
       mTrackColor(LIGHTGRAY), mFillColor(DARKGRAY), mKnobColor(RAYWHITE),
       mBorderColor(BLACK), mBorderThickness(2.0f), mOnValueChanged(nullptr),
-      mSnapEnabled(false), mSnapTolerance(0.0f), mSnapValues()
+      mSnapEnabled(false), mSnapTolerance(0.0f), mSnapValues(),
+      mIsSnapped(false), mSnappedValue(0.0f)
 {
     setIsActive(true);
     setCanCollide(false);
@@ -20,7 +21,8 @@ Slider::Slider(Vector2 position, Vector2 size, float minValue, float maxValue, f
     : mMinValue(minValue), mMaxValue(maxValue), mValue(startValue), mIsDragging(false),
       mTrackColor(LIGHTGRAY), mFillColor(DARKGRAY), mKnobColor(RAYWHITE),
       mBorderColor(BLACK), mBorderThickness(2.0f), mOnValueChanged(nullptr),
-      mSnapEnabled(false), mSnapTolerance(0.0f), mSnapValues()
+      mSnapEnabled(false), mSnapTolerance(0.0f), mSnapValues(),
+      mIsSnapped(false), mSnappedValue(0.0f)
 {
     if (mMinValue == mMaxValue)
     {
@@ -51,12 +53,26 @@ void Slider::setValue(float value, bool fireCallback)
     {
         clamped = Clamp(value, mMinValue, mMaxValue);
     }
-    clamped = applySnapping(clamped);
+    float snappedValue = clamped;
+    bool snapped = getSnappedValue(clamped, snappedValue);
+    if (snapped)
+    {
+        clamped = snappedValue;
+        mIsSnapped = true;
+        mSnappedValue = snappedValue;
+    }
+    else
+    {
+        mIsSnapped = false;
+        mSnappedValue = clamped;
+    }
+
     if (fabsf(clamped - mValue) < 0.0001f)
     {
         mValue = clamped;
         return;
     }
+
     mValue = clamped;
     if (mOnValueChanged && fireCallback)
     {
@@ -87,10 +103,7 @@ float Slider::getNormalizedValue() const
 
 bool Slider::isMouseOver() const
 {
-    if (!getIsActive()) return false;
-    Rectangle track = getTrackRectangle();
-    Vector2 mousePos = GetMousePosition();
-    return PointInRectangle(mousePos, track);
+    return UIBase::isMouseOver();
 }
 
 void Slider::update(float deltaTime, Entity *player, Map *map, const std::vector<Entity*> &collidableEntities)
@@ -163,6 +176,38 @@ void Slider::render()
         knobSize
     };
 
+    if (mSnapEnabled && !mSnapValues.empty())
+    {
+        float tickWidth = track.width * 0.02f;
+        tickWidth = Clamp(tickWidth, track.height * 0.3f, track.width * 0.06f);
+        float tickHeight = track.height * 0.5f;
+
+        for (float snapValue : mSnapValues)
+        {
+            float normalizedSnap = 0.0f;
+            if (mMaxValue > mMinValue)
+            {
+                normalizedSnap = (snapValue - mMinValue) / (mMaxValue - mMinValue);
+            }
+            normalizedSnap = Clamp(normalizedSnap, 0.0f, 1.0f);
+
+            float snapX = track.x + normalizedSnap * track.width;
+            Rectangle snapHint = {
+                snapX - tickWidth / 2.0f,
+                track.y + track.height / 2.0f - tickHeight / 2.0f,
+                tickWidth,
+                tickHeight
+            };
+
+            bool isCurrentSnap = mIsSnapped && fabsf(snapValue - mSnappedValue) < 0.0001f;
+            Color fillColor = isCurrentSnap ? Fade(GRAY, 0.8f) : Fade(GRAY, 0.3f);
+            Color borderColor = isCurrentSnap ? Fade(DARKGRAY, 0.9f) : Fade(DARKGRAY, 0.4f);
+
+            DrawFilledRectangle(snapHint, fillColor);
+            DrawRectangleBorder(snapHint, 1.0f, borderColor);
+        }
+    }
+
     Color knobColor = mKnobColor;
     if (mIsDragging)
     {
@@ -175,19 +220,6 @@ void Slider::render()
 
     DrawFilledRectangle(knob, knobColor);
     DrawRectangleBorder(knob, 2.0f, mBorderColor);
-<<<<<<< ours
-
-    if (mSnapEnabled && mIsSnapped)
-    {
-        const int hintFontSize = 16;
-        const char* hintText = TextFormat("Snapped %.1f", mSnappedValue);
-        Vector2 textSize = MeasureTextEx(GetFontDefault(), hintText, hintFontSize, 1.0f);
-        float textX = knob.x + knob.width / 2.0f - textSize.x / 2.0f;
-        float textY = track.y - textSize.y - 5.0f;
-        DrawText(hintText, textX, textY, hintFontSize, GRAY);
-    }
-=======
->>>>>>> theirs
 }
 
 void Slider::updateGlobalCursor()
@@ -232,11 +264,11 @@ void Slider::addSnapValue(float value)
         mSnapValues.end());
 }
 
-float Slider::applySnapping(float candidate) const
+bool Slider::getSnappedValue(float candidate, float &outValue) const
 {
     if (!mSnapEnabled || mSnapValues.empty())
     {
-        return candidate;
+        return false;
     }
 
     float closestDiff = std::numeric_limits<float>::max();
@@ -253,8 +285,9 @@ float Slider::applySnapping(float candidate) const
 
     if (mSnapTolerance <= 0.0f || closestDiff <= mSnapTolerance)
     {
-        return closestValue;
+        outValue = closestValue;
+        return true;
     }
 
-    return candidate;
+    return false;
 }

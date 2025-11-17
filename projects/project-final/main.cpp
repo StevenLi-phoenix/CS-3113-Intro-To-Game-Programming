@@ -15,8 +15,9 @@
 #include "constants.h"
 #include "leveldata/player.h"
 #include "lib/Helper.h"
-#include "lib/ui/Button.h"
-#include "lib/ui/ToggleButton.h"
+#include "lib/ui/TextInput.h"
+#include "lib/ui/Dropdown.h"
+#include "lib/ui/ListBox.h"
 #include <vector>
 
 AppStatus gAppStatus = RUNNING;
@@ -29,8 +30,9 @@ void render();
 void shutdown();
 
 Player* player;
-Button* testButton;
-ToggleButton* testToggle;
+TextInput* testTextInput = nullptr;
+Dropdown* testDropdown = nullptr;
+ListBox* testListBox = nullptr;
 std::vector<Entity*> globalUpdateQueue = {};
 
 void initialise()
@@ -40,48 +42,32 @@ void initialise()
 
     player = new Player();
     player->setIsActive(true);
-    
-    // Create a test button with callback example
-    testButton = new Button(
-        {c::SCREEN_WIDTH / 2.0f, 100.0f},  // position
-        {200.0f, 50.0f},                    // size
-        "Click Me!"                         // text
+
+    testTextInput = new TextInput(
+        {c::SCREEN_WIDTH / 2.0f, 420.0f},
+        {320.0f, 40.0f}
     );
-    
-    // Set button colors
-    testButton->setBackgroundColor(BLUE);
-    testButton->setTextColor(WHITE);
-    testButton->setBorderColor(DARKBLUE);
-    testButton->setBorderThickness(3.0f);
-    
-    // Set callback function (using lambda)
-    testButton->setOnClick([]() {
-        LOG("Button clicked! This is a callback example.");
-        // You can add any code here that should execute when button is clicked
+    testTextInput->setPlaceholder("Type something and press Enter");
+    testTextInput->setOnSubmit([](const std::string& text) {
+        LOG(TextFormat("Submitted text: %s", text.c_str()));
     });
 
-    // Create a toggle button demo beneath the regular button
-    testToggle = new ToggleButton(
-        {c::SCREEN_WIDTH / 2.0f, 200.0f},
-        {220.0f, 50.0f},
-        "Sound ON",
-        "Sound OFF"
+    testDropdown = new Dropdown(
+        {c::SCREEN_WIDTH / 2.0f, 260.0f},
+        {240.0f, 40.0f}
     );
-    testToggle->setOnBackgroundColor(Fade(BLUE, 0.2f));
-    testToggle->setOffBackgroundColor(RAYWHITE);
-    testToggle->setOnBorderColor(BLUE);
-    testToggle->setOffBorderColor(LIGHTGRAY);
-    testToggle->setOnTextColor(BLUE);
-    testToggle->setOffTextColor(DARKGRAY);
-    testToggle->setOnToggle([](bool toggled) {
-        if (toggled)
-        {
-            LOG("ToggleButton switched ON");
-        }
-        else
-        {
-            LOG("ToggleButton switched OFF");
-        }
+    testDropdown->setOptions({"Easy", "Medium", "Hard"});
+    testDropdown->setOnSelectionChanged([](int index, const std::string& value) {
+        LOG(TextFormat("Dropdown selected %d -> %s", index, value.c_str()));
+    });
+
+    testListBox = new ListBox(
+        {c::SCREEN_WIDTH / 4.0f, 360.0f},
+        {220.0f, 160.0f}
+    );
+    testListBox->setItems({"Red Potion", "Blue Potion", "Green Potion", "Elixir"});
+    testListBox->setOnSelectionChanged([](int index, const std::string& value) {
+        LOG(TextFormat("ListBox selected %d -> %s", index, value.c_str()));
     });
 }
 
@@ -102,10 +88,19 @@ void update()
     while (gTimeAccumulator >= c::FIXED_TIMESTEP)
     {
         player->update(c::FIXED_TIMESTEP);
-        // Update button to check for clicks
-        testButton->update(c::FIXED_TIMESTEP);
-        testToggle->update(c::FIXED_TIMESTEP);
         gTimeAccumulator -= c::FIXED_TIMESTEP;
+    }
+    if (testTextInput)
+    {
+        testTextInput->update(deltaTime);
+    }
+    if (testDropdown)
+    {
+        testDropdown->update(deltaTime);
+    }
+    if (testListBox)
+    {
+        testListBox->update(deltaTime);
     }
     // LOG("Hello from LOG()");
 }
@@ -116,19 +111,44 @@ void render()
     ClearBackground(RAYWHITE);
     player->render();
     player->displayCollider();
-    
-    // Update global cursor (should be called after all button updates)
-    Button::updateGlobalCursor();
-    ToggleButton::updateGlobalCursor();
-    
-    // Render button
-    testButton->render();
-    testToggle->render();
-    
-    // Optional: Show mouse over status
-    if (testButton->isMouseOver())
+    if (testDropdown)
     {
-        DrawText("Mouse over button!", 10, 10, 20, BLACK);
+        testDropdown->render();
+        DrawText(
+            TextFormat("Dropdown choice: %s",
+                (testDropdown->getSelectedIndex() >= 0
+                    ? testDropdown->getOptions()[testDropdown->getSelectedIndex()].c_str()
+                    : "None")),
+            20,
+            20,
+            20,
+            DARKGRAY
+        );
+    }
+    if (testListBox)
+    {
+        testListBox->render();
+        DrawText(
+            TextFormat("ListBox selection: %s",
+                (testListBox->getSelectedIndex() >= 0
+                    ? testListBox->getItems()[testListBox->getSelectedIndex()].c_str()
+                    : "None")),
+            20,
+            50,
+            20,
+            DARKGRAY
+        );
+    }
+    if (testTextInput)
+    {
+        testTextInput->render();
+        DrawText(
+            TextFormat("Current input: %s", testTextInput->getText().c_str()),
+            20,
+            80,
+            20,
+            DARKGRAY
+        );
     }
     
     EndDrawing();
@@ -138,8 +158,9 @@ void shutdown()
 {
     CloseWindow();
     delete player;
-    delete testButton;
-    delete testToggle;
+    delete testTextInput;
+    delete testDropdown;
+    delete testListBox;
 }
 int main(int argc, char *argv[])
 {

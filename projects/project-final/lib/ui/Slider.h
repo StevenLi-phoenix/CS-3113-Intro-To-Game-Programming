@@ -2,11 +2,18 @@
 #define SLIDER_H
 
 #include "../Helper.h"
-#include "../Entity.h"
+#include "uiBase.h"
 #include <functional>
 #include <vector>
 
-class Slider : public Entity
+// Usage example:
+//     Slider slider({screenWidth / 2.0f, 300.0f}, {260.0f, 18.0f}, 0.0f, 100.0f, 50.0f);
+//     slider.setSnapEnabled(true);
+//     slider.setSnapValues({0, 25, 50, 75, 100});
+//     slider.setOnValueChanged([](float value) { LOG(TextFormat("Slider: %.1f", value)); });
+//     // Call slider.update(deltaTime) and slider.render() each frame.
+
+class Slider : public UIBase
 {
 public:
     using ValueCallback = std::function<void(float)>;
@@ -27,6 +34,8 @@ private:
     bool mSnapEnabled;
     float mSnapTolerance;
     std::vector<float> mSnapValues;
+    bool mIsSnapped;
+    float mSnappedValue;
 
     static Slider* sCurrentHoveredSlider;
 
@@ -40,6 +49,8 @@ public:
 
     bool isMouseOver() const;
     bool isDragging() const { return mIsDragging; }
+    bool isSnapped() const { return mIsSnapped; }
+    float getSnappedValue() const { return mSnappedValue; }
 
     void setRange(float minValue, float maxValue);
     void setValue(float value, bool fireCallback = true);
@@ -62,7 +73,7 @@ public:
 private:
     float getNormalizedValue() const;
     Rectangle getTrackRectangle() const;
-    float applySnapping(float candidate) const;
+    bool getSnappedValue(float candidate, float &outValue) const;
 };
 
 #endif

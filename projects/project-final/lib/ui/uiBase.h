@@ -2,23 +2,17 @@
 #define UI_BASE_H
 
 #include "../Entity.h"
+#include "../Helper.h"
 
-class UIBase {
+class UIBase : public Entity
+{
 public:
     UIBase();
-    explicit UIBase(Entity *entity);
     virtual ~UIBase();
 
-    void setEntity(Entity *entity);
-    Entity* getEntity();
-    const Entity* getEntity() const;
-
-    virtual void update(float deltaTime);
-    virtual void render();
-    virtual void shutdown();
-
-protected:
-    Entity *mEntity = nullptr;
+    Rectangle getBounds() const;
+    bool containsPoint(Vector2 point) const;
+    bool isMouseOver() const;
 };
 
 #endif

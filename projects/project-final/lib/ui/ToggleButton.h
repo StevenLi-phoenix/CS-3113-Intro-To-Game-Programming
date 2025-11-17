@@ -2,11 +2,11 @@
 #define TOGGLEBUTTON_H
 
 #include "../Helper.h"
-#include "../Entity.h"
+#include "uiBase.h"
 #include <functional>
 #include <string>
 
-class ToggleButton : public Entity
+class ToggleButton : public UIBase
 {
 public:
     using ToggleCallback = std::function<void(bool)>;

@@ -328,9 +328,11 @@ void Entity::update(float deltaTime, Entity *player, Map *map, const std::vector
 
     resetColliderFlags();
 
-    mMovement += mAcceleration * deltaTime;
-    mVelocity += mMovement * deltaTime;
+    if (mMass > 0.0f) {mAcceleration += mForce * deltaTime / mMass; mForce = {0.0f, 0.0f};}
+    mVelocity += mAcceleration * deltaTime;
     mPosition += mVelocity * deltaTime;
+    mPosition += mMovement;
+    mMovement = {0.0f, 0.0f};
 
     // resolve collisions
     checkCollisionY(collidableEntities);

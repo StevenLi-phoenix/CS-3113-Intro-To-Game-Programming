@@ -10,20 +10,20 @@ Player::~Player()
 
 void Player::moveLeft()
 {
-    setMovement({-1.0f, 0.0f});
+    setMovement({-15.0f, 0.0f});
 }
 
 void Player::moveRight()
 {
-    setMovement({1.0f, 0.0f});
+    setMovement({15.0f, 0.0f});
 }
 
 void Player::moveUp()
 {
-    setMovement({0.0f, -1.0f});
+    setMovement({0.0f, -15.0f});
 }
 
 void Player::moveDown()
 {
-    setMovement({0.0f, 1.0f});
+    setMovement({0.0f, 15.0f});
 }

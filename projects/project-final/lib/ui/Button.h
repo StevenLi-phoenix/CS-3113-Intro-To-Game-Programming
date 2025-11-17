@@ -1,11 +1,17 @@
 #ifndef BUTTON_H
 #define BUTTON_H
 #include "../Helper.h"
-#include "../Entity.h"
+#include "uiBase.h"
 #include <string>
 #include <functional>
 
-class Button : public Entity
+// Usage example:
+//     Button button({screenWidth / 2.0f, 100.0f}, {200.0f, 50.0f}, "Click Me!");
+//     button.setBackgroundColor(BLUE);
+//     button.setOnClick([]() { LOG("Button pressed"); });
+//     // In game loop: button.update(deltaTime); button.render();
+
+class Button : public UIBase
 {
 public:
     using Callback = std::function<void()>;

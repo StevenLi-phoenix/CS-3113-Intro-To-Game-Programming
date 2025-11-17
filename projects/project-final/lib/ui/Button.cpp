@@ -89,20 +89,7 @@ void Button::update(float deltaTime, Entity *player, Map *map, const std::vector
 
 bool Button::isMouseOver() const
 {
-    if (!getIsActive()) return false;
-    
-    Vector2 position = getPosition();
-    Vector2 scale = getScale();
-    
-    Rectangle buttonRect = {
-        position.x - scale.x / 2.0f,
-        position.y - scale.y / 2.0f,
-        scale.x,
-        scale.y
-    };
-    
-    Vector2 mousePos = GetMousePosition();
-    return PointInRectangle(mousePos, buttonRect);
+    return UIBase::isMouseOver();
 }
 
 bool Button::isClicked() const
