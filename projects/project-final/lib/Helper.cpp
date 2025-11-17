@@ -195,6 +195,40 @@ Color ApplyAlpha(Color color, float alpha)
     return color;
 }
 
+Color AdjustColorBrightness(Color color, float factor)
+{
+    // factor: -1.0 to 1.0, negative makes darker, positive makes brighter
+    int r = color.r;
+    int g = color.g;
+    int b = color.b;
+    
+    if (factor < 0.0f)
+    {
+        // Darken
+        r = static_cast<int>(r * (1.0f + factor));
+        g = static_cast<int>(g * (1.0f + factor));
+        b = static_cast<int>(b * (1.0f + factor));
+    }
+    else
+    {
+        // Brighten
+        r = static_cast<int>(r + (255 - r) * factor);
+        g = static_cast<int>(g + (255 - g) * factor);
+        b = static_cast<int>(b + (255 - b) * factor);
+    }
+    
+    r = std::clamp(r, 0, 255);
+    g = std::clamp(g, 0, 255);
+    b = std::clamp(b, 0, 255);
+    
+    return Color{
+        static_cast<unsigned char>(r),
+        static_cast<unsigned char>(g),
+        static_cast<unsigned char>(b),
+        color.a
+    };
+}
+
 bool PointInRectangle(Vector2 point, const Rectangle &rect)
 {
     const float right = rect.x + rect.width;
@@ -202,4 +236,15 @@ bool PointInRectangle(Vector2 point, const Rectangle &rect)
 
     return point.x >= rect.x && point.x <= right &&
            point.y >= rect.y && point.y <= bottom;
+}
+
+float previousTicks = 0.0f;
+float timeAccumulator = 0.0f;
+
+float getDeltaTime()
+{
+    float ticks = (float) GetTime();
+    float deltaTime = ticks - previousTicks;
+    previousTicks  = ticks;
+    return deltaTime;
 }

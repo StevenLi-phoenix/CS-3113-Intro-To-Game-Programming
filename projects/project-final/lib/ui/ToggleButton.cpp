@@ -80,7 +80,9 @@ void ToggleButton::update(float deltaTime, Entity *player, Map *map, const std::
 
     if (isClicked())
     {
-        setToggled(!mIsToggled);
+        Vector2 mousePos = GetMousePosition();
+        bool activateRightHalf = mousePos.x >= getPosition().x;
+        setToggled(activateRightHalf);
     }
 }
 
@@ -141,33 +143,51 @@ void ToggleButton::render()
         scale.y
     };
 
-    Color bgColor = mIsToggled ? mOnBackgroundColor : mOffBackgroundColor;
-    Color borderColor = mIsToggled ? mOnBorderColor : mOffBorderColor;
-    Color textColor = mIsToggled ? mOnTextColor : mOffTextColor;
+    // Base background and border
+    DrawFilledRectangle(buttonRect, mOffBackgroundColor);
+    DrawRectangleBorder(buttonRect, mBorderThickness, mOffBorderColor);
 
+    // Highlighted half representing the active selection
+    Rectangle highlightRect = buttonRect;
+    highlightRect.width = buttonRect.width / 2.0f;
+    if (mIsToggled)
+    {
+        highlightRect.x += highlightRect.width;
+    }
+
+    Color highlightColor = mOnBackgroundColor;
     if (mIsPressed)
     {
-        bgColor = AdjustColorBrightness(bgColor, -0.2f);
+        highlightColor = AdjustColorBrightness(highlightColor, -0.2f);
     }
     else if (isMouseOver())
     {
-        bgColor = AdjustColorBrightness(bgColor, 0.1f);
+        highlightColor = AdjustColorBrightness(highlightColor, 0.05f);
     }
+    DrawFilledRectangle(highlightRect, highlightColor);
+    DrawRectangleBorder(highlightRect, mBorderThickness, mOnBorderColor);
 
-    DrawFilledRectangle(buttonRect, bgColor);
-    DrawRectangleBorder(buttonRect, mBorderThickness, borderColor);
+    // Draw option texts centered in each half
+    const std::string leftText = mOffText.empty() ? mOnText : mOffText;
+    const std::string rightText = mOnText;
 
-    const std::string& text = mIsToggled ? mOnText : (mOffText.empty() ? mOnText : mOffText);
-    if (!text.empty())
-    {
-        Vector2 textSize = MeasureTextEx(GetFontDefault(), text.c_str(), mFontSize, 1.0f);
-        Vector2 textPosition = {
-            position.x - textSize.x / 2.0f,
-            position.y - textSize.y / 2.0f
-        };
+    float halfWidth = buttonRect.width / 2.0f;
+    float textHeightOffset = position.y;
+    Vector2 leftTextSize = MeasureTextEx(GetFontDefault(), leftText.c_str(), mFontSize, 1.0f);
+    Vector2 rightTextSize = MeasureTextEx(GetFontDefault(), rightText.c_str(), mFontSize, 1.0f);
 
-        DrawText(text.c_str(), textPosition.x, textPosition.y, mFontSize, textColor);
-    }
+    Vector2 leftPos = {
+        buttonRect.x + halfWidth / 2.0f - leftTextSize.x / 2.0f,
+        textHeightOffset - leftTextSize.y / 2.0f
+    };
+
+    Vector2 rightPos = {
+        buttonRect.x + halfWidth + halfWidth / 2.0f - rightTextSize.x / 2.0f,
+        textHeightOffset - rightTextSize.y / 2.0f
+    };
+
+    DrawText(leftText.c_str(), leftPos.x, leftPos.y, mFontSize, mIsToggled ? mOffTextColor : mOnTextColor);
+    DrawText(rightText.c_str(), rightPos.x, rightPos.y, mFontSize, mIsToggled ? mOnTextColor : mOffTextColor);
 }
 
 void ToggleButton::updateGlobalCursor()

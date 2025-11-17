@@ -394,6 +394,12 @@ void Entity::render()
     DrawTexturePro(mTexture, sourceArea, destinationArea, textureOrigin, mAngle, WHITE);
 }
 
+void Entity::shutdown()
+{
+    // Default implementation does nothing
+    // Override this in derived classes for cleanup
+}
+
 void Entity::displayCollider()
 {
     Rectangle colliderBox = {

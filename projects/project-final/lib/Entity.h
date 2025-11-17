@@ -22,6 +22,7 @@ private:
     Entity *mParent = nullptr;
 
     Vector2 mPosition;
+    int zIndex = 5; // 0 is the lowest, 10 is the highest (not enforced) // used for rendering order
     Vector2 mMovement;
     Vector2 mVelocity;
     Vector2 mAcceleration;
@@ -79,8 +80,9 @@ public:
     Entity& operator=(Entity&& other) noexcept;
     ~Entity();
 
-    void update(float deltaTime, Entity *player = nullptr, Map *map = nullptr, const std::vector<Entity*> &collidableEntities = {});
-    void render();
+    virtual void update(float deltaTime, Entity *player = nullptr, Map *map = nullptr, const std::vector<Entity*> &collidableEntities = {});
+    virtual void render();
+    virtual void shutdown();
     void normaliseMovement() { Normalise(&mMovement); }
     bool intersects(const Entity &other) const;
     void displayCollider();

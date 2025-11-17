@@ -28,6 +28,7 @@ void init_log_level(int argc, char *argv[]);
 
 // Color Helper Functions
 Color ColorFromHex(const char *hex);
+Color AdjustColorBrightness(Color color, float factor);
 
 // Vector Helper Functions
 void Normalise(Vector2 *vector);
@@ -47,5 +48,8 @@ Color ApplyAlpha(Color color, float alpha);
 
 // Geometry helpers
 bool PointInRectangle(Vector2 point, const Rectangle &rect);
+
+// deltaTime
+float getDeltaTime();
 
 #endif // HELPER_H

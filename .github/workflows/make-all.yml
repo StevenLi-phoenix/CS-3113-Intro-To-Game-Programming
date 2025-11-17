@@ -36,6 +36,9 @@ jobs:
 
           json='{"directory":['
           for dir in "${dirs[@]}"; do
+            if [ -f "$dir/.skip" ]; then
+              continue
+            fi
             escaped=$(printf '%s' "$dir" | sed 's/\\/\\\\/g; s/"/\\"/g')
             json+="\"${escaped}\","
           done
