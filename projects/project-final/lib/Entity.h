@@ -1,6 +1,7 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
+#include <vector>
 #include "Helper.h"
 #include "Map.h"
 
@@ -56,15 +57,14 @@ private:
     bool mIsCollidingRight  = false;
     bool mIsCollidingLeft   = false;
 
-    bool isColliding(Entity *other) const;
+    bool isColliding(const Entity *other) const;
     bool isColliding(Map *map) const;
+    bool isColliding(Vector2 position) const; // for point detection
 
-    void checkCollisionY(Entity *collidableEntities, int collisionCheckCount);
-    void checkCollisionY(Entity *collidableEntity);
+    void checkCollisionY(const std::vector<Entity*> &collidableEntities);
     void checkCollisionY(Map *map);
 
-    void checkCollisionX(Entity *collidableEntities, int collisionCheckCount);
-    void checkCollisionX(Entity *collidableEntity);
+    void checkCollisionX(const std::vector<Entity*> &collidableEntities);
     void checkCollisionX(Map *map);
 
     void animate(float deltaTime);
@@ -73,9 +73,13 @@ public:
     Entity();
     Entity(Vector2 position, Vector2 scale, const char *textureFilepath);
     Entity(Vector2 position, Vector2 scale, const char *textureFilepath, EntityConstants::TextureType textureType, Vector2 spriteSheetDimensions, std::vector<int> animationIndices);
+    Entity(const Entity&) = delete;
+    Entity& operator=(const Entity&) = delete;
+    Entity(Entity&& other) noexcept;
+    Entity& operator=(Entity&& other) noexcept;
     ~Entity();
 
-    void update(float deltaTime, Entity *player, Map *map, Entity *collidableEntities, int collisionCheckCount);
+    void update(float deltaTime, Entity *player = nullptr, Map *map = nullptr, const std::vector<Entity*> &collidableEntities = {});
     void render();
     void normaliseMovement() { Normalise(&mMovement); }
     bool intersects(const Entity &other) const;

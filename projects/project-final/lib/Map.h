@@ -1,7 +1,8 @@
-#include "Helper.h"
-
 #ifndef MAP_H
 #define MAP_H
+
+#include <vector>
+#include "Helper.h"
 
 class Map
 {

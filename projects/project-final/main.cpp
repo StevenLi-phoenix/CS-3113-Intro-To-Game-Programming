@@ -12,25 +12,15 @@
 #define DEBUG_BUILD 0
 #endif
 
+#include "constants.h"
+#include "leveldata/player.h"
 #include "lib/Helper.h"
-#include "lib/Entity.h"
-#include "lib/Map.h"
-#include "lib/pid_controller.h"
-#include "lib/Scene.h"
-#include "lib/ShaderProgram.h"
-#include "lib/Effects.h"
 
-namespace {
-    struct Constants {
-        const char *TITLE = "Project Final";
-        constexpr static int SCREEN_WIDTH = 800 * 1.5f;
-        constexpr static int SCREEN_HEIGHT = 450 * 1.5f;
-        constexpr static int FPS = 60;
-    };
-}
+
 
 AppStatus gAppStatus = RUNNING;
-Constants c;
+float gPreviousTicks = 0.0f;
+float gTimeAccumulator = 0.0f;
 
 void initialise();
 void processInput();
@@ -38,19 +28,38 @@ void update();
 void render();
 void shutdown();
 
+Player* player;
+
 void initialise()
 {
-    InitWindow(c.SCREEN_WIDTH, c.SCREEN_HEIGHT, c.TITLE);
-    SetTargetFPS(c.FPS);
+    InitWindow(c::SCREEN_WIDTH, c::SCREEN_HEIGHT, c::TITLE);
+    SetTargetFPS(c::FPS);
+
+    player = new Player();
+    player->setIsActive(true);
 }
 
 void processInput()
 {
     if (WindowShouldClose()) gAppStatus = TERMINATED;
+
+    if (IsKeyDown(KEY_A)) player->moveLeft();
+    if (IsKeyDown(KEY_D)) player->moveRight();
+    if (IsKeyDown(KEY_W)) player->moveUp();
+    if (IsKeyDown(KEY_S)) player->moveDown();
 }
 
 void update()
 {
+    float ticks = (float) GetTime();
+    float deltaTime = ticks - gPreviousTicks;
+    gPreviousTicks  = ticks;
+    gTimeAccumulator += deltaTime;
+    while (gTimeAccumulator >= c::FIXED_TIMESTEP)
+    {
+        player->update(c::FIXED_TIMESTEP);
+        gTimeAccumulator -= c::FIXED_TIMESTEP;
+    }
     LOG("Hello from LOG()");
 }
 
@@ -58,12 +67,15 @@ void render()
 {
     BeginDrawing();
     ClearBackground(RAYWHITE);
+    player->render();
+    player->displayCollider();
     EndDrawing();
 }
 
 void shutdown()
 {
     CloseWindow();
+    delete player;
 }
 int main(int argc, char *argv[])
 {

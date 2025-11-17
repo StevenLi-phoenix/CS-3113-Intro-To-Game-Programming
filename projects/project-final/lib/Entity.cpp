@@ -1,4 +1,5 @@
 #include "Entity.h"
+#include <utility>
 
 Entity::Entity() : 
     mParent {nullptr},
@@ -43,12 +44,99 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, Ent
 {
 }
 
-Entity::~Entity()
+Entity::Entity(Entity&& other) noexcept :
+    mParent {other.mParent},
+    mPosition {other.mPosition},
+    mMovement {other.mMovement},
+    mVelocity {other.mVelocity},
+    mAcceleration {other.mAcceleration},
+    mScale {other.mScale},
+    mColliderDimensions {other.mColliderDimensions},
+    mTexture {other.mTexture},
+    mTextureType {other.mTextureType},
+    mAngle {other.mAngle},
+    mSpriteSheetDimensions {other.mSpriteSheetDimensions},
+    mAnimationIndices {std::move(other.mAnimationIndices)},
+    mFrameSpeed {other.mFrameSpeed},
+    mCurrentFrameIndex {other.mCurrentFrameIndex},
+    mAnimationTime {other.mAnimationTime},
+    mIsJumping {other.mIsJumping},
+    mJumpingPower {other.mJumpingPower},
+    mIsActive {other.mIsActive},
+    enableControl {other.enableControl},
+    mAIActive {other.mAIActive},
+    canCollide {other.canCollide},
+    mIsTextureAtlas {other.mIsTextureAtlas},
+    mIsHorizontalFlipped {other.mIsHorizontalFlipped},
+    mIsVerticalFlipped {other.mIsVerticalFlipped},
+    mSpeed {other.mSpeed},
+    mIsCollidingTop {other.mIsCollidingTop},
+    mIsCollidingBottom {other.mIsCollidingBottom},
+    mIsCollidingRight {other.mIsCollidingRight},
+    mIsCollidingLeft {other.mIsCollidingLeft}
 {
-    UnloadTexture(mTexture);
+    other.mParent = nullptr;
+    other.mTexture = Texture2D{};
+    other.mAnimationIndices.clear();
+    other.mIsActive = false;
 }
 
-bool Entity::isColliding(Entity *other) const
+Entity& Entity::operator=(Entity&& other) noexcept
+{
+    if (this == &other) return *this;
+
+    if (mTexture.id > 0)
+    {
+        UnloadTexture(mTexture);
+    }
+
+    mParent = other.mParent;
+    mPosition = other.mPosition;
+    mMovement = other.mMovement;
+    mVelocity = other.mVelocity;
+    mAcceleration = other.mAcceleration;
+    mScale = other.mScale;
+    mColliderDimensions = other.mColliderDimensions;
+    mTexture = other.mTexture;
+    mTextureType = other.mTextureType;
+    mAngle = other.mAngle;
+    mSpriteSheetDimensions = other.mSpriteSheetDimensions;
+    mAnimationIndices = std::move(other.mAnimationIndices);
+    mFrameSpeed = other.mFrameSpeed;
+    mCurrentFrameIndex = other.mCurrentFrameIndex;
+    mAnimationTime = other.mAnimationTime;
+    mIsJumping = other.mIsJumping;
+    mJumpingPower = other.mJumpingPower;
+    mIsActive = other.mIsActive;
+    enableControl = other.enableControl;
+    mAIActive = other.mAIActive;
+    canCollide = other.canCollide;
+    mIsTextureAtlas = other.mIsTextureAtlas;
+    mIsHorizontalFlipped = other.mIsHorizontalFlipped;
+    mIsVerticalFlipped = other.mIsVerticalFlipped;
+    mSpeed = other.mSpeed;
+    mIsCollidingTop = other.mIsCollidingTop;
+    mIsCollidingBottom = other.mIsCollidingBottom;
+    mIsCollidingRight = other.mIsCollidingRight;
+    mIsCollidingLeft = other.mIsCollidingLeft;
+
+    other.mParent = nullptr;
+    other.mTexture = Texture2D{};
+    other.mAnimationIndices.clear();
+    other.mIsActive = false;
+
+    return *this;
+}
+
+Entity::~Entity()
+{
+    if (mTexture.id > 0)
+    {
+        UnloadTexture(mTexture);
+    }
+}
+
+bool Entity::isColliding(const Entity *other) const
 {
     if (!other->mIsActive || other == this) return false;
 
@@ -68,69 +156,85 @@ bool Entity::isColliding(Map *map) const
            map->isSolidTileAt(mPosition);
 }
 
+bool Entity::isColliding(Vector2 position) const
+{
+    return fabs(mPosition.x - position.x) < (mColliderDimensions.x / 2.0f) &&
+           fabs(mPosition.y - position.y) < (mColliderDimensions.y / 2.0f);
+}
+
 bool Entity::intersects(const Entity &other) const
 {
     if (&other == this || !other.mIsActive) return false;
 
-    float xDistance = fabs(mPosition.x - other.getPosition().x) - 
-        ((mColliderDimensions.x + other.getColliderDimensions().x) / 2.0f);
-    float yDistance = fabs(mPosition.y - other.getPosition().y) - 
-        ((mColliderDimensions.y + other.getColliderDimensions().y) / 2.0f);
-    return (xDistance < 0.0f && yDistance < 0.0f);
+    return isColliding(&other);
 }
 
-void Entity::checkCollisionY(Entity *collidableEntities, int collisionCheckCount)
+void Entity::checkCollisionY(const std::vector<Entity*> &collidableEntities)
 {
-    for (int i = 0; i < collisionCheckCount; i++)
+    for (Entity *entity : collidableEntities)
     {
-        Entity *entity = &collidableEntities[i];
-        if (entity == this) continue;
-        if (isColliding(entity) && canCollide)
+        if (entity == this || !canCollide || !isColliding(entity)) continue;
+
+        float yDistance = mPosition.y - entity->mPosition.y;
+        float yOverlap = ((mColliderDimensions.y + entity->mColliderDimensions.y) / 2.0f) - fabs(yDistance);
+        if (yOverlap <= 0.0f) continue;
+
+        float direction = 0.0f;
+        if (yDistance > 0.0f) direction = 1.0f;
+        else if (yDistance < 0.0f) direction = -1.0f;
+        else
         {
-            float yDistance = mVelocity.y - entity->mVelocity.y;
-            float yABSDistance = fabs(yDistance);
-            float yOverlap  = fabs(yABSDistance - (mColliderDimensions.y / 2.0f) - 
-                              (entity->mColliderDimensions.y / 2.0f));
-            
-            if (yDistance > 0.0f) 
-            {
-                mPosition.y -= yOverlap;
-                mVelocity.y  = 0;
-                mIsCollidingBottom = true;
-            } else if (yDistance < 0.0f) 
-            {
-                mPosition.y += yOverlap;
-                mVelocity.y  = 0;
-                mIsCollidingTop = true;
-            }
+            float relativeVelocity = mVelocity.y - entity->mVelocity.y;
+            if (relativeVelocity > 0.0f) direction = 1.0f;
+            else if (relativeVelocity < 0.0f) direction = -1.0f;
+            else direction = 1.0f;
+        }
+
+        mPosition.y += direction * yOverlap;
+        mVelocity.y  = 0;
+
+        if (direction < 0.0f)
+        {
+            mIsCollidingBottom = true;
+        }
+        else
+        {
+            mIsCollidingTop = true;
         }
     }
 }
 
-void Entity::checkCollisionX(Entity *collidableEntities, int collisionCheckCount)
+void Entity::checkCollisionX(const std::vector<Entity*> &collidableEntities)
 {
-    for (int i = 0; i < collisionCheckCount; i++)
+    for (Entity *entity : collidableEntities)
     {
-        Entity *entity = &collidableEntities[i];
-        if (entity == this) continue;
-        if (isColliding(entity) && canCollide)
+        if (entity == this || !canCollide || !isColliding(entity)) continue;
+
+        float xDistance = mPosition.x - entity->mPosition.x;
+        float xOverlap = ((mColliderDimensions.x + entity->mColliderDimensions.x) / 2.0f) - fabs(xDistance);
+        if (xOverlap <= 0.0f) continue;
+
+        float direction = 0.0f;
+        if (xDistance > 0.0f) direction = 1.0f;
+        else if (xDistance < 0.0f) direction = -1.0f;
+        else
         {
-            float xDistance = mVelocity.x - entity->mVelocity.x;
-            float xABSDistance = fabs(xDistance);
-            float xOverlap  = fabs(xABSDistance - (mColliderDimensions.x / 2.0f) - 
-                              (entity->mColliderDimensions.x / 2.0f));
-            
-            if (xDistance > 0.0f) 
-            {
-                mPosition.x -= xOverlap;
-                mVelocity.x  = 0;
-                mIsCollidingRight = true;
-            } else if (xDistance < 0.0f) 
-            {
-                mPosition.x += xOverlap;
-                mVelocity.x  = 0;
-                mIsCollidingLeft = true;
-            }
+            float relativeVelocity = mVelocity.x - entity->mVelocity.x;
+            if (relativeVelocity > 0.0f) direction = 1.0f;
+            else if (relativeVelocity < 0.0f) direction = -1.0f;
+            else direction = 1.0f;
+        }
+
+        mPosition.x += direction * xOverlap;
+        mVelocity.x  = 0;
+
+        if (direction < 0.0f)
+        {
+            mIsCollidingRight = true;
+        }
+        else
+        {
+            mIsCollidingLeft = true;
         }
     }
 }
@@ -216,7 +320,7 @@ void Entity::animate(float deltaTime)
     }
 }
 
-void Entity::update(float deltaTime, Entity *player, Map *map, Entity *collidableEntities, int collisionCheckCount)
+void Entity::update(float deltaTime, Entity *player, Map *map, const std::vector<Entity*> &collidableEntities)
 {
     if (!mIsActive) return;
 
@@ -229,8 +333,8 @@ void Entity::update(float deltaTime, Entity *player, Map *map, Entity *collidabl
     mPosition += mVelocity * deltaTime;
 
     // resolve collisions
-    checkCollisionY(collidableEntities, collisionCheckCount);
-    checkCollisionX(collidableEntities, collisionCheckCount);
+    checkCollisionY(collidableEntities);
+    checkCollisionX(collidableEntities);
     checkCollisionY(map);
     checkCollisionX(map);
 

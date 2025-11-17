@@ -1,8 +1,8 @@
 #ifndef SHADER_PROGRAM_H
 #define SHADER_PROGRAM_H
 
+#include "Helper.h"
 #include <string>
-#include "raylib.h"
 
 class ShaderProgram 
 {
