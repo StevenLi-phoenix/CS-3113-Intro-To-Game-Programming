@@ -101,7 +101,7 @@ void Entity::checkCollisionX(Entity *collidableEntities, int collisionCheckCount
             float xDistance = fabs(mPosition.x - collidableEntity->mPosition.x);
             float xOverlap  = fabs(xDistance - (mColliderDimensions.x / 2.0f) - (collidableEntity->mColliderDimensions.x / 2.0f));
 
-            if (mVelocity.x > 0) {
+            if (mVelocity.x > 0) { // bug here, if both are moving
                 mPosition.x     -= xOverlap;
                 mVelocity.x      = 0;
 

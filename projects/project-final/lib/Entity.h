@@ -1,0 +1,139 @@
+#ifndef ENTITY_H
+#define ENTITY_H
+
+#include "Helper.h"
+#include "Map.h"
+
+namespace EntityConstants {
+    constexpr float DEFAULT_SIZE = 16.0f;
+    constexpr float DEFAULT_SPEED = 100.0f;
+    constexpr float DEFAULT_FRAME_SPEED = 10.0f;
+    constexpr float DEFAULT_JUMP_POWER = 100.0f;
+    constexpr float DEFAULT_GRAVITY = 10.0f;
+    constexpr float DEFAULT_FRICTION = 0.9f;
+    constexpr float DEFAULT_BOUNCE = 0.8f;
+    enum TextureType { SINGLE, ATLAS };
+}
+
+class Entity
+{
+private:
+    Entity *mParent = nullptr;
+
+    Vector2 mPosition;
+    Vector2 mMovement;
+    Vector2 mVelocity;
+    Vector2 mAcceleration;
+
+    Vector2 mScale;
+    Vector2 mColliderDimensions;
+
+    Texture2D mTexture;
+    EntityConstants::TextureType mTextureType;
+    Vector2 mSpriteSheetDimensions;
+    
+    std::vector<int> mAnimationIndices;
+    int mFrameSpeed;
+
+    int mCurrentFrameIndex = 0;
+    float mAnimationTime = 0.0f;
+
+    bool mIsJumping = false;
+    float mJumpingPower = 0.0f;
+    bool mIsActive = false; // True if the entity is active, false if it is inactive
+    bool enableControl = false; // True if the entity is controllable by the player, false if it is not
+    bool mAIActive = false; // If script AIupdate is called, this will be true
+    bool canCollide = true; // True if the entity can collide with other entities, false if it cannot
+    bool mIsTextureAtlas = false; // True if the entity has a texture atlas, false if it does not
+    bool mIsHorizontalFlipped = false; // True if the entity is horizontally flipped, false if it is not
+    bool mIsVerticalFlipped = false; // True if the entity is vertically flipped, false if it is not
+
+    float mSpeed;
+    float mAngle;
+
+    bool mIsCollidingTop    = false;
+    bool mIsCollidingBottom = false;
+    bool mIsCollidingRight  = false;
+    bool mIsCollidingLeft   = false;
+
+    bool isColliding(Entity *other) const;
+    bool isColliding(Map *map) const;
+
+    void checkCollisionY(Entity *collidableEntities, int collisionCheckCount);
+    void checkCollisionY(Entity *collidableEntity);
+    void checkCollisionY(Map *map);
+
+    void checkCollisionX(Entity *collidableEntities, int collisionCheckCount);
+    void checkCollisionX(Entity *collidableEntity);
+    void checkCollisionX(Map *map);
+
+    void animate(float deltaTime);
+    virtual void AIupdate(float deltaTime);
+public:
+    Entity();
+    Entity(Vector2 position, Vector2 scale, const char *textureFilepath);
+    Entity(Vector2 position, Vector2 scale, const char *textureFilepath, EntityConstants::TextureType textureType, Vector2 spriteSheetDimensions, std::vector<int> animationIndices);
+    ~Entity();
+
+    void update(float deltaTime, Entity *player, Map *map, Entity *collidableEntities, int collisionCheckCount);
+    void render();
+    void normaliseMovement() { Normalise(&mMovement); }
+    bool intersects(const Entity &other) const;
+    void displayCollider();
+
+    // setters and getters
+    void setPosition(Vector2 position) { mPosition = position; }
+    void setMovement(Vector2 movement) { mMovement = movement; }
+    void setVelocity(Vector2 velocity) { mVelocity = velocity; }
+    void setAcceleration(Vector2 acceleration) { mAcceleration = acceleration; }
+    void setScale(Vector2 scale) { mScale = scale; }
+    void setColliderDimensions(Vector2 colliderDimensions) { mColliderDimensions = colliderDimensions; }
+    void setTexture(Texture2D texture) { mTexture = texture; }
+    void setTextureType(EntityConstants::TextureType textureType) { mTextureType = textureType; }
+    void setSpriteSheetDimensions(Vector2 spriteSheetDimensions) { mSpriteSheetDimensions = spriteSheetDimensions; }
+    void setAnimationIndices(std::vector<int> animationIndices) { mAnimationIndices = animationIndices; }
+    void setFrameSpeed(int frameSpeed) { mFrameSpeed = frameSpeed; }
+    void setCurrentFrameIndex(int currentFrameIndex) { mCurrentFrameIndex = currentFrameIndex; }
+    void setAnimationTime(float animationTime) { mAnimationTime = animationTime; }
+    void setIsJumping(bool isJumping) { mIsJumping = isJumping; }
+    void setJumpingPower(float jumpingPower) { mJumpingPower = jumpingPower; }
+    void setIsActive(bool isActive) { mIsActive = isActive; }
+    void setEnableControl(bool enableControl) { enableControl = enableControl; }
+    void setAIActive(bool mAIActive) { mAIActive = mAIActive; }
+    void setCanCollide(bool canCollide) { canCollide = canCollide; }
+    void setIsTextureAtlas(bool isTextureAtlas) { mIsTextureAtlas = isTextureAtlas; }
+    void setIsHorizontalFlipped(bool isHorizontalFlipped) { mIsHorizontalFlipped = isHorizontalFlipped; }
+    void setIsVerticalFlipped(bool isVerticalFlipped) { mIsVerticalFlipped = isVerticalFlipped; }
+    void setSpeed(float speed) { mSpeed = speed; }
+    void setAngle(float angle) { mAngle = angle; }
+    void setIsCollidingTop(bool isCollidingTop) { mIsCollidingTop = isCollidingTop; }
+    void setIsCollidingBottom(bool isCollidingBottom) { mIsCollidingBottom = isCollidingBottom; }
+    void setIsCollidingRight(bool isCollidingRight) { mIsCollidingRight = isCollidingRight; }
+    void setIsCollidingLeft(bool isCollidingLeft) { mIsCollidingLeft = isCollidingLeft; }
+    void resetColliderFlags() { mIsCollidingTop = false; mIsCollidingBottom = false; mIsCollidingRight = false; mIsCollidingLeft = false; }
+    
+    // getters
+    Vector2 getPosition() const { return mPosition; }
+    Vector2 getMovement() const { return mMovement; }
+    Vector2 getVelocity() const { return mVelocity; }
+    Vector2 getAcceleration() const { return mAcceleration; }
+    Vector2 getScale() const { return mScale; }
+    Vector2 getColliderDimensions() const { return mColliderDimensions; }
+    Texture2D getTexture() const { return mTexture; }
+    EntityConstants::TextureType getTextureType() const { return mTextureType; }
+    Vector2 getSpriteSheetDimensions() const { return mSpriteSheetDimensions; }
+    std::vector<int> getAnimationIndices() const { return mAnimationIndices; }
+    int getFrameSpeed() const { return mFrameSpeed; }
+    int getCurrentFrameIndex() const { return mCurrentFrameIndex; }
+    float getAnimationTime() const { return mAnimationTime; }
+    bool getIsJumping() const { return mIsJumping; }
+    float getJumpingPower() const { return mJumpingPower; }
+    bool getIsActive() const { return mIsActive; }
+    bool getEnableControl() const { return enableControl; }
+    bool getAIActive() const { return mAIActive; }
+    bool getCanCollide() const { return canCollide; }
+    bool getIsTextureAtlas() const { return mIsTextureAtlas; }
+    bool getIsHorizontalFlipped() const { return mIsHorizontalFlipped; }
+};
+
+#endif // ENTITY_H
