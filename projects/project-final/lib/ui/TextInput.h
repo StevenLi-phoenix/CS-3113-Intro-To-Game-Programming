@@ -16,6 +16,7 @@ class TextInput : public UIBase
 {
 public:
     using SubmitCallback = std::function<void(const std::string&)>;
+    using FocusCallback = std::function<void(bool)>;
 
 private:
     std::string mText;
@@ -34,6 +35,10 @@ private:
     float mCursorBlinkTimer;
     float mCursorBlinkInterval;
     SubmitCallback mOnSubmit;
+    FocusCallback mOnFocusChanged;
+    float mBackspaceHoldTimer;
+    float mBackspaceRepeatDelay;
+    float mBackspaceRepeatInterval;
 
 public:
     TextInput();
@@ -56,9 +61,11 @@ public:
     void setCursorColor(Color color) { mCursorColor = color; }
     void setBorderThickness(float thickness) { mBorderThickness = thickness; }
     void setOnSubmit(SubmitCallback callback) { mOnSubmit = callback; }
+    void setOnFocusChanged(FocusCallback callback) { mOnFocusChanged = callback; }
 
     bool isMouseOver() const;
     bool isFocused() const { return mIsFocused; }
+    void setFocused(bool focused);
 
 private:
     void processInput();

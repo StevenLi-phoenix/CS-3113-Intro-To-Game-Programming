@@ -36,6 +36,7 @@ private:
     Vector2 mColliderDimensions;
 
     Texture2D mTexture;
+    bool mOwnsTexture = true;
     EntityConstants::TextureType mTextureType;
     Vector2 mSpriteSheetDimensions;
     
@@ -54,6 +55,8 @@ private:
     bool mIsTextureAtlas = false; // True if the entity has a texture atlas, false if it does not
     bool mIsHorizontalFlipped = false; // True if the entity is horizontally flipped, false if it is not
     bool mIsVerticalFlipped = false; // True if the entity is vertically flipped, false if it is not
+    bool mUseCustomSourceRect = false;
+    Rectangle mCustomSourceRect = {0, 0, 0, 0};
 
     float mSpeed;
     float mAngle;
@@ -93,7 +96,7 @@ public:
     void displayCollider();
 
     // setters and getters
-    void setZIndex(int zIndex) { zIndex = zIndex; }
+    void setZIndex(int value) { zIndex = value; }
     void setPosition(Vector2 position) { mPosition = position; }
     void setMovement(Vector2 movement) { mMovement = movement; }
     void setVelocity(Vector2 velocity) { mVelocity = velocity; }
@@ -103,6 +106,7 @@ public:
     void setScale(Vector2 scale) { mScale = scale; }
     void setColliderDimensions(Vector2 colliderDimensions) { mColliderDimensions = colliderDimensions; }
     void setTexture(Texture2D texture) { mTexture = texture; }
+    void setOwnsTexture(bool ownsTexture) { mOwnsTexture = ownsTexture; }
     void setTextureType(EntityConstants::TextureType textureType) { mTextureType = textureType; }
     void setSpriteSheetDimensions(Vector2 spriteSheetDimensions) { mSpriteSheetDimensions = spriteSheetDimensions; }
     void setAnimationIndices(std::vector<int> animationIndices) { mAnimationIndices = animationIndices; }
@@ -118,6 +122,8 @@ public:
     void setIsTextureAtlas(bool isTextureAtlas) { mIsTextureAtlas = isTextureAtlas; }
     void setIsHorizontalFlipped(bool isHorizontalFlipped) { mIsHorizontalFlipped = isHorizontalFlipped; }
     void setIsVerticalFlipped(bool isVerticalFlipped) { mIsVerticalFlipped = isVerticalFlipped; }
+    void setCustomSourceRect(const Rectangle &rect) { mCustomSourceRect = rect; mUseCustomSourceRect = true; }
+    void clearCustomSourceRect() { mUseCustomSourceRect = false; mCustomSourceRect = {0, 0, 0, 0}; }
     void setSpeed(float speed) { mSpeed = speed; }
     void setAngle(float angle) { mAngle = angle; }
     void setIsCollidingTop(bool isCollidingTop) { mIsCollidingTop = isCollidingTop; }
@@ -136,6 +142,7 @@ public:
     Vector2 getScale() const { return mScale; }
     Vector2 getColliderDimensions() const { return mColliderDimensions; }
     Texture2D getTexture() const { return mTexture; }
+    bool ownsTexture() const { return mOwnsTexture; }
     EntityConstants::TextureType getTextureType() const { return mTextureType; }
     Vector2 getSpriteSheetDimensions() const { return mSpriteSheetDimensions; }
     std::vector<int> getAnimationIndices() const { return mAnimationIndices; }
@@ -150,6 +157,8 @@ public:
     bool getCanCollide() const { return canCollide; }
     bool getIsTextureAtlas() const { return mIsTextureAtlas; }
     bool getIsHorizontalFlipped() const { return mIsHorizontalFlipped; }
+    bool usesCustomSourceRect() const { return mUseCustomSourceRect; }
+    Rectangle getCustomSourceRect() const { return mCustomSourceRect; }
 };
 
 #endif // ENTITY_H

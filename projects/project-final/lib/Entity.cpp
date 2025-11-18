@@ -7,7 +7,7 @@ Entity::Entity() :
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
     mScale {EntityConstants::DEFAULT_SIZE, EntityConstants::DEFAULT_SIZE},
     mColliderDimensions {EntityConstants::DEFAULT_SIZE, EntityConstants::DEFAULT_SIZE}, 
-    mTexture {0}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
+    mTexture {0}, mOwnsTexture {true}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
     mSpriteSheetDimensions {},
     mAnimationIndices {}, mFrameSpeed {0},
     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
@@ -21,7 +21,7 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath) :
     mPosition {position}, mMovement {0.0f, 0.0f}, 
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
     mScale {scale}, mColliderDimensions {scale}, 
-    mTexture {LoadTexture(textureFilepath)}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
+    mTexture {LoadTexture(textureFilepath)}, mOwnsTexture {true}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
     mSpriteSheetDimensions {},
     mAnimationIndices {}, mFrameSpeed {0},
     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
@@ -35,7 +35,7 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, Ent
     mPosition {position}, mMovement {0.0f, 0.0f}, 
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
     mScale {scale}, mColliderDimensions {scale}, 
-    mTexture {LoadTexture(textureFilepath)}, mTextureType {textureType}, mAngle {0.0f},
+    mTexture {LoadTexture(textureFilepath)}, mOwnsTexture {true}, mTextureType {textureType}, mAngle {0.0f},
     mSpriteSheetDimensions {spriteSheetDimensions}, 
     mAnimationIndices {animationIndices}, mFrameSpeed {0},
     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
@@ -53,6 +53,7 @@ Entity::Entity(Entity&& other) noexcept :
     mScale {other.mScale},
     mColliderDimensions {other.mColliderDimensions},
     mTexture {other.mTexture},
+    mOwnsTexture {other.mOwnsTexture},
     mTextureType {other.mTextureType},
     mAngle {other.mAngle},
     mSpriteSheetDimensions {other.mSpriteSheetDimensions},
@@ -79,13 +80,14 @@ Entity::Entity(Entity&& other) noexcept :
     other.mTexture = Texture2D{};
     other.mAnimationIndices.clear();
     other.mIsActive = false;
+    other.mOwnsTexture = false;
 }
 
 Entity& Entity::operator=(Entity&& other) noexcept
 {
     if (this == &other) return *this;
 
-    if (mTexture.id > 0)
+    if (mOwnsTexture && mTexture.id > 0)
     {
         UnloadTexture(mTexture);
     }
@@ -98,6 +100,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
     mScale = other.mScale;
     mColliderDimensions = other.mColliderDimensions;
     mTexture = other.mTexture;
+    mOwnsTexture = other.mOwnsTexture;
     mTextureType = other.mTextureType;
     mAngle = other.mAngle;
     mSpriteSheetDimensions = other.mSpriteSheetDimensions;
@@ -124,13 +127,14 @@ Entity& Entity::operator=(Entity&& other) noexcept
     other.mTexture = Texture2D{};
     other.mAnimationIndices.clear();
     other.mIsActive = false;
+    other.mOwnsTexture = false;
 
     return *this;
 }
 
 Entity::~Entity()
 {
-    if (mTexture.id > 0)
+    if (mOwnsTexture && mTexture.id > 0)
     {
         UnloadTexture(mTexture);
     }
@@ -370,6 +374,11 @@ void Entity::render()
     }
 
     Rectangle sourceArea = textureArea;
+
+    if (mUseCustomSourceRect)
+    {
+        sourceArea = mCustomSourceRect;
+    }
 
     if (mIsHorizontalFlipped)
     {

@@ -25,11 +25,15 @@ private:
     float mRightBoundary; // right boundary of the map in world coordinates
     float mTopBoundary;   // top boundary of the map in world coordinates
     float mBottomBoundary;// bottom boundary of the map in world coordinates
+    Rectangle mAtlasRegion;
+    bool mUseAtlasRegion;
+    bool mOwnsTexture;
 
 public:
     Map(int mapColumns, int mapRows, unsigned int *levelData,
         const char *textureFilePath, float tileSize, int textureColumns,
-        int textureRows, Vector2 origin);
+        int textureRows, Vector2 origin, Rectangle atlasRegion = {0.0f, 0.0f, 0.0f, 0.0f},
+        const Texture2D *sharedTexture = nullptr);
     ~Map();
 
     void build();

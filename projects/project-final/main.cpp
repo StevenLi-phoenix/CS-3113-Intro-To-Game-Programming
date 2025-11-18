@@ -13,12 +13,11 @@
 #endif
 
 #include "constants.h"
-#include "leveldata/player.h"
+#include "leveldata/Settings.h"
+#include "leveldata/level1.h"
 #include "lib/Helper.h"
-#include "lib/ui/TextInput.h"
-#include "lib/ui/Dropdown.h"
-#include "lib/ui/ListBox.h"
-#include <vector>
+#include "lib/Controller.h"
+#include "lib/Music.h"
 
 AppStatus gAppStatus = RUNNING;
 float gTimeAccumulator = 0.0f;
@@ -29,78 +28,78 @@ void update();
 void render();
 void shutdown();
 
-Player* player;
-TextInput* testTextInput = nullptr;
-Dropdown* testDropdown = nullptr;
-ListBox* testListBox = nullptr;
-std::vector<Entity*> globalUpdateQueue = {};
+Controller* gController = nullptr;
+Settings* gSettings = nullptr;
+Level1* gLevel1 = nullptr;
+bool gShowSettings = false;
 
 void initialise()
 {
     InitWindow(c::SCREEN_WIDTH, c::SCREEN_HEIGHT, c::TITLE);
     SetTargetFPS(c::FPS);
+    AudioManager::init();
 
-    player = new Player();
-    player->setIsActive(true);
+    gLevel1 = new Level1();
+    gLevel1->initialise();
 
-    testTextInput = new TextInput(
-        {c::SCREEN_WIDTH / 2.0f, 420.0f},
-        {320.0f, 40.0f}
-    );
-    testTextInput->setPlaceholder("Type something and press Enter");
-    testTextInput->setOnSubmit([](const std::string& text) {
-        LOG(TextFormat("Submitted text: %s", text.c_str()));
-    });
+    Player* levelPlayer = gLevel1->getPlayer();
+    gController = new Controller();
+    if (levelPlayer)
+    {
+        gController->bindAction("move_left", KEY_A, Controller::InputEvent::Held, [levelPlayer](float) {
+            levelPlayer->moveLeft();
+        });
+        gController->bindAction("move_right", KEY_D, Controller::InputEvent::Held, [levelPlayer](float) {
+            levelPlayer->moveRight();
+        });
+        gController->bindAction("move_up", KEY_W, Controller::InputEvent::Held, [levelPlayer](float) {
+            levelPlayer->moveUp();
+        });
+        gController->bindAction("move_down", KEY_S, Controller::InputEvent::Held, [levelPlayer](float) {
+            levelPlayer->moveDown();
+        });
+    }
 
-    testDropdown = new Dropdown(
-        {c::SCREEN_WIDTH / 2.0f, 260.0f},
-        {240.0f, 40.0f}
-    );
-    testDropdown->setOptions({"Easy", "Medium", "Hard"});
-    testDropdown->setOnSelectionChanged([](int index, const std::string& value) {
-        LOG(TextFormat("Dropdown selected %d -> %s", index, value.c_str()));
-    });
-
-    testListBox = new ListBox(
-        {c::SCREEN_WIDTH / 4.0f, 360.0f},
-        {220.0f, 160.0f}
-    );
-    testListBox->setItems({"Red Potion", "Blue Potion", "Green Potion", "Elixir"});
-    testListBox->setOnSelectionChanged([](int index, const std::string& value) {
-        LOG(TextFormat("ListBox selected %d -> %s", index, value.c_str()));
-    });
+    gSettings = new Settings(levelPlayer, gController);
+    gSettings->initialise();
 }
 
 void processInput()
 {
     if (WindowShouldClose()) gAppStatus = TERMINATED;
 
-    if (IsKeyDown(KEY_A)) player->moveLeft();
-    if (IsKeyDown(KEY_D)) player->moveRight();
-    if (IsKeyDown(KEY_W)) player->moveUp();
-    if (IsKeyDown(KEY_S)) player->moveDown();
+    if (IsKeyPressed(KEY_F1) && gSettings)
+    {
+        gShowSettings = !gShowSettings;
+        gSettings->setVisible(gShowSettings);
+        if (gController)
+        {
+            gController->setInputCaptureActive(gShowSettings);
+        }
+    }
 }
 
 void update()
 {
     float deltaTime = getDeltaTime();
     gTimeAccumulator += deltaTime;
+    if (gController)
+    {
+        gController->update(deltaTime);
+    }
+    AudioManager::update();
     while (gTimeAccumulator >= c::FIXED_TIMESTEP)
     {
-        player->update(c::FIXED_TIMESTEP);
+        if (gLevel1)
+        {
+            gLevel1->update(c::FIXED_TIMESTEP);
+        }
         gTimeAccumulator -= c::FIXED_TIMESTEP;
     }
-    if (testTextInput)
+
+    if (gShowSettings && gSettings)
     {
-        testTextInput->update(deltaTime);
-    }
-    if (testDropdown)
-    {
-        testDropdown->update(deltaTime);
-    }
-    if (testListBox)
-    {
-        testListBox->update(deltaTime);
+        gSettings->update(deltaTime);
     }
     // LOG("Hello from LOG()");
 }
@@ -109,58 +108,32 @@ void render()
 {
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    player->render();
-    player->displayCollider();
-    if (testDropdown)
+    if (gLevel1)
     {
-        testDropdown->render();
-        DrawText(
-            TextFormat("Dropdown choice: %s",
-                (testDropdown->getSelectedIndex() >= 0
-                    ? testDropdown->getOptions()[testDropdown->getSelectedIndex()].c_str()
-                    : "None")),
-            20,
-            20,
-            20,
-            DARKGRAY
-        );
+        gLevel1->render();
     }
-    if (testListBox)
+
+    if (gShowSettings && gSettings)
     {
-        testListBox->render();
-        DrawText(
-            TextFormat("ListBox selection: %s",
-                (testListBox->getSelectedIndex() >= 0
-                    ? testListBox->getItems()[testListBox->getSelectedIndex()].c_str()
-                    : "None")),
-            20,
-            50,
-            20,
-            DARKGRAY
-        );
+        gSettings->render();
     }
-    if (testTextInput)
-    {
-        testTextInput->render();
-        DrawText(
-            TextFormat("Current input: %s", testTextInput->getText().c_str()),
-            20,
-            80,
-            20,
-            DARKGRAY
-        );
-    }
-    
     EndDrawing();
 }
 
 void shutdown()
 {
     CloseWindow();
-    delete player;
-    delete testTextInput;
-    delete testDropdown;
-    delete testListBox;
+    delete gSettings;
+    gSettings = nullptr;
+    delete gController;
+    gController = nullptr;
+    if (gLevel1)
+    {
+        gLevel1->shutdown();
+        delete gLevel1;
+        gLevel1 = nullptr;
+    }
+    AudioManager::shutdown();
 }
 int main(int argc, char *argv[])
 {

@@ -15,7 +15,11 @@ TextInput::TextInput()
       mBorderThickness(2.0f),
       mCursorBlinkTimer(0.0f),
       mCursorBlinkInterval(0.5f),
-      mOnSubmit(nullptr)
+      mOnSubmit(nullptr),
+      mOnFocusChanged(nullptr),
+      mBackspaceHoldTimer(0.0f),
+      mBackspaceRepeatDelay(0.3f),
+      mBackspaceRepeatInterval(0.05f)
 {
     setIsActive(true);
     setCanCollide(false);
@@ -57,25 +61,30 @@ void TextInput::processInput()
         }
     }
 
-    if ((IsKeyPressed(KEY_BACKSPACE) || IsKeyDown(KEY_BACKSPACE)) && !mText.empty())
-    {
-        static float repeatDelay = 0.05f;
-        static float repeatTimer = 0.0f;
+    bool backspacePressed = IsKeyPressed(KEY_BACKSPACE);
+    bool backspaceDown = IsKeyDown(KEY_BACKSPACE);
 
-        if (IsKeyPressed(KEY_BACKSPACE))
+    if (backspacePressed && !mText.empty())
+    {
+        mText.pop_back();
+        mBackspaceHoldTimer = 0.0f;
+    }
+    else if (backspaceDown && !mText.empty())
+    {
+        mBackspaceHoldTimer += getDeltaTime();
+        if (mBackspaceHoldTimer >= mBackspaceRepeatDelay)
         {
             mText.pop_back();
-            repeatTimer = 0.0f;
-        }
-        else
-        {
-            repeatTimer += getDeltaTime();
-            if (repeatTimer >= repeatDelay)
+            mBackspaceHoldTimer -= mBackspaceRepeatInterval;
+            if (mBackspaceHoldTimer < mBackspaceRepeatDelay)
             {
-                mText.pop_back();
-                repeatTimer = 0.0f;
+                mBackspaceHoldTimer = mBackspaceRepeatDelay;
             }
         }
+    }
+    else
+    {
+        mBackspaceHoldTimer = 0.0f;
     }
 
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
@@ -84,7 +93,7 @@ void TextInput::processInput()
         {
             mOnSubmit(mText);
         }
-        mIsFocused = false;
+        setFocused(false);
     }
 }
 
@@ -101,7 +110,7 @@ void TextInput::update(float deltaTime, Entity *player, Map *map, const std::vec
     bool mouseOver = PointInRectangle(GetMousePosition(), bounds);
     if (mousePressed)
     {
-        mIsFocused = mouseOver;
+        setFocused(mouseOver);
     }
 
     if (mIsFocused)
@@ -159,4 +168,19 @@ void TextInput::render()
 void TextInput::shutdown()
 {
     Entity::shutdown();
+}
+
+void TextInput::setFocused(bool focused)
+{
+    if (mIsFocused == focused) return;
+    mIsFocused = focused;
+    mCursorBlinkTimer = 0.0f;
+    if (!mIsFocused)
+    {
+        mBackspaceHoldTimer = 0.0f;
+    }
+    if (mOnFocusChanged)
+    {
+        mOnFocusChanged(mIsFocused);
+    }
 }

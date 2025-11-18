@@ -2,17 +2,49 @@
 
 Map::Map(int mapColumns, int mapRows, unsigned int *levelData,
          const char *textureFilePath, float tileSize, int textureColumns,
-         int textureRows, Vector2 origin) : 
-         mMapColumns {mapColumns}, mMapRows {mapRows}, 
-         mTextureAtlas { LoadTexture(textureFilePath) },
-         mLevelData {levelData }, mTileSize {tileSize}, 
+         int textureRows, Vector2 origin, Rectangle atlasRegion) :
+         mMapColumns {mapColumns}, mMapRows {mapRows},
+         mLevelData {levelData}, mTileSize {tileSize},
          mTextureColumns {textureColumns}, mTextureRows {textureRows},
-         mOrigin {origin} { build(); }
+         mOrigin {origin}, mAtlasRegion {atlasRegion},
+         mUseAtlasRegion {atlasRegion.width > 0.0f && atlasRegion.height > 0.0f}
+{
+    if (mUseAtlasRegion)
+    {
+        Image fullImage = LoadImage(textureFilePath);
+        Rectangle region = atlasRegion;
+        region.x = fmaxf(0.0f, fminf(region.x, static_cast<float>(fullImage.width - 1)));
+        region.y = fmaxf(0.0f, fminf(region.y, static_cast<float>(fullImage.height - 1)));
+        float maxWidth = static_cast<float>(fullImage.width) - region.x;
+        float maxHeight = static_cast<float>(fullImage.height) - region.y;
+        region.width  = fmaxf(0.0f, fminf(region.width,  maxWidth));
+        region.height = fmaxf(0.0f, fminf(region.height, maxHeight));
+        Image slice = ImageFromImage(fullImage, region);
+        mTextureAtlas = LoadTextureFromImage(slice);
+        UnloadImage(slice);
+        UnloadImage(fullImage);
+    }
+    else
+    {
+        mTextureAtlas = LoadTexture(textureFilePath);
+    }
 
-Map::~Map() { UnloadTexture(mTextureAtlas); }
+    build();
+}
+
+Map::~Map()
+{
+    if (mTextureAtlas.id > 0)
+    {
+        UnloadTexture(mTextureAtlas);
+    }
+}
 
 void Map::build()
 {
+    mTextureAreas.clear();
+    mTextureAreas.reserve(mTextureColumns * mTextureRows);
+
     // Calculate map boundaries in world coordinates
     mLeftBoundary   = mOrigin.x - (mMapColumns * mTileSize) / 2.0f;
     mRightBoundary  = mOrigin.x + (mMapColumns * mTileSize) / 2.0f;

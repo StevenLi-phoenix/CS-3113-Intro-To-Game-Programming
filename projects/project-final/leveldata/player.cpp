@@ -10,20 +10,28 @@ Player::~Player()
 
 void Player::moveLeft()
 {
-    setMovement({-15.0f, 0.0f});
+    Vector2 movement = getMovement();
+    movement.x = -15.0f;
+    setMovement(movement);
 }
 
 void Player::moveRight()
 {
-    setMovement({15.0f, 0.0f});
+    Vector2 movement = getMovement();
+    movement.x = 15.0f;
+    setMovement(movement);
 }
 
 void Player::moveUp()
 {
-    setMovement({0.0f, -15.0f});
+    Vector2 movement = getMovement();
+    movement.y = -15.0f;
+    setMovement(movement);
 }
 
 void Player::moveDown()
 {
-    setMovement({0.0f, 15.0f});
+    Vector2 movement = getMovement();
+    movement.y = 15.0f;
+    setMovement(movement);
 }
