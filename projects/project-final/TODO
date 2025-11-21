@@ -20,6 +20,16 @@
 [x] Add UI for inventory
 [ ] Add UI for quest log
 
+Add UI for quest log
+Survive and find the tablewithmap to trigger the next level
+Create new class tablewithmap that use texture of table with map
+Create new class compass that use texture of compass - the compass will show the direction to tablewithmap when held in inventory slot
+player are not allowed to press z or throw branches while holding the compass
+slot 1 should now be axes that can trigger x melee attack
+slot 2 should now be compass that can show the direction to tablewithmap
+slot 3 should now be a branch that can be thrown enemy for 1 damage (z should also do 1 damage)
+while either item is not held/selected, the player should not be able to perform that action
+
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
 
 # level 2
@@ -36,13 +46,13 @@ new player abilities:
 - roll (dodge) (invincible for a short time)
 
 # future fixes / optimizations
-- Use true collider box instead of point detection
+- Use true collider box instead of point detection [x]
 - Add animations for both player and enemies
 - Add shaders for screen effects
 - CGs
 - Add a way to save/load game
 - enemies ai using pytorch neural network
-- multiplayer mode
+- multiplayer mode (PVP)
 - cloud saving (supabase)
 - replay system
 - leaderboard

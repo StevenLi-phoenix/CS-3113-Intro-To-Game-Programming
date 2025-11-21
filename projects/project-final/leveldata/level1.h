@@ -102,6 +102,10 @@ private:
     void clearBoxes();
     void clearBranches();
     void cleanupInactiveTrees();
+    void updateTutorialOverlay(float deltaTime);
+    void drawTutorialOverlay() const;
+    bool tutorialInputDetected() const;
+    float tutorialOverlayAlpha() const;
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -175,6 +179,11 @@ private:
     std::unique_ptr<Inventory> mInventory;
     std::unique_ptr<InventoryBar> mInventoryBar;
     size_t mBranchSlotIndex = 0;
+
+    bool mTutorialOverlayVisible = false;
+    bool mTutorialOverlayDismissed = false;
+    float mTutorialOverlayDisplayTimer = 0.0f;
+    float mTutorialOverlayFadeTimer = 0.0f;
 };
 
 #endif

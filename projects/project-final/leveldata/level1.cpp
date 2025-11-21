@@ -82,7 +82,7 @@ namespace
 
     constexpr RockSpawnSettings ROCK_SPAWN_SETTINGS{
         0xd137f0a5u,
-        0.995f,
+        0.95f,
         4,
         32.0f,
         72.0f,
@@ -99,6 +99,21 @@ namespace
     };
 
     constexpr const char *BRANCH_SLOT_ICON_TAG = "BRANCH";
+
+    namespace tutorial
+    {
+        constexpr float AUTO_HIDE_SECONDS = 5.0f;
+        constexpr float FADE_SECONDS = 1.0f;
+        constexpr int MAX_GAMEPADS = 4;
+        constexpr const char *TITLE = "Getting Started";
+        constexpr const char *LINES[] = {
+            "WASD or Arrow Keys to move your character",
+            "Left click anywhere to toss a branch at that spot",
+            "Press Z to auto-throw at the nearest enemy, X for melee",
+            "Press F1 for settings, rebinding, and tips"
+        };
+        constexpr size_t LINE_COUNT = sizeof(LINES) / sizeof(LINES[0]);
+    }
 }
 
 void Level1::initialise()
@@ -116,6 +131,11 @@ void Level1::initialise()
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
     // initialiseLightingShader();
+
+    mTutorialOverlayVisible = true;
+    mTutorialOverlayDismissed = false;
+    mTutorialOverlayDisplayTimer = 0.0f;
+    mTutorialOverlayFadeTimer = 0.0f;
 }
 
 void Level1::update(float deltaTime)
@@ -141,6 +161,7 @@ void Level1::update(float deltaTime)
     updateCameraFromPlayer(deltaTime);
     updateGameOverState();
     updateInventoryUI(deltaTime);
+    updateTutorialOverlay(deltaTime);
 }
 
 void Level1::spawnPlayer()
@@ -277,6 +298,7 @@ void Level1::render()
 
     drawPlayerHUD();
     drawInventoryOverlay();
+    drawTutorialOverlay();
     drawGameOverOverlay();
     DrawFPS(0, 60);
 }
@@ -890,9 +912,6 @@ void Level1::drawPlayerHUD() const
     DrawRectangleRec(barFill, RED);
     DrawRectangleLinesEx(barBackground, 1.0f, Fade(WHITE, 0.85f));
 
-    const char *branchText = TextFormat("Branches: %d/%d", mBranchInventory, mBranchCapacity);
-    DrawRectangleRounded({16.0f, 20.0f, 160.0f, 28.0f}, 0.3f, 4, Fade(BLACK, 0.4f));
-    DrawText(branchText, 24, 26, 18, DARKGREEN);
 }
 
 void Level1::drawInventoryOverlay()
@@ -909,6 +928,158 @@ void Level1::updateInventoryUI(float deltaTime)
     {
         mInventoryBar->update(deltaTime);
     }
+}
+
+void Level1::updateTutorialOverlay(float deltaTime)
+{
+    if (!mTutorialOverlayVisible)
+    {
+        return;
+    }
+
+    mTutorialOverlayDisplayTimer += deltaTime;
+
+    if (!mTutorialOverlayDismissed)
+    {
+        const bool interacted = tutorialInputDetected();
+        if (interacted || mTutorialOverlayDisplayTimer >= tutorial::AUTO_HIDE_SECONDS)
+        {
+            mTutorialOverlayDismissed = true;
+            mTutorialOverlayFadeTimer = 0.0f;
+        }
+        return;
+    }
+
+    mTutorialOverlayFadeTimer += deltaTime;
+    if (mTutorialOverlayFadeTimer >= tutorial::FADE_SECONDS)
+    {
+        mTutorialOverlayVisible = false;
+    }
+}
+
+void Level1::drawTutorialOverlay() const
+{
+    if (!mTutorialOverlayVisible || isPaused())
+    {
+        return;
+    }
+
+    const float alpha = tutorialOverlayAlpha();
+    if (alpha <= 0.0f)
+    {
+        return;
+    }
+
+    const float headerHeight = 70.0f;
+    const float lineSpacing = 28.0f;
+    const float footerHeight = 40.0f;
+    const float panelHeight = headerHeight +
+                              static_cast<float>(tutorial::LINE_COUNT) * lineSpacing +
+                              footerHeight;
+
+    DrawRectangle(0,
+                  0,
+                  c::SCREEN_WIDTH,
+                  static_cast<int>(panelHeight),
+                  Fade(BLACK, 0.55f * alpha));
+
+    const int titleFontSize = 32;
+    const int titleWidth = MeasureText(tutorial::TITLE, titleFontSize);
+    DrawText(tutorial::TITLE,
+             (c::SCREEN_WIDTH - titleWidth) / 2,
+             18,
+             titleFontSize,
+             Fade(RAYWHITE, alpha));
+
+    int lineY = 70;
+    const int lineFontSize = 22;
+    for (size_t i = 0; i < tutorial::LINE_COUNT; ++i)
+    {
+        const char *line = tutorial::LINES[i];
+        const int lineWidth = MeasureText(line, lineFontSize);
+        DrawText(line,
+                 (c::SCREEN_WIDTH - lineWidth) / 2,
+                 lineY,
+                 lineFontSize,
+                 Fade(LIGHTGRAY, alpha));
+        lineY += static_cast<int>(lineSpacing);
+    }
+
+    const char *dismissHint = "Move, click, or wait a moment to hide this hint";
+    const int hintFontSize = 18;
+    const int hintWidth = MeasureText(dismissHint, hintFontSize);
+    DrawText(dismissHint,
+             (c::SCREEN_WIDTH - hintWidth) / 2,
+             lineY,
+             hintFontSize,
+             Fade(GRAY, alpha));
+}
+
+bool Level1::tutorialInputDetected() const
+{
+    for (int key = KEY_NULL + 1; key <= KEY_KB_MENU; ++key)
+    {
+        if (IsKeyPressed(static_cast<KeyboardKey>(key)))
+        {
+            return true;
+        }
+    }
+
+    constexpr MouseButton mouseButtons[] = {
+        MOUSE_BUTTON_LEFT,
+        MOUSE_BUTTON_RIGHT,
+        MOUSE_BUTTON_MIDDLE
+    };
+    for (MouseButton button : mouseButtons)
+    {
+        if (IsMouseButtonPressed(button))
+        {
+            return true;
+        }
+    }
+
+    for (int pad = 0; pad < tutorial::MAX_GAMEPADS; ++pad)
+    {
+        if (!IsGamepadAvailable(pad))
+        {
+            continue;
+        }
+
+        for (int button = GAMEPAD_BUTTON_UNKNOWN + 1;
+             button <= GAMEPAD_BUTTON_RIGHT_THUMB;
+             ++button)
+        {
+            if (IsGamepadButtonPressed(pad, static_cast<GamepadButton>(button)))
+            {
+                return true;
+            }
+        }
+
+        const int axisCount = GetGamepadAxisCount(pad);
+        for (int axis = 0; axis < axisCount; ++axis)
+        {
+            if (std::fabs(GetGamepadAxisMovement(pad, axis)) > 0.35f)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+float Level1::tutorialOverlayAlpha() const
+{
+    if (!mTutorialOverlayVisible)
+    {
+        return 0.0f;
+    }
+    if (!mTutorialOverlayDismissed)
+    {
+        return 1.0f;
+    }
+    const float remaining = 1.0f - (mTutorialOverlayFadeTimer / tutorial::FADE_SECONDS);
+    return std::clamp(remaining, 0.0f, 1.0f);
 }
 
 void Level1::initialiseInventoryUI()
