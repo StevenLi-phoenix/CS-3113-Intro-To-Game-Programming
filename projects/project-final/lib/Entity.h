@@ -56,6 +56,7 @@ private:
     bool mIsTextureAtlas = false; // True if the entity has a texture atlas, false if it does not
     bool mIsHorizontalFlipped = false; // True if the entity is horizontally flipped, false if it is not
     bool mIsVerticalFlipped = false; // True if the entity is vertically flipped, false if it is not
+    bool mTextureFacesLeft = false; // True if the source texture faces left by default
     bool mUseCustomSourceRect = false;
     Rectangle mCustomSourceRect = {0, 0, 0, 0};
 
@@ -125,6 +126,7 @@ public:
     void setIsTextureAtlas(bool isTextureAtlas) { mIsTextureAtlas = isTextureAtlas; }
     void setIsHorizontalFlipped(bool isHorizontalFlipped) { mIsHorizontalFlipped = isHorizontalFlipped; }
     void setIsVerticalFlipped(bool isVerticalFlipped) { mIsVerticalFlipped = isVerticalFlipped; }
+    void setTextureFacesLeft(bool facesLeft) { mTextureFacesLeft = facesLeft; }
     void setCustomSourceRect(const Rectangle &rect) { mCustomSourceRect = rect; mUseCustomSourceRect = true; }
     void clearCustomSourceRect() { mUseCustomSourceRect = false; mCustomSourceRect = {0, 0, 0, 0}; }
     void setSpeed(float speed) { mSpeed = speed; }
@@ -162,6 +164,7 @@ public:
     bool getCanCollide() const { return canCollide; }
     bool getIsTextureAtlas() const { return mIsTextureAtlas; }
     bool getIsHorizontalFlipped() const { return mIsHorizontalFlipped; }
+    bool getTextureFacesLeft() const { return mTextureFacesLeft; }
     bool usesCustomSourceRect() const { return mUseCustomSourceRect; }
     Rectangle getCustomSourceRect() const { return mCustomSourceRect; }
 };

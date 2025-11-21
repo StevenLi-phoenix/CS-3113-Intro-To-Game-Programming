@@ -28,6 +28,8 @@ public:
     void render() override;
     void shutdown() override;
     Player* getPlayer() override { return mPlayer; }
+    void handleRetryAction() override;
+    void onRetryBindingChanged(KeyboardKey key) override;
 
     Player* getPlayer() const { return mPlayer; }
 
@@ -40,6 +42,7 @@ private:
     void ensureTileTexture();
     void ensureTreeAtlas();
     void ensureMusicNotes();
+    void drawPlayerHUD() const;
     void refreshMusicNoteSlots();
     void updateMusicNoteBehaviour();
     void updatePlayerAttack(float deltaTime);
@@ -57,6 +60,10 @@ private:
     bool hasEnemyWithinRadius(float radius) const;
     MusicNote::Variant currentNoteVariant() const;
     void advanceNoteVariant();
+    void updateGameOverState();
+    void drawGameOverOverlay() const;
+    void resetPlayerForRetry();
+    void updatePlayerSpawnPoint(const Vector2 &position);
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -77,6 +84,7 @@ private:
     std::vector<Enemy*> mEnemies;
     std::vector<Entity*> mCollidableEntities; // All collidable entities (trees, rocks, etc.)
     std::vector<MusicNote*> mMusicNotes;
+    Vector2 mPlayerSpawnPosition = c::ORIGIN;
     unsigned int mWorldSeed = 1337u;
     MapGenerator mMapGenerator;
     std::vector<unsigned int> mLevelData;
@@ -108,6 +116,8 @@ private:
         MusicNote::Variant::Star
     };
     size_t mNoteSequenceIndex = 0;
+    bool mIsGameOver = false;
+    KeyboardKey mRetryBindingKey = KEY_ENTER;
 };
 
 #endif

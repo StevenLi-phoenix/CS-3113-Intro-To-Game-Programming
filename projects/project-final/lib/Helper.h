@@ -49,6 +49,7 @@ Rectangle getUVRectangle(const Texture2D *texture, int index, int rows, int cols
 void DrawFilledRectangle(const Rectangle &rect, Color color);
 void DrawRectangleBorder(const Rectangle &rect, float thickness, Color color);
 Color ApplyAlpha(Color color, float alpha);
+std::string KeyToString(KeyboardKey key);
 
 // Geometry helpers
 bool PointInRectangle(Vector2 point, const Rectangle &rect);

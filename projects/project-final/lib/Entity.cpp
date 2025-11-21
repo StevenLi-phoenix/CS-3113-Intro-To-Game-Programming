@@ -395,7 +395,8 @@ void Entity::render()
         sourceArea = mCustomSourceRect;
     }
 
-    if (mIsHorizontalFlipped)
+    const bool horizontalFlip = (mIsHorizontalFlipped != mTextureFacesLeft);
+    if (horizontalFlip)
     {
         sourceArea.width = -sourceArea.width;
     }

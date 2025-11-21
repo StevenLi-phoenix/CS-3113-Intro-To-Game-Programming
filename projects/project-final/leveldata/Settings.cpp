@@ -4,7 +4,10 @@
 #include "../lib/Music.h"
 #include <algorithm>
 
-Settings::Settings(Player* player, Controller* controller)
+Settings::Settings(Player* player,
+                   Controller* controller,
+                   std::function<void()> retryCallback,
+                   std::function<void(KeyboardKey)> retryKeyChanged)
     : mPlayer(player),
       mController(controller),
       mVisible(false),
@@ -17,15 +20,17 @@ Settings::Settings(Player* player, Controller* controller)
       mVolumeLabel("Master Volume: 100%"),
       mGraphicsDropdown(nullptr),
       mGraphicsOptions({"Performance", "Balanced", "Quality"}),
-      mGraphicsLabel("Graphics: Balanced")
+      mGraphicsLabel("Graphics: Balanced"),
+      mHealthDropdown(nullptr),
+      mHealthOptions({"Easy (100 HP)", "Normal (10 HP)", "Hard (3 HP)", "Impossible (1 HP)"}),
+      mHealthValues({100.0f, 10.0f, 3.0f, 1.0f}),
+      mHealthLabel("Difficulty: Normal (10 HP)"),
+      mSelectedHealthIndex(1),
+      mRetryCallback(retryCallback),
+      mRetryKeyCallback(retryKeyChanged)
 {
     configureActions();
     mStatusMessage = "Click a control to rebind keys. Press F1 to close settings.";
-}
-
-Settings::~Settings()
-{
-    shutdown();
 }
 
 void Settings::configureActions()
@@ -67,12 +72,22 @@ void Settings::configureActions()
         [this](float) { if (mPlayer) mPlayer->moveDown(); },
         nullptr
     });
+    mActions.push_back({
+        "retry_level",
+        "Retry Level",
+        KEY_ENTER,
+        KEY_ENTER,
+        Controller::InputEvent::Pressed,
+        [this](float) { triggerRetry(); },
+        nullptr
+    });
 }
 
 void Settings::initialise()
 {
     setupVolumeControl();
     setupGraphicsControl();
+    setupHealthControl();
     buildUI();
     refreshButtonLabels();
 
@@ -90,9 +105,7 @@ void Settings::buildUI()
     float buttonWidth = 320.0f;
     float buttonHeight = 40.0f;
     float spacing = 12.0f;
-    float totalHeight = static_cast<float>(mActions.size()) * (buttonHeight + spacing) - spacing;
-
-    float startY = 320.0f;
+    float startY = 380.0f;
 
     Vector2 start = {
         c::SCREEN_WIDTH / 2.0f,
@@ -197,43 +210,13 @@ void Settings::applyBinding(const std::string& actionName, KeyboardKey key)
             {
                 mController->bindAction(action.name, key, action.eventType, action.callback);
             }
+            if (action.name == "retry_level" && mRetryKeyCallback)
+            {
+                mRetryKeyCallback(key);
+            }
             refreshButtonLabels();
             break;
         }
-    }
-}
-
-std::string Settings::keyToString(KeyboardKey key)
-{
-    if (key >= KEY_A && key <= KEY_Z)
-    {
-        char c = static_cast<char>('A' + (key - KEY_A));
-        return std::string(1, c);
-    }
-    if (key >= KEY_ZERO && key <= KEY_NINE)
-    {
-        char c = static_cast<char>('0' + (key - KEY_ZERO));
-        return std::string(1, c);
-    }
-
-    switch (key)
-    {
-        case KEY_LEFT: return "Left";
-        case KEY_RIGHT: return "Right";
-        case KEY_UP: return "Up";
-        case KEY_DOWN: return "Down";
-        case KEY_SPACE: return "Space";
-        case KEY_ENTER: return "Enter";
-        case KEY_TAB: return "Tab";
-        case KEY_BACKSPACE: return "Backspace";
-        case KEY_LEFT_SHIFT:
-        case KEY_RIGHT_SHIFT: return "Shift";
-        case KEY_LEFT_CONTROL:
-        case KEY_RIGHT_CONTROL: return "Ctrl";
-        case KEY_LEFT_ALT:
-        case KEY_RIGHT_ALT: return "Alt";
-        default:
-            return std::string(TextFormat("Key %d", key));
     }
 }
 
@@ -248,6 +231,10 @@ void Settings::update(float deltaTime)
     if (mGraphicsDropdown)
     {
         mGraphicsDropdown->update(deltaTime);
+    }
+    if (mHealthDropdown)
+    {
+        mHealthDropdown->update(deltaTime);
     }
 
     for (auto& action : mActions)
@@ -291,6 +278,15 @@ void Settings::render()
                  RAYWHITE);
     }
 
+    if (mHealthDropdown)
+    {
+        DrawText(mHealthLabel.c_str(),
+                 c::SCREEN_WIDTH / 2 - MeasureText(mHealthLabel.c_str(), 20) / 2,
+                 260,
+                 20,
+                 RAYWHITE);
+    }
+
     std::vector<UIBase*> drawList;
     drawList.reserve(mUIElements.size());
     for (UIBase* element : mUIElements)
@@ -318,6 +314,9 @@ void Settings::shutdown()
 
     delete mGraphicsDropdown;
     mGraphicsDropdown = nullptr;
+
+    delete mHealthDropdown;
+    mHealthDropdown = nullptr;
 
     for (auto& action : mActions)
     {
@@ -367,6 +366,45 @@ void Settings::setupGraphicsControl()
     });
 }
 
+void Settings::setupHealthControl()
+{
+    mHealthDropdown = new Dropdown(
+        {c::SCREEN_WIDTH / 2.0f, 310.0f},
+        {260.0f, 36.0f}
+    );
+    mHealthDropdown->setZIndex(3);
+    registerElement(mHealthDropdown);
+    mHealthDropdown->setOptions(mHealthOptions);
+    mHealthDropdown->setSelectedIndex(mSelectedHealthIndex, false);
+    mHealthDropdown->setOnSelectionChanged([this](int index, const std::string&) {
+        mSelectedHealthIndex = index;
+        applyHealthPreset(index);
+    });
+    applyHealthPreset(mSelectedHealthIndex);
+}
+
+void Settings::applyHealthPreset(int index)
+{
+    if (index < 0 || index >= static_cast<int>(mHealthValues.size()))
+    {
+        return;
+    }
+
+    mHealthLabel = "Difficulty: " + mHealthOptions[index];
+    if (mPlayer)
+    {
+        mPlayer->setMaxHealth(mHealthValues[index], true);
+    }
+}
+
+void Settings::triggerRetry()
+{
+    if (mRetryCallback)
+    {
+        mRetryCallback();
+    }
+}
+
 void Settings::setVisible(bool visible)
 {
     if (mVisible == visible) return;
@@ -408,7 +446,7 @@ void Settings::setButtonHint(Settings::ActionDefinition& action, const std::stri
     std::string text;
     if (hintText.empty())
     {
-        text = action.label + ": " + keyToString(action.currentKey);
+        text = action.label + ": " + KeyToString(action.currentKey);
     }
     else
     {

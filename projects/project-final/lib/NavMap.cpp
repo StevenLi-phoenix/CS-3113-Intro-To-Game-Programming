@@ -8,16 +8,27 @@
 
 namespace
 {
-    constexpr int kNeighbourOffsets[4][2] = {
+    constexpr int kNeighbourOffsets[8][2] = {
         {1, 0},
         {-1, 0},
         {0, 1},
-        {0, -1}
+        {0, -1},
+        {1, 1},
+        {1, -1},
+        {-1, 1},
+        {-1, -1}
     };
 
-    float heuristicManhattan(int ax, int ay, int bx, int by)
+    constexpr float kCardinalCost = 1.0f;
+    constexpr float kDiagonalCost = 1.41421356f;
+
+    float heuristicOctile(int ax, int ay, int bx, int by)
     {
-        return static_cast<float>(std::abs(ax - bx) + std::abs(ay - by));
+        const float dx = static_cast<float>(std::abs(ax - bx));
+        const float dy = static_cast<float>(std::abs(ay - by));
+        const float minDiff = std::min(dx, dy);
+        const float maxDiff = std::max(dx, dy);
+        return (maxDiff - minDiff) * kCardinalCost + minDiff * kDiagonalCost;
     }
 }
 
@@ -150,7 +161,7 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
     const int startY = startIndex / mColumns;
     const int goalX = goalIndex % mColumns;
     const int goalY = goalIndex / mColumns;
-    fScore[static_cast<size_t>(startIndex)] = heuristicManhattan(startX, startY, goalX, goalY);
+    fScore[static_cast<size_t>(startIndex)] = heuristicOctile(startX, startY, goalX, goalY);
 
     openSet.push({startIndex, fScore[static_cast<size_t>(startIndex)], 0.0f});
 
@@ -183,7 +194,21 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
                 continue;
             }
 
-            const float tentativeG = gScore[static_cast<size_t>(current.index)] + 1.0f;
+            const bool isDiagonalStep = (offset[0] != 0) && (offset[1] != 0);
+            if (isDiagonalStep)
+            {
+                const int adjXIndex = toIndex(currentX + offset[0], currentY);
+                const int adjYIndex = toIndex(currentX, currentY + offset[1]);
+                if (adjXIndex < 0 || adjYIndex < 0 ||
+                    !isWalkable(currentX + offset[0], currentY) ||
+                    !isWalkable(currentX, currentY + offset[1]))
+                {
+                    continue;
+                }
+            }
+
+            const float stepCost = isDiagonalStep ? kDiagonalCost : kCardinalCost;
+            const float tentativeG = gScore[static_cast<size_t>(current.index)] + stepCost;
             if (tentativeG >= gScore[static_cast<size_t>(neighbourIndex)])
             {
                 continue;
@@ -191,7 +216,7 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
 
             cameFrom[static_cast<size_t>(neighbourIndex)] = current.index;
             gScore[static_cast<size_t>(neighbourIndex)] = tentativeG;
-            const float h = heuristicManhattan(neighbourX, neighbourY, goalX, goalY);
+            const float h = heuristicOctile(neighbourX, neighbourY, goalX, goalY);
             fScore[static_cast<size_t>(neighbourIndex)] = tentativeG + h;
             openSet.push({neighbourIndex, fScore[static_cast<size_t>(neighbourIndex)], tentativeG});
         }

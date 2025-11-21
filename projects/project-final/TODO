@@ -15,7 +15,8 @@
 [x] Add pathfinding AI to enemies
 [x] Add enemies attacking player
 [ ] Add player attack via arrows (temporary)
-[ ] Add UI for health and arrows
+[x] Add UI for health (floating bar)
+[ ] Add UI for arrows
 [ ] Add UI for inventory
 [ ] Add UI for quest log
 

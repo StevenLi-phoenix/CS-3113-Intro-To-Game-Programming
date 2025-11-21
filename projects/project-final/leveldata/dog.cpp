@@ -56,6 +56,7 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
                     mDesiredHeight,
                     DogConstants::COLLIDER_WIDTH_RATIO,
                     DogConstants::COLLIDER_HEIGHT_RATIO);
+    setTextureFacesLeft(true);
 
     setVelocity({0.0f, 0.0f});
     mPatrolHome = position;
@@ -138,7 +139,8 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
                 setIsHorizontalFlipped(true);
             }
         }
-        attemptAttack(player, distance);
+        const float playerDistance = Vector2Distance(player->getPosition(), getPosition());
+        attemptAttack(player, playerDistance);
         handleStuckDetection(deltaTime, distance, player);
     }
     else
@@ -406,13 +408,18 @@ void Dog::attemptAttack(Entity *player, float distanceToPlayer)
         return;
     }
 
-    if (distanceToPlayer > DogConstants::ATTACK_RANGE)
+    Player *playerEntity = dynamic_cast<Player*>(player);
+    if (!playerEntity || playerEntity->isDead())
     {
         return;
     }
 
-    Player *playerEntity = dynamic_cast<Player*>(player);
-    if (!playerEntity || playerEntity->isDead())
+    const float dogRadius = std::max(getColliderDimensions().x, getColliderDimensions().y) * 0.5f;
+    const float playerRadius = std::max(playerEntity->getColliderDimensions().x,
+                                        playerEntity->getColliderDimensions().y) * 0.5f;
+    const float effectiveRange = DogConstants::ATTACK_RANGE + dogRadius + playerRadius;
+
+    if (distanceToPlayer > effectiveRange)
     {
         return;
     }

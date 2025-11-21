@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <limits>
+#include <string>
 #include "../lib/ResourceManager.h"
 
 namespace
@@ -41,7 +42,7 @@ namespace
 
     constexpr EnemySpawnSettings ENEMY_SPAWN_SETTINGS{
         0x5f3759d5u,
-        0.3f,
+        0.8f,
         4,
         DogConstants::MIN_HEIGHT,
         DogConstants::MAX_HEIGHT,
@@ -75,21 +76,29 @@ void Level1::update(float deltaTime)
     updatePlayerAttack(deltaTime);
 
     updateCameraFromPlayer(deltaTime);
+    updateGameOverState();
 }
 
 void Level1::spawnPlayer()
 {
     if (mPlayer)
     {
+        mPlayer->setPosition(mPlayerSpawnPosition);
+        mPlayer->setMovement({0.0f, 0.0f});
+        mPlayer->setVelocity({0.0f, 0.0f});
+        mPlayer->setForce({0.0f, 0.0f});
         mPlayer->restoreFullHealth();
+        mIsGameOver = false;
         mCamera.target = mPlayer->getPosition();
         return;
     }
 
     mPlayer = new Player(c::ORIGIN, {54.0f, 75.0f});
+    updatePlayerSpawnPoint(mPlayer->getPosition());
     mPlayer->restoreFullHealth();
     mCollidableEntities.push_back(mPlayer);
     mCamera.target = mPlayer->getPosition();
+    mIsGameOver = false;
 }
 
 void Level1::updateCameraFromPlayer(float deltaTime)
@@ -137,10 +146,25 @@ void Level1::render()
         for (Entity* entity : mCollidableEntities)
         {
             entity->displayCollider();
+            if (Dog *dog = dynamic_cast<Dog*>(entity))
+            {
+                const Vector2 center = dog->getPosition();
+                const float dogRadius = std::max(dog->getColliderDimensions().x,
+                                                 dog->getColliderDimensions().y) * 0.5f;
+                const float playerRadius = (mPlayer)
+                                           ? std::max(mPlayer->getColliderDimensions().x,
+                                                      mPlayer->getColliderDimensions().y) * 0.5f
+                                           : 0.0f;
+                const float effectiveRadius = DogConstants::ATTACK_RANGE + dogRadius + playerRadius;
+                DrawCircleLinesV(center, effectiveRadius, Fade(RED, 0.7f));
+            }
         }
     }
     EndMode2D();
-    DrawFPS(10, 10);
+
+    drawPlayerHUD();
+    drawGameOverOverlay();
+    DrawFPS(10, 60);
     DrawText("Level 1 - WIP", c::SCREEN_WIDTH / 2 - 100, c::SCREEN_HEIGHT / 2, 24, DARKBLUE);
 }
 
@@ -367,6 +391,125 @@ void Level1::updatePlayerAttack(float deltaTime)
     note->launchAttack(target->getPosition());
     advanceNoteVariant();
     mAttackTimer = std::max(mAttackIntervalSeconds, 0.01f);
+}
+
+void Level1::drawPlayerHUD() const
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    const float maxHealth = std::max(mPlayer->getMaxHealth(), 0.001f);
+    const float healthRatio = std::clamp(mPlayer->getHealth() / maxHealth, 0.0f, 1.0f);
+    const Vector2 playerScreenPos = GetWorldToScreen2D(mPlayer->getPosition(), mCamera);
+
+    const Vector2 playerScale = mPlayer->getScale();
+    const float barWidth = std::max(playerScale.x * 0.9f, 60.0f);
+    const float barHeight = 8.0f;
+    const float verticalOffset = -playerScale.y * 0.65f;
+
+    Rectangle barBackground = {
+        playerScreenPos.x - barWidth * 0.5f,
+        playerScreenPos.y + verticalOffset - barHeight,
+        barWidth,
+        barHeight
+    };
+
+    Rectangle barFill = barBackground;
+    barFill.width = barBackground.width * healthRatio;
+
+    DrawRectangleRounded(barBackground, 0.4f, 8, Fade(BLACK, 0.55f));
+    DrawRectangleRec(barFill, RED);
+    DrawRectangleLinesEx(barBackground, 1.0f, Fade(WHITE, 0.85f));
+}
+
+void Level1::updateGameOverState()
+{
+    if (!mPlayer)
+    {
+        mIsGameOver = false;
+        return;
+    }
+
+    mIsGameOver = mPlayer->isDead();
+}
+
+void Level1::handleRetryAction()
+{
+    if (!mIsGameOver)
+    {
+        return;
+    }
+
+    resetPlayerForRetry();
+}
+
+void Level1::onRetryBindingChanged(KeyboardKey key)
+{
+    mRetryBindingKey = key;
+}
+
+void Level1::resetPlayerForRetry()
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    mPlayer->setPosition(mPlayerSpawnPosition);
+    mPlayer->setMovement({0.0f, 0.0f});
+    mPlayer->setVelocity({0.0f, 0.0f});
+    mPlayer->setForce({0.0f, 0.0f});
+    mPlayer->restoreFullHealth();
+    mAttackTimer = 0.0f;
+    mIsGameOver = false;
+
+    updateChunkStream(true);
+    mCamera.target = mPlayer->getPosition();
+}
+
+void Level1::updatePlayerSpawnPoint(const Vector2 &position)
+{
+    mPlayerSpawnPosition = position;
+}
+
+void Level1::drawGameOverOverlay() const
+{
+    if (!mIsGameOver || isPaused())
+    {
+        return;
+    }
+
+    DrawRectangle(0, 0, c::SCREEN_WIDTH, c::SCREEN_HEIGHT, Fade(BLACK, 0.65f));
+
+    const char* title = "You Died";
+    const int titleFont = 48;
+    const int titleWidth = MeasureText(title, titleFont);
+    DrawText(title,
+             (c::SCREEN_WIDTH - titleWidth) / 2,
+             c::SCREEN_HEIGHT / 2 - 80,
+             titleFont,
+             RED);
+
+    const std::string retryKeyLabel = KeyToString(mRetryBindingKey);
+    const std::string retryText = "Press " + retryKeyLabel + " to Retry";
+    const int retryFont = 24;
+    const int retryWidth = MeasureText(retryText.c_str(), retryFont);
+    DrawText(retryText.c_str(),
+             (c::SCREEN_WIDTH - retryWidth) / 2,
+             c::SCREEN_HEIGHT / 2,
+             retryFont,
+             RAYWHITE);
+
+    const char* hint = "Open Settings (F1) to rebind";
+    const int hintFont = 20;
+    const int hintWidth = MeasureText(hint, hintFont);
+    DrawText(hint,
+             (c::SCREEN_WIDTH - hintWidth) / 2,
+             c::SCREEN_HEIGHT / 2 + 36,
+             hintFont,
+             LIGHTGRAY);
 }
 
 void Level1::buildProceduralMap()

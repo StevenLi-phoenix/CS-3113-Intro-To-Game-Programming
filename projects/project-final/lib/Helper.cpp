@@ -258,3 +258,38 @@ float getDeltaTime()
     previousTicks  = ticks;
     return deltaTime;
 }
+
+std::string KeyToString(KeyboardKey key)
+{
+    if (key >= KEY_A && key <= KEY_Z)
+    {
+        char c = static_cast<char>('A' + (key - KEY_A));
+        return std::string(1, c);
+    }
+    if (key >= KEY_ZERO && key <= KEY_NINE)
+    {
+        char c = static_cast<char>('0' + (key - KEY_ZERO));
+        return std::string(1, c);
+    }
+
+    switch (key)
+    {
+        case KEY_LEFT: return "Left";
+        case KEY_RIGHT: return "Right";
+        case KEY_UP: return "Up";
+        case KEY_DOWN: return "Down";
+        case KEY_SPACE: return "Space";
+        case KEY_ENTER: return "Enter";
+        case KEY_TAB: return "Tab";
+        case KEY_BACKSPACE: return "Backspace";
+        case KEY_LEFT_SHIFT:
+        case KEY_RIGHT_SHIFT: return "Shift";
+        case KEY_LEFT_CONTROL:
+        case KEY_RIGHT_CONTROL: return "Ctrl";
+        case KEY_LEFT_ALT:
+        case KEY_RIGHT_ALT: return "Alt";
+        case KEY_ESCAPE: return "Escape";
+        default:
+            return std::string(TextFormat("Key %d", key));
+    }
+}

@@ -130,3 +130,24 @@ void Player::restoreFullHealth()
     setIsActive(true);
     setCanCollide(true);
 }
+
+void Player::setMaxHealth(float maxHealth, bool refill)
+{
+    mMaxHealth = std::max(1.0f, maxHealth);
+    if (refill)
+    {
+        mHealth = mMaxHealth;
+        mDamageCooldownTimer = 0.0f;
+        setIsActive(true);
+        setCanCollide(true);
+    }
+    else
+    {
+        mHealth = std::clamp(mHealth, 0.0f, mMaxHealth);
+        if (mHealth <= 0.0f)
+        {
+            setIsActive(false);
+            setCanCollide(false);
+        }
+    }
+}

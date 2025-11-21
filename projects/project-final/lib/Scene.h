@@ -13,6 +13,7 @@ protected:
     bool mCameraFollowEnabled = true;
     float mCameraFollowSpeed = 6.0f;
     Camera2D mCamera{};
+    bool mPaused = false;
 
     // chunk streaming helpers
     int mChunkSize = 128;
@@ -32,12 +33,16 @@ public:
     virtual void render() = 0;
     virtual void shutdown() = 0;
     virtual Player* getPlayer() { return nullptr; }
+    virtual void handleRetryAction() {}
+    virtual void onRetryBindingChanged(KeyboardKey /*key*/) {}
 
     void resetCamera();
     void setCameraFollowEnabled(bool enabled);
     bool isCameraFollowEnabled() const { return mCameraFollowEnabled; }
     void updateCameraTarget(Vector2 target, float deltaTime);
     void setCameraFollowSpeed(float speed) { mCameraFollowSpeed = speed; }
+    void setPaused(bool paused);
+    bool isPaused() const { return mPaused; }
 
     // chunk streaming
     void setChunkSize(int size);

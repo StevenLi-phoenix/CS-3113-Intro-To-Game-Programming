@@ -8,7 +8,7 @@
 namespace PlayerConstants {
     constexpr const char *SPRITE_TAG = "PLAYER";
     constexpr const char *FALLBACK_TEXTURE_PATH = "assets/player.png";
-    constexpr float MAX_HEALTH = 5.0f;
+    constexpr float MAX_HEALTH = 10.0f;
     constexpr float DAMAGE_COOLDOWN_SECONDS = 0.8f;
 }
 
@@ -34,6 +34,7 @@ public:
     bool applyDamage(float amount);
     void heal(float amount);
     void restoreFullHealth();
+    void setMaxHealth(float maxHealth, bool refill = true);
 
     ~Player();
 

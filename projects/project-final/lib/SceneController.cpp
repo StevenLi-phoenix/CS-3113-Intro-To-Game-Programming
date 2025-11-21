@@ -2,6 +2,7 @@
 #include "Controller.h"
 #include "../leveldata/Settings.h"
 #include "../leveldata/player.h"
+#include <functional>
 
 SceneController::SceneController() = default;
 
@@ -46,7 +47,7 @@ void SceneController::updateFixed(float deltaTime)
     {
         mController->update(deltaTime);
     }
-    if (mActiveScene)
+    if (mActiveScene && !mActiveScene->isPaused())
     {
         mActiveScene->update(deltaTime);
     }
@@ -101,6 +102,10 @@ void SceneController::toggleSettings()
     {
         mController->setInputCaptureActive(mSettingsVisible);
     }
+    if (mActiveScene)
+    {
+        mActiveScene->setPaused(mSettingsVisible);
+    }
 }
 
 void SceneController::activateScene(std::unique_ptr<Scene> scene)
@@ -124,6 +129,7 @@ void SceneController::activateScene(std::unique_ptr<Scene> scene)
     if (mActiveScene)
     {
         mActiveScene->initialise();
+        mActiveScene->setPaused(false);
     }
 
     Player* player = mActiveScene ? mActiveScene->getPlayer() : nullptr;
@@ -139,6 +145,7 @@ void SceneController::bindPlayerActions(Player* player)
     mController->unbindAction("move_right");
     mController->unbindAction("move_up");
     mController->unbindAction("move_down");
+    mController->unbindAction("retry_level");
 
     if (!player) return;
 
@@ -168,8 +175,31 @@ void SceneController::rebuildSettings(Player* player)
         return;
     }
 
-    mSettings = std::make_unique<Settings>(player, mController.get());
+    std::function<void()> retryAction;
+    std::function<void(KeyboardKey)> retryKeyChanged;
+    if (mActiveScene)
+    {
+        Scene* scenePtr = mActiveScene.get();
+        retryAction = [scenePtr]() {
+            if (scenePtr)
+            {
+                scenePtr->handleRetryAction();
+            }
+        };
+        retryKeyChanged = [scenePtr](KeyboardKey key) {
+            if (scenePtr)
+            {
+                scenePtr->onRetryBindingChanged(key);
+            }
+        };
+    }
+
+    mSettings = std::make_unique<Settings>(player, mController.get(), retryAction, retryKeyChanged);
     mSettings->initialise();
     mSettingsVisible = false;
     mSettings->setVisible(false);
+    if (mActiveScene)
+    {
+        mActiveScene->setPaused(false);
+    }
 }

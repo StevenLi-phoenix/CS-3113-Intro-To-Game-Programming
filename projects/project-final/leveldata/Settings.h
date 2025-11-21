@@ -5,6 +5,7 @@
 #include "../constants.h"
 #include <vector>
 #include <string>
+#include <functional>
 
 #ifndef SETTINGS_H
 #define SETTINGS_H
@@ -14,8 +15,11 @@ class Player;
 class Settings : public Scene
 {
 public:
-    Settings(Player* player, Controller* controller);
-    ~Settings();
+    Settings(Player* player,
+             Controller* controller,
+             std::function<void()> retryCallback = {},
+             std::function<void(KeyboardKey)> retryKeyChanged = {});
+    ~Settings() override = default;
 
     void initialise() override;
     void update(float deltaTime) override;
@@ -56,6 +60,15 @@ private:
     std::vector<std::string> mGraphicsOptions;
     std::string mGraphicsLabel;
 
+    Dropdown* mHealthDropdown;
+    std::vector<std::string> mHealthOptions;
+    std::vector<float> mHealthValues;
+    std::string mHealthLabel;
+    int mSelectedHealthIndex;
+
+    std::function<void()> mRetryCallback;
+    std::function<void(KeyboardKey)> mRetryKeyCallback;
+
     std::vector<UIBase*> mUIElements;
 
     void configureActions();
@@ -68,6 +81,9 @@ private:
 
     void setupVolumeControl();
     void setupGraphicsControl();
+    void setupHealthControl();
+    void applyHealthPreset(int index);
+    void triggerRetry();
     ActionDefinition* findAction(const std::string& actionName);
     bool isKeyConflict(KeyboardKey key, const std::string& actionName) const;
     void setButtonHint(ActionDefinition& action, const std::string& hintText);

@@ -34,6 +34,11 @@ void Scene::updateCameraTarget(Vector2 target, float deltaTime)
     mCamera.target = Vector2Lerp(mCamera.target, target, lerpAlpha);
 }
 
+void Scene::setPaused(bool paused)
+{
+    mPaused = paused;
+}
+
 void Scene::setChunkSize(int size)
 {
     mChunkSize = std::max(1, size);
