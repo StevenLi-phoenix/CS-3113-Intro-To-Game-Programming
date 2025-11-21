@@ -9,6 +9,10 @@ void Level1::initialise()
         mPlayer = new Player(c::ORIGIN, {32.0f, 32.0f});
         mPlayer->setIsActive(true);
     }
+    if (mPlayer)
+    {
+        mGameState.camera.target = mPlayer->getPosition();
+    }
 }
 
 void Level1::update(float deltaTime)
@@ -16,11 +20,13 @@ void Level1::update(float deltaTime)
     if (mPlayer)
     {
         mPlayer->update(deltaTime, nullptr, mMap);
+        updateCameraTarget(mPlayer->getPosition(), deltaTime);
     }
 }
 
 void Level1::render()
 {
+    BeginMode2D(mGameState.camera);
     if (mMap)
     {
         mMap->render();
@@ -31,6 +37,7 @@ void Level1::render()
         mPlayer->render();
         mPlayer->displayCollider();
     }
+    EndMode2D();
     DrawText("Level 1 - WIP", c::SCREEN_WIDTH / 2 - 100, c::SCREEN_HEIGHT / 2, 24, DARKBLUE);
 }
 

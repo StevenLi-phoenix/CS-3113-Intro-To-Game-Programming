@@ -22,6 +22,8 @@ protected:
     GameState mGameState;
     Vector2 mOrigin;
     const char *mBGColourHexCode = "#000000";
+    bool mCameraFollowEnabled = true;
+    float mCameraFollowSpeed = 6.0f;
     
 public:
     Scene();
@@ -31,6 +33,12 @@ public:
     virtual void update(float deltaTime) = 0;
     virtual void render() = 0;
     virtual void shutdown() = 0;
+
+    void resetCamera();
+    void setCameraFollowEnabled(bool enabled);
+    bool isCameraFollowEnabled() const { return mCameraFollowEnabled; }
+    void updateCameraTarget(Vector2 target, float deltaTime);
+    void setCameraFollowSpeed(float speed) { mCameraFollowSpeed = speed; }
     
     GameState   getState()           const { return mGameState; }
     Vector2     getOrigin()          const { return mOrigin;    }
