@@ -1,9 +1,24 @@
 #include "mapgenerator.h"
 
+#include <cstdint>
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <random>
+
+namespace
+{
+    // Wang hash for fast, decorrelated 32-bit mixing
+    inline uint32_t wangHash(uint32_t x)
+    {
+        x = (x ^ 61u) ^ (x >> 16u);
+        x *= 9u;
+        x = x ^ (x >> 4u);
+        x *= 0x27d4eb2du;
+        x = x ^ (x >> 15u);
+        return x;
+    }
+}
 
 MapGenerator::MapGenerator(unsigned int seed)
 {
@@ -62,6 +77,24 @@ float MapGenerator::gradSimplex(int hash, float x, float y)
     float u = h < 4 ? x : y;
     float v = h < 4 ? y : x;
     return ((h & 1) ? -u : u) + ((h & 2) ? -2.0f * v : 2.0f * v);
+}
+
+float MapGenerator::whiteNoise(int x, int y, unsigned int salt) const
+{
+    uint32_t xi = static_cast<uint32_t>(static_cast<int32_t>(x));
+    uint32_t yi = static_cast<uint32_t>(static_cast<int32_t>(y));
+    uint32_t seedMix = wangHash(static_cast<uint32_t>(mSeed) ^ 0x85ebca6bu);
+    uint32_t saltMix = wangHash(salt ^ 0xc2b2ae35u);
+
+    uint32_t v = xi * 0x27d4eb2du;
+    v ^= yi * 0x165667b1u;
+    v ^= seedMix;
+    v = wangHash(v ^ saltMix);
+    v ^= wangHash(xi + 0x9e3779b9u);
+    v ^= wangHash(yi + 0x94d049bbu);
+    v = wangHash(v);
+
+    return static_cast<float>(v) / 4294967295.0f;
 }
 
 float MapGenerator::perlin(float x, float y) const
@@ -158,6 +191,42 @@ std::vector<unsigned int> MapGenerator::generate(const GenerationSettings &setti
     }
 
     float zeroBias = std::clamp(settings.zeroBias, 0.0f, 0.999f);
+    auto sampleToTile = [&](float value) -> unsigned int
+    {
+        if (value < zeroBias)
+        {
+            return 1;
+        }
+
+        float remapped = (value - zeroBias) / (1.0f - zeroBias);
+        remapped = std::clamp(remapped, 0.0f, 1.0f);
+
+        if (maxTileIndex == 1)
+        {
+            return 1;
+        }
+
+        int tileIndex = static_cast<int>(std::floor(remapped * static_cast<float>(maxTileIndex - 1))) + 2;
+        tileIndex = std::clamp(tileIndex, 2, maxTileIndex);
+
+        return static_cast<unsigned int>(tileIndex);
+    };
+
+    if (settings.discreteRandom)
+    {
+        for (int row = 0; row < settings.rows; ++row)
+        {
+            for (int col = 0; col < settings.columns; ++col)
+            {
+                int sampleX = col + static_cast<int>(settings.offsetX);
+                int sampleY = row + static_cast<int>(settings.offsetY);
+                float noise = whiteNoise(sampleX, sampleY, settings.discreteSalt);
+                levelData[row * settings.columns + col] = sampleToTile(noise);
+            }
+        }
+
+        return levelData;
+    }
 
     for (int row = 0; row < settings.rows; ++row)
     {
@@ -193,26 +262,7 @@ std::vector<unsigned int> MapGenerator::generate(const GenerationSettings &setti
 
             float combined = (perlinAccum * settings.perlinWeight + simplexAccum * settings.simplexWeight) / weightSum;
             combined = std::clamp(combined, 0.0f, 1.0f);
-
-            if (combined < zeroBias)
-            {
-                levelData[row * settings.columns + col] = 1; // below bias, use base tile
-                continue;
-            }
-
-            float remapped = (combined - zeroBias) / (1.0f - zeroBias);
-            remapped = std::clamp(remapped, 0.0f, 1.0f);
-
-            if (maxTileIndex == 1)
-            {
-                levelData[row * settings.columns + col] = 1;
-                continue;
-            }
-
-            int tileIndex = static_cast<int>(std::floor(remapped * static_cast<float>(maxTileIndex - 1))) + 2;
-            tileIndex = std::clamp(tileIndex, 2, maxTileIndex);
-
-            levelData[row * settings.columns + col] = static_cast<unsigned int>(tileIndex);
+            levelData[row * settings.columns + col] = sampleToTile(combined);
         }
     }
 

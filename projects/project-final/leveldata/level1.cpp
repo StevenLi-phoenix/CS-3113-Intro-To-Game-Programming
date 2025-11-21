@@ -46,9 +46,13 @@ void Level1::shutdown()
 
 void Level1::buildProceduralMap()
 {
+    mMapGenerator = MapGenerator(mWorldSeed);
+
     MapGenerator::GenerationSettings settings;
     settings.columns = mMapColumns;
     settings.rows = mMapRows;
+    settings.discreteRandom = true;
+    settings.discreteSalt = mNoiseSalt;
     settings.scale = 18.0f;
     settings.octaves = 5;
     settings.persistence = 0.55f;

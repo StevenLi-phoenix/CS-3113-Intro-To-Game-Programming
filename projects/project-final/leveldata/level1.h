@@ -27,6 +27,7 @@ private:
 
     Player* mPlayer = nullptr;
     Map* mMap = nullptr;
+    unsigned int mWorldSeed = 1337u;
     MapGenerator mMapGenerator;
     std::vector<unsigned int> mLevelData;
 
@@ -35,6 +36,7 @@ private:
     const float mTileSize = 32.0f;
     const int mTileColumns = 16;
     const int mTileRows = 1;
+    const unsigned int mNoiseSalt = 0x8da6b343u; // decorrelate hash noise
     const char *mMapTexturePath = "assets/ElderAsset1.2.png";
     Rectangle mTileAtlasRegion = {0.0f, 432.0f, 512.0f, 32.0f};
 };
