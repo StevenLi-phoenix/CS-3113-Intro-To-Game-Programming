@@ -109,6 +109,7 @@ public:
     void setColliderDimensions(Vector2 colliderDimensions) { mColliderDimensions = colliderDimensions; }
     void setTexture(Texture2D texture) { mTexture = texture; }
     void setOwnsTexture(bool ownsTexture) { mOwnsTexture = ownsTexture; }
+    void setParent(Entity *parent) { mParent = parent; }
     void setTextureType(EntityConstants::TextureType textureType) { mTextureType = textureType; }
     void setSpriteSheetDimensions(Vector2 spriteSheetDimensions) { mSpriteSheetDimensions = spriteSheetDimensions; }
     void setAnimationIndices(std::vector<int> animationIndices) { mAnimationIndices = animationIndices; }
@@ -119,8 +120,8 @@ public:
     void setJumpingPower(float jumpingPower) { mJumpingPower = jumpingPower; }
     void setIsActive(bool isActive) { mIsActive = isActive; }
     void setEnableControl(bool enableControl) { enableControl = enableControl; }
-    void setAIActive(bool mAIActive) { mAIActive = mAIActive; }
-    void setCanCollide(bool canCollide) { canCollide = canCollide; }
+    void setAIActive(bool mAIActive) { this->mAIActive = mAIActive; }
+    void setCanCollide(bool value) { canCollide = value; }
     void setIsTextureAtlas(bool isTextureAtlas) { mIsTextureAtlas = isTextureAtlas; }
     void setIsHorizontalFlipped(bool isHorizontalFlipped) { mIsHorizontalFlipped = isHorizontalFlipped; }
     void setIsVerticalFlipped(bool isVerticalFlipped) { mIsVerticalFlipped = isVerticalFlipped; }
@@ -137,6 +138,7 @@ public:
     // getters
     int getZIndex() const { return zIndex; }
     Vector2 getPosition() const { return mPosition; }
+    Entity* getParent() const { return mParent; }
     Vector2 getMovement() const { return mMovement; }
     Vector2 getVelocity() const { return mVelocity; }
     Vector2 getAcceleration() const { return mAcceleration; }

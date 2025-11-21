@@ -1,11 +1,14 @@
 #include "Enemy.h"
 
+#include <algorithm>
 #include <cmath>
 
 Enemy::Enemy(Vector2 position, float moveSpeed, float detectionRadius)
     : Entity(),
       mMoveSpeed(moveSpeed),
-      mDetectionRadius(detectionRadius)
+      mDetectionRadius(detectionRadius),
+      mMaxHealth(EnemyConstants::DEFAULT_HEALTH),
+      mHealth(EnemyConstants::DEFAULT_HEALTH)
 {
     ResourceManager &rm = ResourceManager::instance();
     Texture2D *texture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
@@ -84,5 +87,37 @@ bool Enemy::isPlayerWithinRange(Entity *player) const
     const float distanceSquared = toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y;
     const float radiusSquared = mDetectionRadius * mDetectionRadius;
     return distanceSquared <= radiusSquared;
+}
+
+void Enemy::setMaxHealth(float health)
+{
+    mMaxHealth = std::max(health, 1.0f);
+    mHealth = std::min(mHealth, mMaxHealth);
+}
+
+void Enemy::setHealth(float health)
+{
+    mHealth = std::clamp(health, 0.0f, mMaxHealth);
+    if (mHealth <= 0.0f)
+    {
+        setIsActive(false);
+        setCanCollide(false);
+    }
+}
+
+bool Enemy::applyDamage(float amount)
+{
+    if (amount <= 0.0f || !getIsActive())
+    {
+        return false;
+    }
+
+    setHealth(mHealth - amount);
+    if (mHealth <= 0.0f)
+    {
+        LOG_INFO(TextFormat("Enemy[%p] defeated", this));
+        return true;
+    }
+    return false;
 }
 

@@ -8,8 +8,10 @@
 #include "player.h"
 #include "tree.h"
 #include "dog.h"
+#include "music_note.h"
 #include "../lib/Enemy.h"
 #include "../lib/NavMap.h"
+#include <array>
 #include <vector>
 
 // Simple test level scene. Add real game logic later.
@@ -35,12 +37,22 @@ private:
     void drawChunkDebug();
     void ensureTileTexture();
     void ensureTreeAtlas();
+    void ensureMusicNotes();
+    void refreshMusicNoteSlots();
+    void updateMusicNoteBehaviour();
+    void updatePlayerAttack(float deltaTime);
+    Enemy* findNearestEnemy(float maxRange) const;
+    MusicNote* findAvailableNoteForVariant(MusicNote::Variant variant);
+    bool hasEnemyWithinRadius(float radius) const;
+    MusicNote::Variant currentNoteVariant() const;
+    void advanceNoteVariant();
 
     Player* mPlayer = nullptr;
     Map* mMap = nullptr;
     std::vector<Tree*> mTrees;
     std::vector<Enemy*> mEnemies;
     std::vector<Entity*> mCollidableEntities; // All collidable entities (trees, rocks, etc.)
+    std::vector<MusicNote*> mMusicNotes;
     unsigned int mWorldSeed = 1337u;
     MapGenerator mMapGenerator;
     std::vector<unsigned int> mLevelData;
@@ -59,6 +71,19 @@ private:
     Rectangle mTileAtlasRegion = {0.0f, 432.0f, 512.0f, 32.0f};
     Texture2D *mTileTexture = nullptr;
     bool mTileTextureReady = false;
+
+    float mAttackTimer = 0.0f;
+    float mAttackIntervalSeconds = combat::PLAYER_ATTACK_INTERVAL;
+    float mAttackRange = combat::PLAYER_ATTACK_RANGE;
+    float mNoteIdleRadius = combat::NOTE_IDLE_DETECTION_RADIUS;
+    int mNoteCount = combat::NOTE_DEFAULT_COUNT;
+    std::array<MusicNote::Variant, 4> mNoteSequence = {
+        MusicNote::Variant::Note1,
+        MusicNote::Variant::Note2,
+        MusicNote::Variant::Note3,
+        MusicNote::Variant::Star
+    };
+    size_t mNoteSequenceIndex = 0;
 };
 
 #endif

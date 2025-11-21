@@ -10,6 +10,7 @@ namespace EnemyConstants
     constexpr float DEFAULT_HEIGHT = 32.0f;
     constexpr float DEFAULT_SPEED = 35.0f;
     constexpr float DEFAULT_DETECTION_RADIUS = 160.0f;
+    constexpr float DEFAULT_HEALTH = 4.0f;
     constexpr float COLLIDER_WIDTH_RATIO = 0.7f;
     constexpr float COLLIDER_HEIGHT_RATIO = 0.45f;
 }
@@ -29,6 +30,13 @@ public:
     void setNavMap(const NavMap *navMap) { mNavMap = navMap; }
     const NavMap* getNavMap() const { return mNavMap; }
 
+    void setMaxHealth(float health);
+    void setHealth(float health);
+    float getHealth() const { return mHealth; }
+    float getMaxHealth() const { return mMaxHealth; }
+    bool isDead() const { return mHealth <= 0.0f; }
+    bool applyDamage(float amount);
+
 protected:
     void applySpriteRect(const Rectangle &spriteRect,
                          float desiredPixelHeight = EnemyConstants::DEFAULT_HEIGHT,
@@ -47,6 +55,8 @@ private:
     float mMoveSpeed;
     float mDetectionRadius;
     const NavMap *mNavMap = nullptr;
+    float mMaxHealth;
+    float mHealth;
 };
 
 #endif // ENEMY_H

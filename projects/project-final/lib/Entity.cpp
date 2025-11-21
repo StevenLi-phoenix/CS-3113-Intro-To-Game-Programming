@@ -182,7 +182,7 @@ void Entity::checkCollisionY(const std::vector<Entity*> &collidableEntities)
 {
     for (Entity *entity : collidableEntities)
     {
-        if (entity == this || !canCollide || !isColliding(entity)) continue;
+        if (entity == this || !canCollide || !entity->getCanCollide() || !isColliding(entity)) continue;
 
         float yDistance = mPosition.y - entity->mPosition.y;
         float yOverlap = ((mColliderDimensions.y + entity->mColliderDimensions.y) / 2.0f) - fabs(yDistance);
@@ -222,7 +222,7 @@ void Entity::checkCollisionX(const std::vector<Entity*> &collidableEntities)
 {
     for (Entity *entity : collidableEntities)
     {
-        if (entity == this || !canCollide || !isColliding(entity)) continue;
+        if (entity == this || !canCollide || !entity->getCanCollide() || !isColliding(entity)) continue;
 
         float xDistance = mPosition.x - entity->mPosition.x;
         float xOverlap = ((mColliderDimensions.x + entity->mColliderDimensions.x) / 2.0f) - fabs(xDistance);

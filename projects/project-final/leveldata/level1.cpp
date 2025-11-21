@@ -1,6 +1,7 @@
 #include "level1.h"
 #include <cmath>
 #include <algorithm>
+#include <limits>
 #include "../lib/ResourceManager.h"
 
 void Level1::initialise()
@@ -12,7 +13,7 @@ void Level1::initialise()
     ensureTileTexture();
     if (!mPlayer)
     {
-        mPlayer = new Player(c::ORIGIN, {90.0f, 125.0f});
+        mPlayer = new Player(c::ORIGIN, {54.0f, 75.0f});
         mPlayer->setIsActive(true);
         mCollidableEntities.push_back(mPlayer);
     }
@@ -20,17 +21,22 @@ void Level1::initialise()
     {
         mCamera.target = mPlayer->getPosition();
     }
+    ensureMusicNotes();
     updateChunkStream(true);
 }
 
 void Level1::update(float deltaTime)
 {
     updateChunkStream();
+    ensureMusicNotes();
+    updateMusicNoteBehaviour();
 
     for (Entity* entity : mCollidableEntities)
     {
         entity->update(deltaTime, mPlayer, mMap, mCollidableEntities);
     }
+
+    updatePlayerAttack(deltaTime);
 
     if (mPlayer)
     {
@@ -102,6 +108,20 @@ void Level1::shutdown()
     }
     mEnemies.clear();
 
+    if (!mMusicNotes.empty())
+    {
+        for (MusicNote* note : mMusicNotes)
+        {
+            auto it = std::find(mCollidableEntities.begin(), mCollidableEntities.end(), note);
+            if (it != mCollidableEntities.end())
+            {
+                mCollidableEntities.erase(it);
+            }
+            delete note;
+        }
+        mMusicNotes.clear();
+    }
+
     mCollidableEntities.clear();
 
     mLevelData.clear();
@@ -110,6 +130,174 @@ void Level1::shutdown()
         mTileTexture = nullptr;
         mTileTextureReady = false;
     }
+}
+
+void Level1::ensureMusicNotes()
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    const size_t targetCount = static_cast<size_t>(std::max(0, mNoteCount));
+    if (mMusicNotes.size() >= targetCount)
+    {
+        return;
+    }
+
+    while (mMusicNotes.size() < targetCount)
+    {
+        const size_t slotIndex = mMusicNotes.size();
+        const MusicNote::Variant variant = mNoteSequence[slotIndex % mNoteSequence.size()];
+
+        MusicNote::FollowConfig followConfig;
+        followConfig.lagCoefficient = combat::NOTE_FOLLOW_LAG;
+        followConfig.lerpSpeed = combat::NOTE_FOLLOW_LERP;
+        followConfig.bobAmplitude = combat::NOTE_BOB_AMPLITUDE;
+        followConfig.bobSpeed = combat::NOTE_BOB_SPEED;
+
+        MusicNote *note = new MusicNote(variant, mPlayer, followConfig);
+        note->setParent(mPlayer);
+        note->setCanCollide(false);
+        note->setIsActive(true);
+        mMusicNotes.push_back(note);
+        mCollidableEntities.push_back(note);
+    }
+
+    refreshMusicNoteSlots();
+}
+
+void Level1::refreshMusicNoteSlots()
+{
+    const size_t total = mMusicNotes.size();
+    if (total == 0)
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < total; ++i)
+    {
+        if (mMusicNotes[i])
+        {
+            mMusicNotes[i]->setOrbitSlot(i, total);
+        }
+    }
+}
+
+void Level1::updateMusicNoteBehaviour()
+{
+    const bool enemyNearby = hasEnemyWithinRadius(mNoteIdleRadius);
+    for (MusicNote* note : mMusicNotes)
+    {
+        if (!note)
+        {
+            continue;
+        }
+        note->setOrbitSuppressed(enemyNearby);
+    }
+}
+
+MusicNote::Variant Level1::currentNoteVariant() const
+{
+    return mNoteSequence[mNoteSequenceIndex % mNoteSequence.size()];
+}
+
+void Level1::advanceNoteVariant()
+{
+    mNoteSequenceIndex = (mNoteSequenceIndex + 1) % mNoteSequence.size();
+}
+
+Enemy* Level1::findNearestEnemy(float maxRange) const
+{
+    if (!mPlayer)
+    {
+        return nullptr;
+    }
+
+    const float limitSq = maxRange > 0.0f ? maxRange * maxRange : std::numeric_limits<float>::max();
+    Enemy* closest = nullptr;
+    float bestDistanceSq = limitSq;
+
+    const Vector2 playerPos = mPlayer->getPosition();
+    for (Enemy* enemy : mEnemies)
+    {
+        if (!enemy || !enemy->getIsActive())
+        {
+            continue;
+        }
+
+        Vector2 toEnemy = {
+            enemy->getPosition().x - playerPos.x,
+            enemy->getPosition().y - playerPos.y
+        };
+        const float distanceSq = toEnemy.x * toEnemy.x + toEnemy.y * toEnemy.y;
+
+        if (distanceSq <= bestDistanceSq)
+        {
+            bestDistanceSq = distanceSq;
+            closest = enemy;
+        }
+    }
+
+    return closest;
+}
+
+bool Level1::hasEnemyWithinRadius(float radius) const
+{
+    return findNearestEnemy(radius) != nullptr;
+}
+
+MusicNote* Level1::findAvailableNoteForVariant(MusicNote::Variant variant)
+{
+    for (MusicNote* note : mMusicNotes)
+    {
+        if (note && note->getVariant() == variant && note->isAvailableForAttack())
+        {
+            return note;
+        }
+    }
+    return nullptr;
+}
+
+void Level1::updatePlayerAttack(float deltaTime)
+{
+    if (!mPlayer || mMusicNotes.empty())
+    {
+        return;
+    }
+
+    mAttackTimer -= deltaTime;
+    if (mAttackTimer > 0.0f)
+    {
+        return;
+    }
+
+    Enemy* target = findNearestEnemy(mAttackRange);
+    if (!target)
+    {
+        mAttackTimer = 0.0f;
+        return;
+    }
+
+    const MusicNote::Variant variant = currentNoteVariant();
+    MusicNote* note = findAvailableNoteForVariant(variant);
+    if (!note)
+    {
+        // wait briefly for the correct note to return to formation
+        mAttackTimer = 0.05f;
+        return;
+    }
+
+    const int damage = MusicNote::damageForVariant(variant);
+    const bool defeated = target->applyDamage(static_cast<float>(damage));
+    if (defeated && isDebugMode())
+    {
+        LOG_DEBUG(TextFormat("Music attack defeated enemy[%p] damage=%d", target, damage));
+    }
+
+    note->launchAttack(target->getPosition());
+    advanceNoteVariant();
+    mAttackTimer = std::max(mAttackIntervalSeconds, 0.01f);
 }
 
 void Level1::buildProceduralMap()

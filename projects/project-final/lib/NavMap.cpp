@@ -47,8 +47,8 @@ void NavMap::build(const unsigned int *tiles,
     {
         for (int col = 0; col < columns; ++col)
         {
-            const unsigned int tileValue = tiles[row * columns + col];
-            mWalkable[row * columns + col] = static_cast<uint8_t>(tileValue == 0 ? 1 : 0);
+            (void)tiles[row * columns + col];
+            mWalkable[row * columns + col] = 1;
         }
     }
 }
