@@ -4,19 +4,20 @@
 -- proper UI
 
 # level 1
-- walk, melee attack
-- block (stamina)
+- [x] walk, 
+- [ ] melee attack (temp: arrow)
+- [ ] block (stamina)
 
-fix tree rendering
-Add NavMap creation
-Add A*/DFS for pathfinding
-Add enemies spawning (zombie, melle attack only)
-Add pathfinding AI to enemies
-Add enemies attacking player
-Add player attack via arrows (temporary)
-Add UI for health and arrows
-Add UI for inventory
-Add UI for quest log
+[x] fix tree rendering
+[x] Add NavMap creation
+[x] Add A*/DFS for pathfinding 
+[x] Add enemies spawning (zombie, melle attack only)
+[ ] Add pathfinding AI to enemies
+[ ] Add enemies attacking player
+[ ] Add player attack via arrows (temporary)
+[ ] Add UI for health and arrows
+[ ] Add UI for inventory
+[ ] Add UI for quest log
 
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
 

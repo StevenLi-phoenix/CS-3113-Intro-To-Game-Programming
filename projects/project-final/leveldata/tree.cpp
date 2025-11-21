@@ -1,5 +1,6 @@
 #include "tree.h"
 #include <algorithm>
+#include <vector>
 
 Tree::Tree(Vector2 position,
            float treeScale,
@@ -8,24 +9,33 @@ Tree::Tree(Vector2 position,
            float rootColliderWidthRatio)
     : Entity(),
       mTreeScale(treeScale),
-      mTreeVariant(treeVariant % c::TREE_VARIANT_COUNT)
+      mTreeVariant(0)
 {
     // Get texture from ResourceManager
     ResourceManager &rm = ResourceManager::instance();
     Texture2D *texture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+
+    Rectangle spriteRect = {0.0f, 0.0f, TreeConstants::BASE_SCALE * 0.5f, TreeConstants::BASE_SCALE};
+    const std::vector<Rectangle> &treeRects = rm.getSpriteRects(TreeConstants::SPRITE_TAG);
+    const size_t rectCount = treeRects.size();
+    if (rectCount > 0)
+    {
+        const int countAsInt = static_cast<int>(rectCount);
+        int normalizedVariant = treeVariant % countAsInt;
+        if (normalizedVariant < 0) normalizedVariant += countAsInt;
+        mTreeVariant = normalizedVariant;
+        spriteRect = treeRects[mTreeVariant];
+    }
 
     if (texture)
     {
         setTexture(*texture);
         setOwnsTexture(false);
 
-        // Get sprite rectangle for this tree variant from constants
-        Rectangle spriteRect = c::TREE_SPRITES[mTreeVariant];
         setCustomSourceRect(spriteRect);
     }
 
     // Set visual scale based on sprite size and requested pixel height
-    Rectangle spriteRect = c::TREE_SPRITES[mTreeVariant];
     const float spriteHeight = std::max(spriteRect.height, 1.0f);
     const float desiredPixelHeight = std::max(treeScale, TreeConstants::BASE_SCALE);
     const float scaleFactor = desiredPixelHeight / spriteHeight;

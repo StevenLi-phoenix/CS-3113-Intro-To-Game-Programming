@@ -86,7 +86,8 @@ void update()
         }
         else
         {
-            LOG_DEBUG(TextFormat("Frame: dt=%.3f steps=%d accumulator=%.3f", deltaTime, gFixedStepsThisFrame, gTimeAccumulator));
+            // TODO: remove this
+            // LOG_DEBUG(TextFormat("Frame: dt=%.3f steps=%d accumulator=%.3f", deltaTime, gFixedStepsThisFrame, gTimeAccumulator));
         }
     }
     // LOG("Hello from LOG()");

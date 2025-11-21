@@ -8,8 +8,8 @@ void Level1::initialise()
     LOG_INFO("Level1 initialised");
     setChunkSize(mChunkSize);
     setChunkLoadRadius(mChunkLoadRadius);
-    ensureTileTexture();
     ensureTreeAtlas();
+    ensureTileTexture();
     if (!mPlayer)
     {
         mPlayer = new Player(c::ORIGIN, {90.0f, 125.0f});
@@ -52,7 +52,8 @@ void Level1::render()
         }
         else if (isDebugMode())
         {
-            LOG_DEBUG(TextFormat("Map render: %.2fms at chunkStart=(%d,%d)", renderMs, getChunkStartX(), getChunkStartY()));
+            // TODO: remove this
+            // LOG_DEBUG(TextFormat("Map render: %.2fms at chunkStart=(%d,%d)", renderMs, getChunkStartX(), getChunkStartY()));
         }
     }
 
@@ -94,12 +95,19 @@ void Level1::shutdown()
         delete tree;
     }
     mTrees.clear();
+
+    for (Enemy* enemy : mEnemies)
+    {
+        delete enemy;
+    }
+    mEnemies.clear();
+
     mCollidableEntities.clear();
 
     mLevelData.clear();
     if (mTileTextureReady)
     {
-        UnloadTexture(mTileTexture);
+        mTileTexture = nullptr;
         mTileTextureReady = false;
     }
 }
@@ -136,6 +144,24 @@ void Level1::buildProceduralMap()
         mLevelData.assign(mMapColumns * mMapRows, 1);
     }
 
+    const double tNavStart = GetTime();
+    mNavMap.build(mLevelData.data(),
+                  mMapColumns,
+                  mMapRows,
+                  mTileSize,
+                  getChunkStartX(),
+                  getChunkStartY());
+    const double tNavEnd = GetTime();
+    if (isDebugMode())
+    {
+        LOG_DEBUG(TextFormat("NavMap build chunkStart=(%d,%d) size=%dx%d took=%.2fms",
+                             getChunkStartX(),
+                             getChunkStartY(),
+                             mMapColumns,
+                             mMapRows,
+                             (tNavEnd - tNavStart) * 1000.0));
+    }
+
     const float mapOriginX = (static_cast<float>(getChunkStartX()) + static_cast<float>(mMapColumns) / 2.0f) * mTileSize;
     const float mapOriginY = (static_cast<float>(getChunkStartY()) + static_cast<float>(mMapRows) / 2.0f) * mTileSize;
     const double tMapStart = GetTime();
@@ -158,8 +184,8 @@ void Level1::buildProceduralMap()
             mTileColumns,
             mTileRows,
             {mapOriginX, mapOriginY},
-            {}, // already pre-sliced texture
-            mTileTextureReady ? &mTileTexture : nullptr
+            mTileAtlasRegion,
+            mTileTextureReady ? mTileTexture : nullptr
         );
         const double tMapEnd = GetTime();
         LOG_DEBUG(TextFormat("Map refresh (new map) chunkStart=(%d,%d) took=%.2fms",
@@ -183,6 +209,14 @@ void Level1::generateTrees()
     mTrees.clear();
 
     const double tGenStart = GetTime();
+
+    ResourceManager &rm = ResourceManager::instance();
+    const std::vector<Rectangle> &treeRects = rm.getSpriteRects(TreeConstants::SPRITE_TAG);
+    const int treeVariantCount = std::max(1, static_cast<int>(treeRects.size()));
+    if (treeRects.empty())
+    {
+        LOG_WARNING("Tree sprites missing tag 'TREE' in atlas metadata; using fallback variant.");
+    }
 
     struct TreeSpawnSettings
     {
@@ -232,8 +266,8 @@ void Level1::generateTrees()
             const float rootWidthNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 3u);
             const float rootHeightNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 4u);
 
-            int treeVariant = static_cast<int>(variantNoise * static_cast<float>(c::TREE_VARIANT_COUNT));
-            treeVariant = std::clamp(treeVariant, 0, c::TREE_VARIANT_COUNT - 1);
+            int treeVariant = static_cast<int>(variantNoise * static_cast<float>(treeVariantCount));
+            treeVariant = std::clamp(treeVariant, 0, treeVariantCount - 1);
 
             const float treeHeightPx = spawnSettings.minHeightPx +
                                        scaleNoise * (spawnSettings.maxHeightPx - spawnSettings.minHeightPx);
@@ -263,6 +297,130 @@ void Level1::generateTrees()
                          (tGenEnd - tGenStart) * 1000.0));
 }
 
+void Level1::generateEnemies()
+{
+    for (Enemy* enemy : mEnemies)
+    {
+        auto it = std::find(mCollidableEntities.begin(), mCollidableEntities.end(), enemy);
+        if (it != mCollidableEntities.end())
+        {
+            mCollidableEntities.erase(it);
+        }
+        delete enemy;
+    }
+    mEnemies.clear();
+
+    struct EnemySpawnSettings
+    {
+        unsigned int salt = 0u;
+        float spawnThreshold = 0.985f;
+        int spacing = 4;
+        float minHeightPx = DogConstants::MIN_HEIGHT;
+        float maxHeightPx = DogConstants::MAX_HEIGHT;
+        float maxSpawnDistance = 0.0f;
+    };
+
+    const float chunkWorldSize = static_cast<float>(mChunkSize) * mTileSize;
+    const EnemySpawnSettings spawnSettings{
+        0x5f3759d5u,
+        0.985f,
+        4,
+        DogConstants::MIN_HEIGHT,
+        DogConstants::MAX_HEIGHT,
+        chunkWorldSize * 0.85f
+    };
+
+    const int startX = getChunkStartX();
+    const int startY = getChunkStartY();
+    const int spacing = std::max(spawnSettings.spacing, 1);
+
+    const double tGenStart = GetTime();
+    Vector2 playerPos = mPlayer ? mPlayer->getPosition()
+                                : Vector2{
+                                      (static_cast<float>(startX) + static_cast<float>(mMapColumns) * 0.5f) * mTileSize,
+                                      (static_cast<float>(startY) + static_cast<float>(mMapRows) * 0.5f) * mTileSize
+                                  };
+    const float maxSpawnDistanceSq = spawnSettings.maxSpawnDistance * spawnSettings.maxSpawnDistance;
+    int spawnedCount = 0;
+
+    for (int row = 0; row < mMapRows; row += spacing)
+    {
+        for (int col = 0; col < mMapColumns; col += spacing)
+        {
+            const int worldX = startX + col;
+            const int worldY = startY + row;
+
+            float spawnNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt);
+            if (spawnNoise < spawnSettings.spawnThreshold)
+            {
+                continue;
+            }
+
+            const float variantNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 1u);
+            const float heightNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 2u);
+
+            int variant = static_cast<int>(variantNoise * static_cast<float>(DogConstants::VARIANT_COUNT));
+            variant = std::clamp(variant, 0, DogConstants::VARIANT_COUNT - 1);
+
+            const float dogHeight = spawnSettings.minHeightPx +
+                                    heightNoise * (spawnSettings.maxHeightPx - spawnSettings.minHeightPx);
+
+            float worldPosX = (static_cast<float>(worldX) + 0.5f) * mTileSize;
+            float worldPosY = (static_cast<float>(worldY) + 0.5f) * mTileSize;
+
+            const float dx = worldPosX - playerPos.x;
+            const float dy = worldPosY - playerPos.y;
+            if ((dx * dx + dy * dy) > maxSpawnDistanceSq)
+            {
+                continue;
+            }
+
+            Dog* dog = new Dog({worldPosX, worldPosY}, variant, dogHeight);
+            dog->setNavMap(&mNavMap);
+            mEnemies.push_back(dog);
+            mCollidableEntities.push_back(dog);
+            spawnedCount++;
+            if (isDebugMode())
+            {
+                const float dist = sqrtf((dx * dx) + (dy * dy));
+                LOG_DEBUG(TextFormat("Enemy spawn[%p] variant=%d pos=(%.1f,%.1f) height=%.1f dist=%.1f",
+                                     dog,
+                                     variant,
+                                     worldPosX,
+                                     worldPosY,
+                                     dogHeight,
+                                     dist));
+            }
+        }
+    }
+
+    if (spawnedCount == 0)
+    {
+        const float fallbackRadius = spawnSettings.maxSpawnDistance * 0.35f;
+        const float noise = mMapGenerator.whiteNoise(startX, startY, spawnSettings.salt + 5u);
+        const float angle = noise * 2.0f * PI;
+        Vector2 fallbackPos = {
+            playerPos.x + cosf(angle) * fallbackRadius,
+            playerPos.y + sinf(angle) * fallbackRadius
+        };
+
+        Dog* dog = new Dog(fallbackPos, 0, DogConstants::DEFAULT_HEIGHT);
+        dog->setNavMap(&mNavMap);
+        mEnemies.push_back(dog);
+        mCollidableEntities.push_back(dog);
+        spawnedCount = 1;
+        LOG_INFO(TextFormat("Enemy fallback spawn[%p] at (%.1f, %.1f)",
+                            dog,
+                            fallbackPos.x,
+                            fallbackPos.y));
+    }
+
+    const double tGenEnd = GetTime();
+    LOG_DEBUG(TextFormat("Generated %d enemies in %.2fms",
+                         spawnedCount,
+                         (tGenEnd - tGenStart) * 1000.0));
+}
+
 void Level1::updateChunkStream(bool forceRebuild)
 {
     if (!mPlayer) return;
@@ -273,6 +431,7 @@ void Level1::updateChunkStream(bool forceRebuild)
     {
         buildProceduralMap();
         generateTrees();
+        generateEnemies();
     }
 }
 
@@ -280,17 +439,15 @@ void Level1::ensureTileTexture()
 {
     if (mTileTextureReady) return;
 
-    Image full = LoadImage(mMapTexturePath);
-    Rectangle region = mTileAtlasRegion;
-    // clamp region to texture bounds
-    region.x = fmaxf(0.0f, fminf(region.x, static_cast<float>(full.width - 1)));
-    region.y = fmaxf(0.0f, fminf(region.y, static_cast<float>(full.height - 1)));
-    region.width = fmaxf(0.0f, fminf(region.width, static_cast<float>(full.width) - region.x));
-    region.height = fmaxf(0.0f, fminf(region.height, static_cast<float>(full.height) - region.y));
-    Image slice = ImageFromImage(full, region);
-    mTileTexture = LoadTextureFromImage(slice);
-    UnloadImage(slice);
-    UnloadImage(full);
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlasTexture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+    if (!atlasTexture)
+    {
+        LOG_ERROR("World atlas texture not loaded; ensureTreeAtlas() succeeded before building tiles.");
+        return;
+    }
+
+    mTileTexture = atlasTexture;
     mTileTextureReady = true;
 }
 

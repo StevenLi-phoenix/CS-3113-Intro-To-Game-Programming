@@ -3,9 +3,9 @@
 
 #include "../lib/Entity.h"
 #include "../lib/ResourceManager.h"
-#include "../constants.h"
 
 namespace TreeConstants {
+    constexpr const char *SPRITE_TAG = "TREE";
     constexpr float BASE_SCALE = 64.0f; // baseline sprite height from atlas
     constexpr float ROOT_COLLIDER_HEIGHT = 16.0f; // Only bottom portion has collision
     constexpr float ROOT_COLLIDER_WIDTH_RATIO = 0.25f; // Root is narrower than visual
