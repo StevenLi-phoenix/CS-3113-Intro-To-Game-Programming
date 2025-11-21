@@ -25,6 +25,7 @@ enum AppStatus { TERMINATED, RUNNING };
 
 // logging helper functions
 void init_log_level(int argc, char *argv[]);
+bool isDebugMode();
 
 // Color Helper Functions
 Color ColorFromHex(const char *hex);

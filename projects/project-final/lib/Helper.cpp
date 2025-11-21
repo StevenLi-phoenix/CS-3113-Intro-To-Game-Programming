@@ -2,6 +2,11 @@
 
 #include <algorithm>
 
+namespace
+{
+    bool gIsDebugMode = false;
+}
+
 Color ColorFromHex(const char *hex)
 {
     // Skip leading '#', if present
@@ -121,10 +126,8 @@ void init_log_level(int argc, char *argv[])
     int debug = 0;
 
     // compile-time macro (optional fallback)
-#ifdef DEBUG
-#if DEBUG == 1
-debug = 1;
-#endif
+#if defined(DEBUG_BUILD) && DEBUG_BUILD == 1
+    debug = 1;
 #endif
 
     // environment variable (overrides compile-time)
@@ -143,12 +146,19 @@ debug = 1;
     // apply log level
     if (debug) {
         SetTraceLogLevel(LOG_DEBUG);
+        gIsDebugMode = true;
         LOG("Log level: DEBUG");
     } else {
         SetTraceLogLevel(LOG_INFO);
+        gIsDebugMode = false;
         LOG("Log level: INFO");
     }
 
+}
+
+bool isDebugMode()
+{
+    return gIsDebugMode;
 }
 
 namespace

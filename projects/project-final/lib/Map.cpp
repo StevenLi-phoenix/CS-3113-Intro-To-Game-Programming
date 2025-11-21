@@ -96,6 +96,15 @@ void Map::build()
     }
 }
 
+void Map::refresh(unsigned int *levelData, int mapColumns, int mapRows, Vector2 origin)
+{
+    mLevelData = levelData;
+    mMapColumns = mapColumns;
+    mMapRows = mapRows;
+    mOrigin = origin;
+    build();
+}
+
 void Map::render()
 {
     // Draw each tile in the map

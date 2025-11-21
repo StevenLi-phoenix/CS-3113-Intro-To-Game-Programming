@@ -183,14 +183,27 @@ std::vector<unsigned int> MapGenerator::generate(const GenerationSettings &setti
 
     std::vector<unsigned int> levelData(settings.columns * settings.rows, 0);
 
-    float scale = std::max(settings.scale, 0.001f);
-    float weightSum = settings.perlinWeight + settings.simplexWeight;
-    if (weightSum <= 0.0f)
+    for (int row = 0; row < settings.rows; ++row)
     {
-        weightSum = 1.0f;
+        for (int col = 0; col < settings.columns; ++col)
+        {
+            const int worldX = settings.startX + col;
+            const int worldY = settings.startY + row;
+            levelData[row * settings.columns + col] = sampleTile(worldX, worldY, settings, maxTileIndex);
+        }
     }
 
-    float zeroBias = std::clamp(settings.zeroBias, 0.0f, 0.999f);
+    return levelData;
+}
+
+unsigned int MapGenerator::sampleTile(int worldX, int worldY, const GenerationSettings &settings, int maxTileIndex) const
+{
+    if (maxTileIndex <= 0)
+    {
+        return 0;
+    }
+
+    const float zeroBias = std::clamp(settings.zeroBias, 0.0f, 0.999f);
     auto sampleToTile = [&](float value) -> unsigned int
     {
         if (value < zeroBias)
@@ -212,59 +225,46 @@ std::vector<unsigned int> MapGenerator::generate(const GenerationSettings &setti
         return static_cast<unsigned int>(tileIndex);
     };
 
+    const float weightSum = std::max(settings.perlinWeight + settings.simplexWeight, 0.0001f);
+
     if (settings.discreteRandom)
     {
-        for (int row = 0; row < settings.rows; ++row)
-        {
-            for (int col = 0; col < settings.columns; ++col)
-            {
-                int sampleX = col + static_cast<int>(settings.offsetX);
-                int sampleY = row + static_cast<int>(settings.offsetY);
-                float noise = whiteNoise(sampleX, sampleY, settings.discreteSalt);
-                levelData[row * settings.columns + col] = sampleToTile(noise);
-            }
-        }
-
-        return levelData;
+        const int sampleX = worldX + static_cast<int>(settings.offsetX);
+        const int sampleY = worldY + static_cast<int>(settings.offsetY);
+        float noise = whiteNoise(sampleX, sampleY, settings.discreteSalt);
+        return sampleToTile(noise);
     }
 
-    for (int row = 0; row < settings.rows; ++row)
+    const double scale = std::max(settings.scale, 0.001f);
+    const double sampleXBase = (static_cast<double>(worldX) + static_cast<double>(settings.offsetX)) / scale;
+    const double sampleYBase = (static_cast<double>(worldY) + static_cast<double>(settings.offsetY)) / scale;
+
+    float amplitude = 1.0f;
+    float frequency = 1.0f;
+    float amplitudeSum = 0.0f;
+    float perlinAccum = 0.0f;
+    float simplexAccum = 0.0f;
+
+    for (int octave = 0; octave < settings.octaves; ++octave)
     {
-        for (int col = 0; col < settings.columns; ++col)
-        {
-            float sampleX = (static_cast<float>(col) + settings.offsetX) / scale;
-            float sampleY = (static_cast<float>(row) + settings.offsetY) / scale;
+        const float px = static_cast<float>(sampleXBase * frequency);
+        const float py = static_cast<float>(sampleYBase * frequency);
 
-            float amplitude = 1.0f;
-            float frequency = 1.0f;
-            float amplitudeSum = 0.0f;
-            float perlinAccum = 0.0f;
-            float simplexAccum = 0.0f;
+        perlinAccum += perlin(px, py) * amplitude;
+        simplexAccum += simplex(px + 37.0f, py + 17.0f) * amplitude;
 
-            for (int octave = 0; octave < settings.octaves; ++octave)
-            {
-                float px = sampleX * frequency;
-                float py = sampleY * frequency;
-
-                perlinAccum += perlin(px, py) * amplitude;
-                simplexAccum += simplex(px + 37.0f, py + 17.0f) * amplitude;
-
-                amplitudeSum += amplitude;
-                amplitude *= settings.persistence;
-                frequency *= settings.lacunarity;
-            }
-
-            if (amplitudeSum > 0.0f)
-            {
-                perlinAccum /= amplitudeSum;
-                simplexAccum /= amplitudeSum;
-            }
-
-            float combined = (perlinAccum * settings.perlinWeight + simplexAccum * settings.simplexWeight) / weightSum;
-            combined = std::clamp(combined, 0.0f, 1.0f);
-            levelData[row * settings.columns + col] = sampleToTile(combined);
-        }
+        amplitudeSum += amplitude;
+        amplitude *= settings.persistence;
+        frequency *= settings.lacunarity;
     }
 
-    return levelData;
+    if (amplitudeSum > 0.0f)
+    {
+        perlinAccum /= amplitudeSum;
+        simplexAccum /= amplitudeSum;
+    }
+
+    float combined = (perlinAccum * settings.perlinWeight + simplexAccum * settings.simplexWeight) / weightSum;
+    combined = std::clamp(combined, 0.0f, 1.0f);
+    return sampleToTile(combined);
 }

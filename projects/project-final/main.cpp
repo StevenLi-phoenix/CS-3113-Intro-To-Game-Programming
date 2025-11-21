@@ -21,6 +21,7 @@
 
 AppStatus gAppStatus = RUNNING;
 float gTimeAccumulator = 0.0f;
+int gFixedStepsThisFrame = 0;
 
 void initialise();
 void processInput();
@@ -82,6 +83,7 @@ void processInput()
 void update()
 {
     float deltaTime = getDeltaTime();
+    gFixedStepsThisFrame = 0;
     gTimeAccumulator += deltaTime;
     if (gController)
     {
@@ -90,16 +92,35 @@ void update()
     AudioManager::update();
     while (gTimeAccumulator >= c::FIXED_TIMESTEP)
     {
+        if (gController && !gShowSettings)
+        {
+            gController->update(c::FIXED_TIMESTEP);
+        }
         if (gLevel1)
         {
             gLevel1->update(c::FIXED_TIMESTEP);
         }
         gTimeAccumulator -= c::FIXED_TIMESTEP;
+        gFixedStepsThisFrame++;
     }
 
     if (gShowSettings && gSettings)
     {
         gSettings->update(deltaTime);
+    }
+
+    if (isDebugMode())
+    {
+        const bool bigDt = deltaTime > 0.033f; // ~30fps
+        const bool manySteps = gFixedStepsThisFrame > 1;
+        if (bigDt || manySteps)
+        {
+            LOG_INFO(TextFormat("Frame spike: dt=%.3f steps=%d accumulator=%.3f", deltaTime, gFixedStepsThisFrame, gTimeAccumulator));
+        }
+        else
+        {
+            LOG_DEBUG(TextFormat("Frame: dt=%.3f steps=%d accumulator=%.3f", deltaTime, gFixedStepsThisFrame, gTimeAccumulator));
+        }
     }
     // LOG("Hello from LOG()");
 }

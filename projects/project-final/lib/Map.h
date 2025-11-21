@@ -52,6 +52,8 @@ public:
     float         getRightBoundary()  const { return mRightBoundary;  };
     float         getTopBoundary()    const { return mTopBoundary;    };
     float         getBottomBoundary() const { return mBottomBoundary; };
+
+    void refresh(unsigned int *levelData, int mapColumns, int mapRows, Vector2 origin);
 };
 
 #endif
