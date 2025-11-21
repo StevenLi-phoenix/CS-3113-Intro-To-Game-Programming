@@ -2,23 +2,51 @@
 
 Map::Map(int mapColumns, int mapRows, unsigned int *levelData,
          const char *textureFilePath, float tileSize, int textureColumns,
-         int textureRows, Vector2 origin, Rectangle atlasRegion) :
+         int textureRows, Vector2 origin, Rectangle atlasRegion,
+         const Texture2D *sharedTexture) :
          mMapColumns {mapColumns}, mMapRows {mapRows},
-         mLevelData {levelData}, mTileSize {tileSize},
-         mTextureColumns {textureColumns}, mTextureRows {textureRows},
-         mOrigin {origin}, mAtlasRegion {atlasRegion},
-         mUseAtlasRegion {atlasRegion.width > 0.0f && atlasRegion.height > 0.0f}
+         mLevelData {levelData}, mTextureAtlas {},
+         mTileSize {tileSize}, mTextureColumns {textureColumns},
+         mTextureRows {textureRows}, mOrigin {origin},
+         mLeftBoundary {0.0f}, mRightBoundary {0.0f},
+         mTopBoundary {0.0f}, mBottomBoundary {0.0f},
+         mAtlasRegion {atlasRegion},
+         mUseAtlasRegion {atlasRegion.width > 0.0f && atlasRegion.height > 0.0f},
+         mOwnsTexture {true}
 {
-    if (mUseAtlasRegion)
+    auto clampRegion = [](Rectangle region, int width, int height)
     {
-        Image fullImage = LoadImage(textureFilePath);
-        Rectangle region = atlasRegion;
-        region.x = fmaxf(0.0f, fminf(region.x, static_cast<float>(fullImage.width - 1)));
-        region.y = fmaxf(0.0f, fminf(region.y, static_cast<float>(fullImage.height - 1)));
-        float maxWidth = static_cast<float>(fullImage.width) - region.x;
-        float maxHeight = static_cast<float>(fullImage.height) - region.y;
+        region.x = fmaxf(0.0f, fminf(region.x, static_cast<float>(width - 1)));
+        region.y = fmaxf(0.0f, fminf(region.y, static_cast<float>(height - 1)));
+        float maxWidth = static_cast<float>(width) - region.x;
+        float maxHeight = static_cast<float>(height) - region.y;
         region.width  = fmaxf(0.0f, fminf(region.width,  maxWidth));
         region.height = fmaxf(0.0f, fminf(region.height, maxHeight));
+        return region;
+    };
+
+    if (sharedTexture)
+    {
+        if (mUseAtlasRegion)
+        {
+            Image atlasImage = LoadImageFromTexture(*sharedTexture);
+            Rectangle region = clampRegion(mAtlasRegion, atlasImage.width, atlasImage.height);
+            Image slice = ImageFromImage(atlasImage, region);
+            mTextureAtlas = LoadTextureFromImage(slice);
+            UnloadImage(slice);
+            UnloadImage(atlasImage);
+            mOwnsTexture = true;
+        }
+        else
+        {
+            mTextureAtlas = *sharedTexture;
+            mOwnsTexture = false;
+        }
+    }
+    else if (mUseAtlasRegion)
+    {
+        Image fullImage = LoadImage(textureFilePath);
+        Rectangle region = clampRegion(mAtlasRegion, fullImage.width, fullImage.height);
         Image slice = ImageFromImage(fullImage, region);
         mTextureAtlas = LoadTextureFromImage(slice);
         UnloadImage(slice);
@@ -34,7 +62,7 @@ Map::Map(int mapColumns, int mapRows, unsigned int *levelData,
 
 Map::~Map()
 {
-    if (mTextureAtlas.id > 0)
+    if (mOwnsTexture && mTextureAtlas.id > 0)
     {
         UnloadTexture(mTextureAtlas);
     }
