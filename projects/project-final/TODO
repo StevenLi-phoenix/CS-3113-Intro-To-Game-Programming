@@ -18,17 +18,9 @@
 [x] Add UI for health (floating bar)
 [x] Add UI for arrows (throwing branch)
 [x] Add UI for inventory
-[ ] Add UI for quest log
+[x] Add UI for quest log
 
-Add UI for quest log
-Survive and find the tablewithmap to trigger the next level
-Create new class tablewithmap that use texture of table with map
-Create new class compass that use texture of compass - the compass will show the direction to tablewithmap when held in inventory slot
-player are not allowed to press z or throw branches while holding the compass
-slot 1 should now be axes that can trigger x melee attack
-slot 2 should now be compass that can show the direction to tablewithmap
-slot 3 should now be a branch that can be thrown enemy for 1 damage (z should also do 1 damage)
-while either item is not held/selected, the player should not be able to perform that action
+Quest log + compass/table objective implemented with gated actions and level trigger.
 
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
 

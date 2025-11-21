@@ -35,7 +35,7 @@ namespace branch {
     inline constexpr float THROW_SPEED = 520.0f;
     inline constexpr float THROW_RANGE = 520.0f;
     inline constexpr float MIN_THROW_DISTANCE = 24.0f;
-    inline constexpr float PROJECTILE_DAMAGE = 2.0f;
+    inline constexpr float PROJECTILE_DAMAGE = 1.0f;
     inline constexpr int MAX_HELD = 12;
     inline constexpr int DEFAULT_INITIAL = 5;
     inline constexpr int DEFAULT_BOX_REWARD = 4;
@@ -57,4 +57,3 @@ namespace lighting {
 }
 
 #endif
-

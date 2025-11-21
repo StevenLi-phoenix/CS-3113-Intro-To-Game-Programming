@@ -10,11 +10,14 @@
 #include "player.h"
 #include "tree.h"
 #include "dog.h"
+#include "compass.h"
+#include "table_with_map.h"
 #include "music_note.h"
 #include "../lib/Enemy.h"
 #include "../lib/NavMap.h"
 #include <array>
 #include <memory>
+#include <string>
 #include <vector>
 #include <unordered_map>
 #include <utility>
@@ -22,6 +25,7 @@
 class Branch;
 class Box;
 class Rock;
+class GoldCoin;
 
 // Simple test level scene. Add real game logic later.
 class Level1 final : public Scene
@@ -82,6 +86,9 @@ private:
     void tryMeleeAttack();
     Enemy* findNearestMeleeTarget(float range) const;
     void applyMeleeDamage(Enemy *target);
+    void spawnGoldCoin(const Vector2 &position);
+    void updateGoldCoins();
+    void collectGoldCoin(GoldCoin *coin);
     void resolveBranchImpacts();
     void cleanupBranches();
     void resetBranchInventory();
@@ -91,6 +98,7 @@ private:
     void updateInventoryUI(float deltaTime);
     void drawInventoryOverlay();
     void syncBranchSlot();
+    void syncGoldSlot();
     void updateTreesForStream();
     void updateBoxesForStream();
     void spawnBoxesForChunk(const std::pair<int, int> &chunk,
@@ -101,11 +109,21 @@ private:
     void collectBox(Box *box);
     void clearBoxes();
     void clearBranches();
+    void clearGoldCoins(bool resetCount = true);
     void cleanupInactiveTrees();
     void updateTutorialOverlay(float deltaTime);
     void drawTutorialOverlay() const;
     bool tutorialInputDetected() const;
     float tutorialOverlayAlpha() const;
+    void spawnQuestTarget();
+    void spawnCoinsForQuest(int count);
+    int requiredGold() const;
+    void updateQuestState();
+    void drawQuestLog() const;
+    void drawCompassIndicator();
+    bool isBranchSelected() const;
+    bool isCompassSelected() const;
+    bool isAxeSelected() const;
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -130,6 +148,9 @@ private:
     std::vector<MusicNote*> mMusicNotes;
     std::vector<Branch*> mBranches;
     std::vector<Box*> mBoxes;
+    std::vector<GoldCoin*> mGoldCoins;
+    std::unique_ptr<TableWithMap> mTable;
+    std::unique_ptr<Compass> mCompassUI;
     Vector2 mPlayerSpawnPosition = c::ORIGIN;
     unsigned int mWorldSeed = 1337u;
     MapGenerator mMapGenerator;
@@ -169,6 +190,7 @@ private:
 
     int mBranchInventory = branch::DEFAULT_INITIAL;
     int mInitialBranchCount = branch::DEFAULT_INITIAL;
+    int mDifficultyIndex = 1;
     int mBranchCapacity = branch::MAX_HELD;
     int mBoxBranchReward = branch::DEFAULT_BOX_REWARD;
     float mMeleeTimer = 0.0f;
@@ -178,7 +200,14 @@ private:
 
     std::unique_ptr<Inventory> mInventory;
     std::unique_ptr<InventoryBar> mInventoryBar;
-    size_t mBranchSlotIndex = 0;
+    size_t mAxeSlotIndex = 0;
+    size_t mCompassSlotIndex = 1;
+    size_t mBranchSlotIndex = 2;
+    size_t mGoldSlotIndex = 3;
+    int mGoldCount = 0;
+
+    std::string mQuestDescription = "Survive and find the table with map";
+    bool mQuestComplete = false;
 
     bool mTutorialOverlayVisible = false;
     bool mTutorialOverlayDismissed = false;

@@ -9,7 +9,14 @@
 #include "../lib/ui/InventoryBar.h"
 #include "branch.h"
 #include "box.h"
+#include "compass.h"
+#include "goldcoin.h"
 #include "rock.h"
+#include "table_with_map.h"
+#include "LevelSelectScene.h"
+#include "../lib/SceneController.h"
+
+extern SceneController* gSceneController;
 
 namespace
 {
@@ -99,10 +106,13 @@ namespace
     };
 
     constexpr const char *BRANCH_SLOT_ICON_TAG = "BRANCH";
+    constexpr const char *GOLD_SLOT_ICON_TAG = "GOLDCOIN";
+    constexpr int GOLD_REQUIRED[branch::DIFFICULTY_PRESET_COUNT] = {0, 3, 5, 8};
+    constexpr float GOLD_PICKUP_RADIUS = 42.0f;
 
     namespace tutorial
     {
-        constexpr float AUTO_HIDE_SECONDS = 5.0f;
+        constexpr float AUTO_HIDE_SECONDS = 10.0f;
         constexpr float FADE_SECONDS = 1.0f;
         constexpr int MAX_GAMEPADS = 4;
         constexpr const char *TITLE = "Getting Started";
@@ -110,7 +120,8 @@ namespace
             "WASD or Arrow Keys to move your character",
             "Left click anywhere to toss a branch at that spot",
             "Press Z to auto-throw at the nearest enemy, X for melee",
-            "Press F1 for settings, rebinding, and tips"
+            "Press F1 for settings, rebinding, and tips",
+            "Seek the table with a map to reach the next level"
         };
         constexpr size_t LINE_COUNT = sizeof(LINES) / sizeof(LINES[0]);
     }
@@ -127,6 +138,14 @@ void Level1::initialise()
     ensureMusicNotes();
     resetBranchInventory();
     initialiseInventoryUI();
+    spawnQuestTarget();
+    if (!mCompassUI)
+    {
+        mCompassUI = std::make_unique<Compass>();
+    }
+    mCompassUI->setTarget(mTable.get());
+    mCompassUI->setPlayer(mPlayer);
+    mCompassUI->setCamera(&mCamera);
     mSkipPlayerChunkForNextEnemySpawn = true;
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
@@ -155,6 +174,7 @@ void Level1::update(float deltaTime)
     cleanupBranches();
     cleanupInactiveTrees();
     updateBoxRewards();
+    updateGoldCoins();
     updatePlayerAttack(deltaTime);
     updateMeleeTimer(deltaTime);
 
@@ -162,6 +182,11 @@ void Level1::update(float deltaTime)
     updateGameOverState();
     updateInventoryUI(deltaTime);
     updateTutorialOverlay(deltaTime);
+    if (mCompassUI)
+    {
+        mCompassUI->update(deltaTime, mPlayer, mMap, mCollidableEntities);
+    }
+    updateQuestState();
 }
 
 void Level1::spawnPlayer()
@@ -298,6 +323,8 @@ void Level1::render()
 
     drawPlayerHUD();
     drawInventoryOverlay();
+    drawCompassIndicator();
+    drawQuestLog();
     drawTutorialOverlay();
     drawGameOverOverlay();
     DrawFPS(0, 60);
@@ -308,9 +335,12 @@ void Level1::shutdown()
     LOG_INFO("Level1 shutdown");
     mInventoryBar.reset();
     mInventory.reset();
+    mCompassUI.reset();
+    mTable.reset();
     clearMusicNotes();
     clearEnemies();
     clearBranches();
+    clearGoldCoins();
     clearBoxes();
     clearTrees();
     clearRocks();
@@ -410,6 +440,17 @@ void Level1::cleanupInactiveTrees()
 void Level1::clearBranches()
 {
     destroyOwnedEntities(mBranches, mCollidableEntities);
+}
+
+void Level1::clearGoldCoins(bool resetCount)
+{
+    destroyOwnedEntities(mGoldCoins, mCollidableEntities);
+    mGoldCoins.clear();
+    if (resetCount)
+    {
+        mGoldCount = 0;
+        syncGoldSlot();
+    }
 }
 
 void Level1::clearBoxes()
@@ -616,6 +657,10 @@ void Level1::handleMouseBranchInput()
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
     {
+        if (!isBranchSelected() || isCompassSelected())
+        {
+            return;
+        }
         Vector2 cursor = GetMousePosition();
         Vector2 worldTarget = GetScreenToWorld2D(cursor, mCamera);
         tryThrowBranchAt(worldTarget);
@@ -739,6 +784,66 @@ void Level1::addBranches(int amount)
 
     mBranchInventory = std::clamp(mBranchInventory + amount, 0, mBranchCapacity);
     syncBranchSlot();
+}
+
+void Level1::spawnGoldCoin(const Vector2 &position)
+{
+    GoldCoin *coin = new GoldCoin(position);
+    mGoldCoins.push_back(coin);
+    mCollidableEntities.push_back(coin);
+}
+
+void Level1::updateGoldCoins()
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    const float radiusSq = GOLD_PICKUP_RADIUS * GOLD_PICKUP_RADIUS;
+    auto it = mGoldCoins.begin();
+    while (it != mGoldCoins.end())
+    {
+        GoldCoin *coin = *it;
+        if (!coin || !coin->getIsActive())
+        {
+            if (coin)
+            {
+                removeCollidableEntity(mCollidableEntities, coin);
+                delete coin;
+            }
+            it = mGoldCoins.erase(it);
+            continue;
+        }
+
+        Vector2 diff = {
+            coin->getPosition().x - mPlayer->getPosition().x,
+            coin->getPosition().y - mPlayer->getPosition().y
+        };
+        const float distSq = diff.x * diff.x + diff.y * diff.y;
+        if (distSq <= radiusSq)
+        {
+            collectGoldCoin(coin);
+            it = mGoldCoins.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void Level1::collectGoldCoin(GoldCoin *coin)
+{
+    if (!coin)
+    {
+        return;
+    }
+    coin->setIsActive(false);
+    removeCollidableEntity(mCollidableEntities, coin);
+    delete coin;
+    ++mGoldCount;
+    syncGoldSlot();
 }
 
 void Level1::updateMeleeTimer(float deltaTime)
@@ -1084,16 +1189,63 @@ float Level1::tutorialOverlayAlpha() const
 
 void Level1::initialiseInventoryUI()
 {
-    mInventory = std::make_unique<Inventory>(Inventory::DEFAULT_SLOT_COUNT);
-    mBranchSlotIndex = 0;
+    const size_t slotCount = 4;
+    mInventory = std::make_unique<Inventory>(slotCount);
+    mAxeSlotIndex = 0;
+    mCompassSlotIndex = 1;
+    mBranchSlotIndex = 2;
+    mGoldSlotIndex = 3;
+    mGoldCount = 0;
+
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlas = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+
+    auto applyIcon = [&](InventorySlot &slot, const char *tag)
+    {
+        if (!atlas)
+        {
+            return;
+        }
+        Rectangle rect = rm.getSpriteRect(tag);
+        if (rect.width > 0.0f && rect.height > 0.0f)
+        {
+            slot.icon = atlas;
+            slot.iconSource = rect;
+        }
+    };
+
+    InventorySlot axeSlot;
+    axeSlot.id = "axe";
+    axeSlot.label = "Axe";
+    axeSlot.iconTint = Fade(WHITE, 0.9f);
+    axeSlot.quantity = 1;
+    applyIcon(axeSlot, "SWORD");
+    mInventory->setSlot(mAxeSlotIndex, axeSlot);
+
+    InventorySlot compassSlot;
+    compassSlot.id = "compass";
+    compassSlot.label = "Compass";
+    compassSlot.iconTint = Fade(WHITE, 0.95f);
+    compassSlot.quantity = 1;
+    applyIcon(compassSlot, "COMPASS");
+    mInventory->setSlot(mCompassSlotIndex, compassSlot);
 
     InventorySlot branchSlot;
     branchSlot.id = "branches";
     branchSlot.label = "Branches";
     branchSlot.iconTint = DARKGREEN;
     branchSlot.quantity = mBranchInventory;
-
+    applyIcon(branchSlot, BRANCH_SLOT_ICON_TAG);
     mInventory->setSlot(mBranchSlotIndex, branchSlot);
+
+    InventorySlot goldSlot;
+    goldSlot.id = "goldcoin";
+    goldSlot.label = "Gold";
+    goldSlot.iconTint = GOLD;
+    goldSlot.quantity = mGoldCount;
+    applyIcon(goldSlot, GOLD_SLOT_ICON_TAG);
+    mInventory->setSlot(mGoldSlotIndex, goldSlot);
+
     mInventory->setSelectedIndex(mBranchSlotIndex);
 
     if (!mInventoryBar)
@@ -1106,6 +1258,7 @@ void Level1::initialiseInventoryUI()
     }
 
     syncBranchSlot();
+    syncGoldSlot();
 }
 
 void Level1::syncBranchSlot()
@@ -1159,6 +1312,242 @@ void Level1::syncBranchSlot()
     mInventory->setSlot(mBranchSlotIndex, slot);
 }
 
+void Level1::syncGoldSlot()
+{
+    if (!mInventory)
+    {
+        return;
+    }
+
+    if (mInventory->getSlotCount() == 0)
+    {
+        return;
+    }
+
+    if (mGoldSlotIndex >= mInventory->getSlotCount())
+    {
+        mGoldSlotIndex = mInventory->getSlotCount() - 1;
+    }
+
+    InventorySlot slot = mInventory->getSlot(mGoldSlotIndex);
+    slot.id = "goldcoin";
+    if (slot.label.empty())
+    {
+        slot.label = "Gold";
+    }
+    slot.iconTint = GOLD;
+    slot.quantity = mGoldCount;
+
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlas = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+    if (atlas)
+    {
+        Rectangle iconRect = rm.getSpriteRect(GOLD_SLOT_ICON_TAG);
+        if (iconRect.width > 0.0f && iconRect.height > 0.0f)
+        {
+            slot.icon = atlas;
+            slot.iconSource = iconRect;
+        }
+        else
+        {
+            slot.icon = nullptr;
+            slot.iconSource = {0.0f, 0.0f, 0.0f, 0.0f};
+        }
+    }
+    else
+    {
+        slot.icon = nullptr;
+        slot.iconSource = {0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    mInventory->setSlot(mGoldSlotIndex, slot);
+}
+
+bool Level1::isBranchSelected() const
+{
+    return mInventory && mInventory->getSelectedIndex() == mBranchSlotIndex;
+}
+
+bool Level1::isCompassSelected() const
+{
+    return mInventory && mInventory->getSelectedIndex() == mCompassSlotIndex;
+}
+
+bool Level1::isAxeSelected() const
+{
+    return mInventory && mInventory->getSelectedIndex() == mAxeSlotIndex;
+}
+
+void Level1::spawnQuestTarget()
+{
+    mQuestComplete = false;
+    clearGoldCoins(false);
+
+    if (!mTable)
+    {
+        mTable = std::make_unique<TableWithMap>();
+    }
+
+    const Vector2 basePos = mPlayer ? mPlayer->getPosition() : mPlayerSpawnPosition;
+    const float chunkWorld = static_cast<float>(mChunkSize) * mTileSize;
+    const int minChunks = 4 + mDifficultyIndex; // at least 4 chunks (256 tiles) away, further on harder presets
+    const float minDistance = chunkWorld * static_cast<float>(minChunks);
+    const float noise = mMapGenerator.whiteNoise(static_cast<int>(basePos.x), static_cast<int>(basePos.y), mWorldSeed);
+    const float angle = noise * 2.0f * PI;
+    Vector2 dir = { cosf(angle), sinf(angle) };
+    if (Vector2LengthSqr(dir) < 0.0001f)
+    {
+        dir = { 1.0f, 0.0f };
+    }
+    dir = Vector2Normalize(dir);
+    Vector2 targetPos = {
+        basePos.x + dir.x * minDistance,
+        basePos.y + dir.y * minDistance
+    };
+    mTable->setPosition(targetPos);
+    mTable->setIsActive(true);
+    mTable->setCanCollide(true);
+
+    const bool alreadyPresent = std::find(mCollidableEntities.begin(),
+                                          mCollidableEntities.end(),
+                                          mTable.get()) != mCollidableEntities.end();
+    if (!alreadyPresent)
+    {
+        mCollidableEntities.push_back(mTable.get());
+    }
+
+    const int goldNeeded = requiredGold();
+    spawnCoinsForQuest(goldNeeded);
+}
+
+int Level1::requiredGold() const
+{
+    const int idx = std::clamp(mDifficultyIndex, 0, branch::DIFFICULTY_PRESET_COUNT - 1);
+    return GOLD_REQUIRED[idx];
+}
+
+void Level1::spawnCoinsForQuest(int count)
+{
+    if (!mTable || count <= 0)
+    {
+        return;
+    }
+
+    const Vector2 tablePos = mTable->getPosition();
+    for (int i = 0; i < count; ++i)
+    {
+        const unsigned int salt = mWorldSeed + static_cast<unsigned int>(i * 17 + 5);
+        const float noise = mMapGenerator.whiteNoise(static_cast<int>(tablePos.x) + i,
+                                                     static_cast<int>(tablePos.y) + i * 3,
+                                                     salt);
+        const float angle = noise * 2.0f * PI;
+        const float radius = 60.0f + 22.0f * static_cast<float>(i % 4);
+        Vector2 pos = {
+            tablePos.x + cosf(angle) * radius,
+            tablePos.y + sinf(angle) * radius
+        };
+        spawnGoldCoin(pos);
+    }
+}
+
+void Level1::updateQuestState()
+{
+    if (mQuestComplete || !mPlayer || !mTable)
+    {
+        return;
+    }
+
+    const int goldNeeded = requiredGold();
+    if (goldNeeded > 0 && mGoldCount < goldNeeded)
+    {
+        return;
+    }
+
+    if (mPlayer->intersects(*mTable))
+    {
+        mQuestComplete = true;
+        if (gSceneController)
+        {
+            gSceneController->requestSceneChange(std::make_unique<LevelSelectScene>());
+        }
+    }
+}
+
+void Level1::drawQuestLog() const
+{
+    const float panelWidth = 340.0f;
+    const float panelHeight = 116.0f;
+    Rectangle panel = {
+        16.0f,
+        16.0f,
+        panelWidth,
+        panelHeight
+    };
+    DrawRectangleRounded(panel, 0.2f, 6, Fade(BLACK, 0.55f));
+    DrawRectangleLinesEx(panel, 2.0f, Fade(WHITE, 0.4f));
+
+    const char *title = "Quest Log";
+    const int titleSize = 20;
+    const int titleWidth = MeasureText(title, titleSize);
+    DrawText(title,
+             static_cast<int>(panel.x + 12.0f),
+             static_cast<int>(panel.y + 10.0f),
+             titleSize,
+             RAYWHITE);
+
+    const int goldNeeded = requiredGold();
+    const bool hasEnoughGold = goldNeeded <= 0 || mGoldCount >= goldNeeded;
+    const std::string status = mQuestComplete ? "Complete" : (hasEnoughGold ? "Ready" : "Collect");
+    const Color statusColor = mQuestComplete ? LIME : (hasEnoughGold ? SKYBLUE : YELLOW);
+    const int statusSize = 18;
+    DrawText(status.c_str(),
+             static_cast<int>(panel.x + panel.width - 84.0f),
+             static_cast<int>(panel.y + 12.0f),
+             statusSize,
+             statusColor);
+
+    const int descSize = 18;
+    const std::string line = mQuestDescription + (mQuestComplete ? " - Done" : "");
+    DrawText(line.c_str(),
+             static_cast<int>(panel.x + 12.0f),
+             static_cast<int>(panel.y + 40.0f),
+             descSize,
+             Fade(LIGHTGRAY, 0.95f));
+
+    if (goldNeeded > 0)
+    {
+        const std::string goldLine = TextFormat("Gold: %d / %d to activate", mGoldCount, goldNeeded);
+        DrawText(goldLine.c_str(),
+                 static_cast<int>(panel.x + 12.0f),
+                 static_cast<int>(panel.y + 64.0f),
+                 16,
+                 Fade(GOLD, 0.95f));
+    }
+
+    const std::string hint = goldNeeded > 0
+        ? "Bring enough gold, then touch the table"
+        : "Find the table with map";
+    DrawText(hint.c_str(),
+             static_cast<int>(panel.x + 12.0f),
+             static_cast<int>(panel.y + 88.0f),
+             16,
+             Fade(GRAY, 0.9f));
+}
+
+void Level1::drawCompassIndicator()
+{
+    if (!mCompassUI)
+    {
+        return;
+    }
+    const bool shouldShow = isCompassSelected() && !mQuestComplete;
+    mCompassUI->setIsActive(shouldShow);
+    if (shouldShow)
+    {
+        mCompassUI->render();
+    }
+}
+
 void Level1::updateGameOverState()
 {
     if (!mPlayer)
@@ -1191,12 +1580,20 @@ void Level1::handlePrimaryAttackAction()
     {
         return;
     }
+    if (!isBranchSelected() || isCompassSelected())
+    {
+        return;
+    }
     tryThrowBranchAtEnemy();
 }
 
 void Level1::handleMeleeAttackAction()
 {
     if (mIsGameOver)
+    {
+        return;
+    }
+    if (!isAxeSelected())
     {
         return;
     }
@@ -1212,9 +1609,15 @@ void Level1::onDifficultyPresetChanged(int index)
     }
 
     const int clamped = std::clamp(index, 0, presetCount - 1);
+    mDifficultyIndex = clamped;
     mInitialBranchCount = std::clamp(branch::PRESET_INITIALS[clamped], 0, branch::MAX_HELD);
     mBoxBranchReward = std::max(1, branch::PRESET_BOX_REWARDS[clamped]);
     resetBranchInventory();
+    spawnQuestTarget();
+    if (mCompassUI)
+    {
+        mCompassUI->setTarget(mTable.get());
+    }
 }
 
 void Level1::resetPlayerForRetry()
@@ -1234,6 +1637,14 @@ void Level1::resetPlayerForRetry()
     mIsGameOver = false;
     clearBranches();
     resetBranchInventory();
+    clearGoldCoins(true);
+
+    spawnQuestTarget();
+    if (mCompassUI)
+    {
+        mCompassUI->setTarget(mTable.get());
+        mCompassUI->setPlayer(mPlayer);
+    }
 
     mSkipPlayerChunkForNextEnemySpawn = true;
     updateChunkStream(true);
