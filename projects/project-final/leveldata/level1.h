@@ -19,6 +19,7 @@ public:
     void update(float deltaTime) override;
     void render() override;
     void shutdown() override;
+    Player* getPlayer() override { return mPlayer; }
 
     Player* getPlayer() const { return mPlayer; }
 

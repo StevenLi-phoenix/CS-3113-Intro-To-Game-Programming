@@ -13,11 +13,11 @@
 #endif
 
 #include "constants.h"
-#include "leveldata/Settings.h"
 #include "leveldata/level1.h"
 #include "lib/Helper.h"
-#include "lib/Controller.h"
+#include "lib/SceneController.h"
 #include "lib/Music.h"
+#include <memory>
 
 AppStatus gAppStatus = RUNNING;
 float gTimeAccumulator = 0.0f;
@@ -29,10 +29,7 @@ void update();
 void render();
 void shutdown();
 
-Controller* gController = nullptr;
-Settings* gSettings = nullptr;
-Level1* gLevel1 = nullptr;
-bool gShowSettings = false;
+SceneController* gSceneController = nullptr;
 
 void initialise()
 {
@@ -40,43 +37,17 @@ void initialise()
     SetTargetFPS(c::FPS);
     AudioManager::init();
 
-    gLevel1 = new Level1();
-    gLevel1->initialise();
-
-    Player* levelPlayer = gLevel1->getPlayer();
-    gController = new Controller();
-    if (levelPlayer)
-    {
-        gController->bindAction("move_left", KEY_A, Controller::InputEvent::Held, [levelPlayer](float) {
-            levelPlayer->moveLeft();
-        });
-        gController->bindAction("move_right", KEY_D, Controller::InputEvent::Held, [levelPlayer](float) {
-            levelPlayer->moveRight();
-        });
-        gController->bindAction("move_up", KEY_W, Controller::InputEvent::Held, [levelPlayer](float) {
-            levelPlayer->moveUp();
-        });
-        gController->bindAction("move_down", KEY_S, Controller::InputEvent::Held, [levelPlayer](float) {
-            levelPlayer->moveDown();
-        });
-    }
-
-    gSettings = new Settings(levelPlayer, gController);
-    gSettings->initialise();
+    gSceneController = new SceneController();
+    gSceneController->initialise(std::make_unique<Level1>());
 }
 
 void processInput()
 {
     if (WindowShouldClose()) gAppStatus = TERMINATED;
 
-    if (IsKeyPressed(KEY_F1) && gSettings)
+    if (IsKeyPressed(KEY_F1) && gSceneController)
     {
-        gShowSettings = !gShowSettings;
-        gSettings->setVisible(gShowSettings);
-        if (gController)
-        {
-            gController->setInputCaptureActive(gShowSettings);
-        }
+        gSceneController->toggleSettings();
     }
 }
 
@@ -85,28 +56,24 @@ void update()
     float deltaTime = getDeltaTime();
     gFixedStepsThisFrame = 0;
     gTimeAccumulator += deltaTime;
-    if (gController)
+    if (gSceneController)
     {
-        gController->update(deltaTime);
+        gSceneController->updateInput(deltaTime);
     }
     AudioManager::update();
     while (gTimeAccumulator >= c::FIXED_TIMESTEP)
     {
-        if (gController && !gShowSettings)
+        if (gSceneController)
         {
-            gController->update(c::FIXED_TIMESTEP);
-        }
-        if (gLevel1)
-        {
-            gLevel1->update(c::FIXED_TIMESTEP);
+            gSceneController->updateFixed(c::FIXED_TIMESTEP);
         }
         gTimeAccumulator -= c::FIXED_TIMESTEP;
         gFixedStepsThisFrame++;
     }
 
-    if (gShowSettings && gSettings)
+    if (gSceneController)
     {
-        gSettings->update(deltaTime);
+        gSceneController->updateFrame(deltaTime);
     }
 
     if (isDebugMode())
@@ -129,14 +96,9 @@ void render()
 {
     BeginDrawing();
     ClearBackground(RAYWHITE);
-    if (gLevel1)
+    if (gSceneController)
     {
-        gLevel1->render();
-    }
-
-    if (gShowSettings && gSettings)
-    {
-        gSettings->render();
+        gSceneController->render();
     }
     EndDrawing();
 }
@@ -144,15 +106,11 @@ void render()
 void shutdown()
 {
     CloseWindow();
-    delete gSettings;
-    gSettings = nullptr;
-    delete gController;
-    gController = nullptr;
-    if (gLevel1)
+    if (gSceneController)
     {
-        gLevel1->shutdown();
-        delete gLevel1;
-        gLevel1 = nullptr;
+        gSceneController->shutdown();
+        delete gSceneController;
+        gSceneController = nullptr;
     }
     AudioManager::shutdown();
 }

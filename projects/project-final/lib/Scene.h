@@ -1,7 +1,9 @@
-#include "Entity.h"
-
 #ifndef SCENE_H
 #define SCENE_H
+
+#include "Entity.h"
+
+class Player;
 
 class Scene 
 {
@@ -28,6 +30,7 @@ public:
     virtual void update(float deltaTime) = 0;
     virtual void render() = 0;
     virtual void shutdown() = 0;
+    virtual Player* getPlayer() { return nullptr; }
 
     void resetCamera();
     void setCameraFollowEnabled(bool enabled);

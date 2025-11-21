@@ -51,11 +51,11 @@ void Level1::render()
     if (mPlayer)
     {
         mPlayer->render();
-        mPlayer->displayCollider();
     }
     if (isDebugMode())
     {
         drawChunkDebug();
+        mPlayer->displayCollider();
     }
     EndMode2D();
     DrawFPS(10, 10);
