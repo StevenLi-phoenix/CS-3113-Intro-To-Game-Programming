@@ -1,5 +1,6 @@
 #include "Scene.h"
 #include "../constants.h"
+#include <algorithm>
 #include <cmath>
 
 Scene::Scene() : mOrigin{{}}
@@ -37,6 +38,7 @@ void Scene::updateCameraTarget(Vector2 target, float deltaTime)
 void Scene::setPaused(bool paused)
 {
     mPaused = paused;
+    mDayNightCycle.setPaused(paused);
 }
 
 void Scene::setChunkSize(int size)
@@ -69,4 +71,57 @@ bool Scene::updateStreamChunk(const Vector2 &worldPos, float tileSize, bool forc
     mChunkStartX = (mCurrentChunkX - radius) * mChunkSize;
     mChunkStartY = (mCurrentChunkY - radius) * mChunkSize;
     return true;
+}
+
+void Scene::advanceDayNightCycle(float deltaTime)
+{
+    mDayNightCycle.update(deltaTime);
+}
+
+void Scene::initialiseLightingShader()
+{
+    if (mLightingReady)
+    {
+        return;
+    }
+    mLightingReady = mLightingShader.load("assets/shaders/lighting.vs", "assets/shaders/lighting.fs");
+}
+
+ShaderProgram* Scene::getLightingShader()
+{
+    if (!mLightingReady)
+    {
+        return nullptr;
+    }
+    return &mLightingShader;
+}
+
+float Scene::getTimeOfDay() const
+{
+    return mDayNightCycle.getNormalizedTime();
+}
+
+float Scene::getAmbientLight() const
+{
+    return mDayNightCycle.getAmbientIntensity();
+}
+
+float Scene::getNightFactor() const
+{
+    return mDayNightCycle.getNightFactor();
+}
+
+float Scene::getShadowFactor() const
+{
+    return mDayNightCycle.getShadowFactor();
+}
+
+bool Scene::isNightTime() const
+{
+    return mDayNightCycle.isNight();
+}
+
+void Scene::setLightingPaused(bool paused)
+{
+    mDayNightCycle.setPaused(paused);
 }

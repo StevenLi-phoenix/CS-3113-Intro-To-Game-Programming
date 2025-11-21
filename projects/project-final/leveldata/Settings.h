@@ -18,7 +18,10 @@ public:
     Settings(Player* player,
              Controller* controller,
              std::function<void()> retryCallback = {},
-             std::function<void(KeyboardKey)> retryKeyChanged = {});
+             std::function<void(KeyboardKey)> retryKeyChanged = {},
+             std::function<void()> throwBranchCallback = {},
+             std::function<void(int)> difficultyChanged = {},
+             std::function<void()> meleeAttackCallback = {});
     ~Settings() override = default;
 
     void initialise() override;
@@ -68,6 +71,9 @@ private:
 
     std::function<void()> mRetryCallback;
     std::function<void(KeyboardKey)> mRetryKeyCallback;
+    std::function<void()> mThrowBranchCallback;
+    std::function<void(int)> mDifficultyCallback;
+    std::function<void()> mMeleeCallback;
 
     std::vector<UIBase*> mUIElements;
 

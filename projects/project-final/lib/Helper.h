@@ -26,6 +26,8 @@ class Entity;
 
 enum AppStatus { TERMINATED, RUNNING };
 
+extern AppStatus gAppStatus;
+
 // logging helper functions
 void init_log_level(int argc, char *argv[]);
 bool isDebugMode();

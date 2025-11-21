@@ -13,7 +13,7 @@
 #endif
 
 #include "constants.h"
-#include "leveldata/level1.h"
+#include "leveldata/MainMenuScene.h"
 #include "lib/Helper.h"
 #include "lib/SceneController.h"
 #include "lib/Music.h"
@@ -38,7 +38,7 @@ void initialise()
     AudioManager::init();
 
     gSceneController = new SceneController();
-    gSceneController->initialise(std::make_unique<Level1>());
+    gSceneController->initialise(std::make_unique<MainMenuScene>());
 }
 
 void processInput()

@@ -2,6 +2,8 @@
 #define SCENE_H
 
 #include "Entity.h"
+#include "ShaderProgram.h"
+#include "DayNightCycle.h"
 
 class Player;
 
@@ -22,6 +24,10 @@ protected:
     int mCurrentChunkY = 0;
     int mChunkStartX = 0;
     int mChunkStartY = 0;
+
+    DayNightCycle mDayNightCycle;
+    ShaderProgram mLightingShader;
+    bool mLightingReady = false;
     
 public:
     Scene();
@@ -35,6 +41,9 @@ public:
     virtual Player* getPlayer() { return nullptr; }
     virtual void handleRetryAction() {}
     virtual void onRetryBindingChanged(KeyboardKey /*key*/) {}
+    virtual void handlePrimaryAttackAction() {}
+    virtual void onDifficultyPresetChanged(int /*index*/) {}
+    virtual void handleMeleeAttackAction() {}
 
     void resetCamera();
     void setCameraFollowEnabled(bool enabled);
@@ -43,6 +52,16 @@ public:
     void setCameraFollowSpeed(float speed) { mCameraFollowSpeed = speed; }
     void setPaused(bool paused);
     bool isPaused() const { return mPaused; }
+
+    void advanceDayNightCycle(float deltaTime);
+    void initialiseLightingShader();
+    ShaderProgram* getLightingShader();
+    float getTimeOfDay() const;
+    float getAmbientLight() const;
+    float getNightFactor() const;
+    float getShadowFactor() const;
+    bool isNightTime() const;
+    void setLightingPaused(bool paused);
 
     // chunk streaming
     void setChunkSize(int size);

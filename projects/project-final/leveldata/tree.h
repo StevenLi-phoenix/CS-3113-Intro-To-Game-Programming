@@ -1,7 +1,7 @@
 #ifndef TREE_H
 #define TREE_H
 
-#include "../lib/Entity.h"
+#include "../lib/Enemy.h"
 #include "../lib/ResourceManager.h"
 
 namespace TreeConstants {
@@ -13,9 +13,10 @@ namespace TreeConstants {
     constexpr float MAX_SCALE = BASE_SCALE * 4.0f;   // maximum visual height in pixels
     constexpr float MIN_ROOT_WIDTH_RATIO = 0.20f;
     constexpr float MAX_ROOT_WIDTH_RATIO = 0.35f;
+    constexpr float DEFAULT_HEALTH = 6.0f;
 }
 
-class Tree : public Entity
+class Tree : public Enemy
 {
 private:
     float mTreeScale; // desired tree height in pixels
@@ -23,13 +24,16 @@ private:
 
 public:
     Tree(Vector2 position,
-         float treeScale = 1.0f,
+         float treeScale = TreeConstants::BASE_SCALE * 2.0f,
          int treeVariant = 0,
          float rootColliderHeight = TreeConstants::ROOT_COLLIDER_HEIGHT,
-         float rootColliderWidthRatio = TreeConstants::ROOT_COLLIDER_WIDTH_RATIO);
-    ~Tree();
+         float rootColliderWidthRatio = TreeConstants::ROOT_COLLIDER_WIDTH_RATIO,
+         float health = TreeConstants::DEFAULT_HEALTH);
 
-    void update(float deltaTime, Entity *player = nullptr, Map *map = nullptr, const std::vector<Entity*> &collidableEntities = {}) override;
+    void update(float deltaTime,
+                Entity *player = nullptr,
+                Map *map = nullptr,
+                const std::vector<Entity*> &collidableEntities = {}) override;
     float getTreeScale() const { return mTreeScale; }
     int getTreeVariant() const { return mTreeVariant; }
 };

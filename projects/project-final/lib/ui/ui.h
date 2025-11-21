@@ -6,3 +6,4 @@
 #include "TextInput.h"
 #include "Dropdown.h"
 #include "ListBox.h"
+#include "InventoryBar.h"

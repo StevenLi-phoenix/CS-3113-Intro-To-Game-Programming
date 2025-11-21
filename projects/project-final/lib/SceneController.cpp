@@ -146,6 +146,8 @@ void SceneController::bindPlayerActions(Player* player)
     mController->unbindAction("move_up");
     mController->unbindAction("move_down");
     mController->unbindAction("retry_level");
+    mController->unbindAction("throw_branch");
+    mController->unbindAction("melee_attack");
 
     if (!player) return;
 
@@ -177,6 +179,9 @@ void SceneController::rebuildSettings(Player* player)
 
     std::function<void()> retryAction;
     std::function<void(KeyboardKey)> retryKeyChanged;
+    std::function<void()> branchAction;
+    std::function<void(int)> difficultyChanged;
+    std::function<void()> meleeAction;
     if (mActiveScene)
     {
         Scene* scenePtr = mActiveScene.get();
@@ -192,9 +197,33 @@ void SceneController::rebuildSettings(Player* player)
                 scenePtr->onRetryBindingChanged(key);
             }
         };
+        branchAction = [scenePtr]() {
+            if (scenePtr)
+            {
+                scenePtr->handlePrimaryAttackAction();
+            }
+        };
+        difficultyChanged = [scenePtr](int index) {
+            if (scenePtr)
+            {
+                scenePtr->onDifficultyPresetChanged(index);
+            }
+        };
+        meleeAction = [scenePtr]() {
+            if (scenePtr)
+            {
+                scenePtr->handleMeleeAttackAction();
+            }
+        };
     }
 
-    mSettings = std::make_unique<Settings>(player, mController.get(), retryAction, retryKeyChanged);
+    mSettings = std::make_unique<Settings>(player,
+                                           mController.get(),
+                                           retryAction,
+                                           retryKeyChanged,
+                                           branchAction,
+                                           difficultyChanged,
+                                           meleeAction);
     mSettings->initialise();
     mSettingsVisible = false;
     mSettings->setVisible(false);

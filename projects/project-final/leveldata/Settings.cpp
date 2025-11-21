@@ -7,7 +7,10 @@
 Settings::Settings(Player* player,
                    Controller* controller,
                    std::function<void()> retryCallback,
-                   std::function<void(KeyboardKey)> retryKeyChanged)
+                   std::function<void(KeyboardKey)> retryKeyChanged,
+                   std::function<void()> throwBranchCallback,
+                   std::function<void(int)> difficultyChanged,
+                   std::function<void()> meleeAttackCallback)
     : mPlayer(player),
       mController(controller),
       mVisible(false),
@@ -27,7 +30,10 @@ Settings::Settings(Player* player,
       mHealthLabel("Difficulty: Normal (10 HP)"),
       mSelectedHealthIndex(1),
       mRetryCallback(retryCallback),
-      mRetryKeyCallback(retryKeyChanged)
+      mRetryKeyCallback(retryKeyChanged),
+      mThrowBranchCallback(throwBranchCallback),
+      mDifficultyCallback(difficultyChanged),
+      mMeleeCallback(meleeAttackCallback)
 {
     configureActions();
     mStatusMessage = "Click a control to rebind keys. Press F1 to close settings.";
@@ -70,6 +76,24 @@ void Settings::configureActions()
         KEY_S,
         Controller::InputEvent::Held,
         [this](float) { if (mPlayer) mPlayer->moveDown(); },
+        nullptr
+    });
+    mActions.push_back({
+        "throw_branch",
+        "Throw Branch",
+        KEY_Z,
+        KEY_Z,
+        Controller::InputEvent::Pressed,
+        [this](float) { if (mThrowBranchCallback) mThrowBranchCallback(); },
+        nullptr
+    });
+    mActions.push_back({
+        "melee_attack",
+        "Melee Attack",
+        KEY_X,
+        KEY_X,
+        Controller::InputEvent::Pressed,
+        [this](float) { if (mMeleeCallback) mMeleeCallback(); },
         nullptr
     });
     mActions.push_back({
@@ -394,6 +418,10 @@ void Settings::applyHealthPreset(int index)
     if (mPlayer)
     {
         mPlayer->setMaxHealth(mHealthValues[index], true);
+    }
+    if (mDifficultyCallback)
+    {
+        mDifficultyCallback(index);
     }
 }
 

@@ -36,6 +36,8 @@ Player::Player(Vector2 position, Vector2 scale)
             setOwnsTexture(true);
         }
     }
+
+    setTextureFacesLeft(false);
 }
 
 Player::~Player()
@@ -47,6 +49,7 @@ void Player::moveLeft()
     Vector2 movement = getMovement();
     movement.x = -5.0f;
     setMovement(movement);
+    setIsHorizontalFlipped(true);
 }
 
 void Player::moveRight()
@@ -54,6 +57,7 @@ void Player::moveRight()
     Vector2 movement = getMovement();
     movement.x = 5.0f;
     setMovement(movement);
+    setIsHorizontalFlipped(false);
 }
 
 void Player::moveUp()

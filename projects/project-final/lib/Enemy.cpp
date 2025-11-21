@@ -42,6 +42,38 @@ void Enemy::update(float deltaTime,
     Entity::update(deltaTime, player, map, collidableEntities);
 }
 
+void Enemy::render()
+{
+    if (!getIsActive())
+    {
+        return;
+    }
+
+    Entity::render();
+
+    const float maxHealth = std::max(mMaxHealth, 0.001f);
+    const float healthRatio = std::clamp(mHealth / maxHealth, 0.0f, 1.0f);
+    const Vector2 scale = getScale();
+    const float barWidth = std::max(scale.x * 0.6f, 24.0f);
+    const float barHeight = 4.0f;
+    const float verticalOffset = -scale.y * 0.55f;
+    const Vector2 position = getPosition();
+
+    Rectangle barBackground = {
+        position.x - barWidth * 0.5f,
+        position.y + verticalOffset - barHeight,
+        barWidth,
+        barHeight
+    };
+
+    Rectangle barFill = barBackground;
+    barFill.width = barBackground.width * healthRatio;
+
+    DrawRectangleRounded(barBackground, 0.6f, 4, Fade(BLACK, 0.7f));
+    DrawRectangleRec(barFill, DARKGREEN);
+    DrawRectangleLinesEx(barBackground, 0.6f, Fade(RAYWHITE, 0.8f));
+}
+
 void Enemy::applySpriteRect(const Rectangle &spriteRect,
                             float desiredPixelHeight,
                             float colliderWidthRatio,

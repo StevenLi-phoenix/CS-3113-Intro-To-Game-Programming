@@ -5,7 +5,7 @@
 
 # level 1
 - [x] walk, 
-- [ ] melee attack (temp: arrow)
+- [x] melee attack (temp: x key)
 - [ ] block (stamina)
 
 [x] fix tree rendering
@@ -14,10 +14,10 @@
 [x] Add enemies spawning (zombie, melle attack only)
 [x] Add pathfinding AI to enemies
 [x] Add enemies attacking player
-[ ] Add player attack via arrows (temporary)
+[x] Add player attack via arrows (temporary)
 [x] Add UI for health (floating bar)
-[ ] Add UI for arrows
-[ ] Add UI for inventory
+[x] Add UI for arrows (throwing branch)
+[x] Add UI for inventory
 [ ] Add UI for quest log
 
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)

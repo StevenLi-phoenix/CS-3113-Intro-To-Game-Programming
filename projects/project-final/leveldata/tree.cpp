@@ -6,12 +6,12 @@ Tree::Tree(Vector2 position,
            float treeScale,
            int treeVariant,
            float rootColliderHeight,
-           float rootColliderWidthRatio)
-    : Entity(),
+           float rootColliderWidthRatio,
+           float health)
+    : Enemy(position, 0.0f, 0.0f),
       mTreeScale(treeScale),
       mTreeVariant(0)
 {
-    // Get texture from ResourceManager
     ResourceManager &rm = ResourceManager::instance();
     Texture2D *texture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
 
@@ -31,11 +31,9 @@ Tree::Tree(Vector2 position,
     {
         setTexture(*texture);
         setOwnsTexture(false);
-
         setCustomSourceRect(spriteRect);
     }
 
-    // Set visual scale based on sprite size and requested pixel height
     const float spriteHeight = std::max(spriteRect.height, 1.0f);
     const float desiredPixelHeight = std::max(treeScale, TreeConstants::BASE_SCALE);
     const float scaleFactor = desiredPixelHeight / spriteHeight;
@@ -47,7 +45,6 @@ Tree::Tree(Vector2 position,
     };
     setScale(visualScale);
 
-    // Set collision only at the root (bottom portion)
     const float appliedRootHeight = std::max(rootColliderHeight * scaleFactor, 1.0f);
     const float appliedRootWidthRatio = std::max(rootColliderWidthRatio, 0.05f);
     Vector2 rootColliderSize = {
@@ -56,20 +53,22 @@ Tree::Tree(Vector2 position,
     };
     setColliderDimensions(rootColliderSize);
 
-    // Keep collider centred on the requested spawn point and offset the sprite upwards
     setPosition(position);
     const float spriteOffsetY = (appliedRootHeight - visualScale.y) / 2.0f;
     setTextureOffset({0.0f, spriteOffsetY});
 
-    setIsActive(true);
+    setMaxHealth(std::max(health, 1.0f));
+    setHealth(std::max(health, 1.0f));
     setCanCollide(true);
+    setIsActive(true);
 }
 
-Tree::~Tree()
+void Tree::update(float deltaTime,
+                  Entity *player,
+                  Map *map,
+                  const std::vector<Entity*> &collidableEntities)
 {
-}
-
-void Tree::update(float deltaTime, Entity *player, Map *map, const std::vector<Entity*> &collidableEntities)
-{
-    if (!getIsActive()) return;
+    setVelocity({0.0f, 0.0f});
+    setMovement({0.0f, 0.0f});
+    Enemy::update(deltaTime, player, map, collidableEntities);
 }

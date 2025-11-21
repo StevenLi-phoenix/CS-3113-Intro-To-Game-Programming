@@ -26,6 +26,7 @@ public:
                 Entity *player = nullptr,
                 Map *map = nullptr,
                 const std::vector<Entity*> &collidableEntities = {}) override;
+    void render() override;
 
     void setNavMap(const NavMap *navMap) { mNavMap = navMap; }
     const NavMap* getNavMap() const { return mNavMap; }
