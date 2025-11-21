@@ -8,8 +8,8 @@
 namespace EnemyConstants
 {
     constexpr float DEFAULT_HEIGHT = 32.0f;
-    constexpr float DEFAULT_SPEED = 35.0f;
-    constexpr float DEFAULT_DETECTION_RADIUS = 160.0f;
+    constexpr float DEFAULT_SPEED = 55.0f;
+    constexpr float DEFAULT_DETECTION_RADIUS = 460.0f;
     constexpr float DEFAULT_HEALTH = 4.0f;
     constexpr float COLLIDER_WIDTH_RATIO = 0.7f;
     constexpr float COLLIDER_HEIGHT_RATIO = 0.45f;

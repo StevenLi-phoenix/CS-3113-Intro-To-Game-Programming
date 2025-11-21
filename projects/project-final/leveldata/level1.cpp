@@ -501,7 +501,7 @@ void Level1::generateEnemies()
     struct EnemySpawnSettings
     {
         unsigned int salt = 0u;
-        float spawnThreshold = 0.985f;
+        float spawnThreshold = 0.80f;
         int spacing = 4;
         float minHeightPx = DogConstants::MIN_HEIGHT;
         float maxHeightPx = DogConstants::MAX_HEIGHT;
@@ -511,7 +511,7 @@ void Level1::generateEnemies()
     const float chunkWorldSize = static_cast<float>(mChunkSize) * mTileSize;
     const EnemySpawnSettings spawnSettings{
         0x5f3759d5u,
-        0.985f,
+        0.3f,
         4,
         DogConstants::MIN_HEIGHT,
         DogConstants::MAX_HEIGHT,

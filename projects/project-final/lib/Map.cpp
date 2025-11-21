@@ -144,6 +144,23 @@ bool Map::isSolidTileAt(Vector2 position)
     (void)position;
     // Ground is entirely walkable for now; trees/actors handle blocking.
     return false;
+
+    /*
+    // Original tile collision logic (kept for future solid-tile support)
+    if (position.x < mLeftBoundary || position.x > mRightBoundary ||
+        position.y < mTopBoundary  || position.y > mBottomBoundary)
+        return false;
+
+    int tileXIndex = floor((position.x - mLeftBoundary) / mTileSize);
+    int tileYIndex = floor((position.y - mTopBoundary) / mTileSize);
+
+    if (tileXIndex < 0 || tileXIndex >= mMapColumns ||
+        tileYIndex < 0 || tileYIndex >= mMapRows)
+        return false;
+
+    int tile = mLevelData[tileYIndex * mMapColumns + tileXIndex];
+    return tile != 0;
+    */
 }
 
 bool Map::isSolidTileAt(Vector2 position, float *xOverlap, float *yOverlap)
@@ -152,4 +169,28 @@ bool Map::isSolidTileAt(Vector2 position, float *xOverlap, float *yOverlap)
     *yOverlap = 0.0f;
     (void)position;
     return false;
+
+    /*
+    // Original tile collision logic (kept for future solid-tile support)
+    if (position.x < mLeftBoundary || position.x > mRightBoundary ||
+        position.y < mTopBoundary  || position.y > mBottomBoundary)
+        return false;
+
+    int tileXIndex = floor((position.x - mLeftBoundary) / mTileSize);
+    int tileYIndex = floor((position.y - mTopBoundary) / mTileSize);
+
+    if (tileXIndex < 0 || tileXIndex >= mMapColumns ||
+        tileYIndex < 0 || tileYIndex >= mMapRows)
+        return false;
+
+    int tile = mLevelData[tileYIndex * mMapColumns + tileXIndex];
+    if (tile == 0) return false;
+
+    float tileCentreX = mLeftBoundary + tileXIndex * mTileSize + mTileSize / 2.0f;
+    float tileCentreY = mTopBoundary + tileYIndex * mTileSize + mTileSize / 2.0f;
+
+    *xOverlap = fmaxf(0.0f, (mTileSize / 2.0f) - fabs(position.x - tileCentreX));
+    *yOverlap = fmaxf(0.0f, (mTileSize / 2.0f) - fabs(position.y - tileCentreY));
+    return true;
+    */
 }

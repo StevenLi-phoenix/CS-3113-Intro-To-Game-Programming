@@ -25,7 +25,7 @@ namespace combat {
     constexpr float NOTE_IDLE_DETECTION_RADIUS = 260.0f;
     constexpr float NOTE_ATTACK_TRAVEL_TIME    = 0.18f;
     constexpr float NOTE_ATTACK_RETURN_TIME    = 0.14f;
-    constexpr int NOTE_DEFAULT_COUNT = 4;
+    constexpr int NOTE_DEFAULT_COUNT = 0;
 }
 
 #endif

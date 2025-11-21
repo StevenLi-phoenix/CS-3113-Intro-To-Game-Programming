@@ -41,27 +41,27 @@ Player::~Player()
 void Player::moveLeft()
 {
     Vector2 movement = getMovement();
-    movement.x = -15.0f;
+    movement.x = -5.0f;
     setMovement(movement);
 }
 
 void Player::moveRight()
 {
     Vector2 movement = getMovement();
-    movement.x = 15.0f;
+    movement.x = 5.0f;
     setMovement(movement);
 }
 
 void Player::moveUp()
 {
     Vector2 movement = getMovement();
-    movement.y = -15.0f;
+    movement.y = -5.0f;
     setMovement(movement);
 }
 
 void Player::moveDown()
 {
     Vector2 movement = getMovement();
-    movement.y = 15.0f;
+    movement.y = 5.0f;
     setMovement(movement);
 }
