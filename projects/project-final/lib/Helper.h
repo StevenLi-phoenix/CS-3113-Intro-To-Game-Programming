@@ -11,6 +11,7 @@
 #include "raylib.h"
 #include "rlgl.h"
 #include "raymath.h"
+#include <algorithm>
 #include <math.h>
 #include <time.h>
 #include <stdio.h>
@@ -20,6 +21,8 @@
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+
+class Entity;
 
 enum AppStatus { TERMINATED, RUNNING };
 
@@ -52,5 +55,31 @@ bool PointInRectangle(Vector2 point, const Rectangle &rect);
 
 // deltaTime
 float getDeltaTime();
+
+template <typename T>
+inline void removeCollidableEntity(std::vector<Entity*> &collidables, T *entity)
+{
+    if (!entity)
+    {
+        return;
+    }
+
+    auto it = std::find(collidables.begin(), collidables.end(), entity);
+    if (it != collidables.end())
+    {
+        collidables.erase(it);
+    }
+}
+
+template <typename T>
+inline void destroyOwnedEntities(std::vector<T*> &owned, std::vector<Entity*> &collidables)
+{
+    for (T *object : owned)
+    {
+        removeCollidableEntity(collidables, object);
+        delete object;
+    }
+    owned.clear();
+}
 
 #endif // HELPER_H

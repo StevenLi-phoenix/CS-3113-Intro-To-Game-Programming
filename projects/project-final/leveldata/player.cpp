@@ -1,8 +1,12 @@
 #include "player.h"
 #include "../lib/ResourceManager.h"
+#include <algorithm>
 
 Player::Player(Vector2 position, Vector2 scale)
-    : Entity()
+    : Entity(),
+      mMaxHealth(PlayerConstants::MAX_HEALTH),
+      mHealth(PlayerConstants::MAX_HEALTH),
+      mDamageCooldownTimer(0.0f)
 {
     setPosition(position);
     setScale(scale);
@@ -64,4 +68,65 @@ void Player::moveDown()
     Vector2 movement = getMovement();
     movement.y = 5.0f;
     setMovement(movement);
+}
+
+void Player::update(float deltaTime,
+                    Entity *player,
+                    Map *map,
+                    const std::vector<Entity*> &collidableEntities)
+{
+    if (!getIsActive())
+    {
+        return;
+    }
+
+    if (mDamageCooldownTimer > 0.0f)
+    {
+        mDamageCooldownTimer = std::max(0.0f, mDamageCooldownTimer - deltaTime);
+    }
+
+    Entity::update(deltaTime, player, map, collidableEntities);
+}
+
+bool Player::applyDamage(float amount)
+{
+    if (amount <= 0.0f || !getIsActive())
+    {
+        return false;
+    }
+
+    if (mDamageCooldownTimer > 0.0f)
+    {
+        return false;
+    }
+
+    mHealth = std::max(0.0f, mHealth - amount);
+    mDamageCooldownTimer = PlayerConstants::DAMAGE_COOLDOWN_SECONDS;
+
+    if (mHealth <= 0.0f)
+    {
+        setIsActive(false);
+        setCanCollide(false);
+        LOG_INFO("Player defeated");
+    }
+
+    return true;
+}
+
+void Player::heal(float amount)
+{
+    if (amount <= 0.0f)
+    {
+        return;
+    }
+
+    mHealth = std::clamp(mHealth + amount, 0.0f, mMaxHealth);
+}
+
+void Player::restoreFullHealth()
+{
+    mHealth = mMaxHealth;
+    mDamageCooldownTimer = 0.0f;
+    setIsActive(true);
+    setCanCollide(true);
 }

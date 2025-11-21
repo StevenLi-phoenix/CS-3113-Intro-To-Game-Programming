@@ -12,8 +12,8 @@
 [x] Add NavMap creation
 [x] Add A*/DFS for pathfinding 
 [x] Add enemies spawning (zombie, melle attack only)
-[ ] Add pathfinding AI to enemies
-[ ] Add enemies attacking player
+[x] Add pathfinding AI to enemies
+[x] Add enemies attacking player
 [ ] Add player attack via arrows (temporary)
 [ ] Add UI for health and arrows
 [ ] Add UI for inventory

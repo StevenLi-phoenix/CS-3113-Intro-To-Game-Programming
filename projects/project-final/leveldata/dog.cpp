@@ -1,14 +1,55 @@
 #include "dog.h"
+#include "player.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
 
+namespace
+{
+int normalizeVariantIndex(int variant)
+{
+    if (DogConstants::VARIANT_COUNT <= 0)
+    {
+        return 0;
+    }
+    const int mod = variant % DogConstants::VARIANT_COUNT;
+    return (mod + DogConstants::VARIANT_COUNT) % DogConstants::VARIANT_COUNT;
+}
+
+float resolveVariantScalar(const float values[], int count, int variant, float fallback)
+{
+    if (!values || count <= 0)
+    {
+        return fallback;
+    }
+    if (variant < 0 || variant >= count)
+    {
+        return fallback;
+    }
+    return values[variant];
+}
+} // namespace
+
 Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
-    : Enemy(position, DogConstants::PATROL_SPEED, DogConstants::DETECTION_RADIUS),
-      mVariant((variant % DogConstants::VARIANT_COUNT + DogConstants::VARIANT_COUNT) % DogConstants::VARIANT_COUNT),
-      mDesiredHeight(std::clamp(desiredHeightPixels, DogConstants::MIN_HEIGHT, DogConstants::MAX_HEIGHT))
+    : Enemy(position,
+            resolveVariantScalar(DogConstants::VARIANT_PATROL_SPEEDS,
+                                 DogConstants::VARIANT_COUNT,
+                                 normalizeVariantIndex(variant),
+                                 DogConstants::PATROL_SPEED),
+            DogConstants::DETECTION_RADIUS),
+      mVariant(normalizeVariantIndex(variant)),
+      mDesiredHeight(std::clamp(desiredHeightPixels, DogConstants::MIN_HEIGHT, DogConstants::MAX_HEIGHT)),
+      mMovementBias((mVariant % 2 == 0) ? MovementBias::Horizontal : MovementBias::Vertical),
+      mChaseSpeed(resolveVariantScalar(DogConstants::VARIANT_CHASE_SPEEDS,
+                                       DogConstants::VARIANT_COUNT,
+                                       mVariant,
+                                       DogConstants::CHASE_SPEED)),
+      mPatrolSpeed(resolveVariantScalar(DogConstants::VARIANT_PATROL_SPEEDS,
+                                        DogConstants::VARIANT_COUNT,
+                                        mVariant,
+                                        DogConstants::PATROL_SPEED))
 {
     Rectangle spriteRect = resolveSpriteRect(mVariant);
     applySpriteRect(spriteRect,
@@ -35,6 +76,11 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
 void Dog::updateBehaviour(float deltaTime, Entity *player)
 {
     const bool playerValid = player && player->getIsActive();
+    if (mAttackCooldownTimer > 0.0f)
+    {
+        mAttackCooldownTimer = std::max(0.0f, mAttackCooldownTimer - deltaTime);
+    }
+
     bool playerDetected = playerValid && isPlayerWithinRange(player);
     if (playerDetected)
     {
@@ -76,21 +122,23 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
                 toTarget.x / distance,
                 toTarget.y / distance
             };
+            Vector2 biasedDirection = applyMovementBias(direction);
             Vector2 velocity = {
-                direction.x * DogConstants::CHASE_SPEED,
-                direction.y * DogConstants::CHASE_SPEED
+                biasedDirection.x * mChaseSpeed,
+                biasedDirection.y * mChaseSpeed
             };
             setVelocity(velocity);
 
-            if (direction.x > 0.1f)
+            if (biasedDirection.x > 0.1f)
             {
                 setIsHorizontalFlipped(false);
             }
-            else if (direction.x < -0.1f)
+            else if (biasedDirection.x < -0.1f)
             {
                 setIsHorizontalFlipped(true);
             }
         }
+        attemptAttack(player, distance);
         handleStuckDetection(deltaTime, distance, player);
     }
     else
@@ -142,9 +190,10 @@ void Dog::updatePatrol(float deltaTime)
             toTarget.x / distance,
             toTarget.y / distance
         };
+        direction = applyMovementBias(direction);
         Vector2 velocity = {
-            direction.x * DogConstants::PATROL_SPEED,
-            direction.y * DogConstants::PATROL_SPEED
+            direction.x * mPatrolSpeed,
+            direction.y * mPatrolSpeed
         };
         setVelocity(velocity);
         if (direction.x > 0.1f)
@@ -348,5 +397,57 @@ bool Dog::hasReachedTarget(const Vector2 &target, float radius) const
     };
     const float distanceSq = diff.x * diff.x + diff.y * diff.y;
     return distanceSq <= radius * radius;
+}
+
+void Dog::attemptAttack(Entity *player, float distanceToPlayer)
+{
+    if (!player || mAttackCooldownTimer > 0.0f)
+    {
+        return;
+    }
+
+    if (distanceToPlayer > DogConstants::ATTACK_RANGE)
+    {
+        return;
+    }
+
+    Player *playerEntity = dynamic_cast<Player*>(player);
+    if (!playerEntity || playerEntity->isDead())
+    {
+        return;
+    }
+
+    const bool applied = playerEntity->applyDamage(DogConstants::ATTACK_DAMAGE);
+    if (applied && isDebugMode())
+    {
+        LOG_INFO(TextFormat("Dog[%p] hit player damage=%.1f", this, DogConstants::ATTACK_DAMAGE));
+    }
+
+    mAttackCooldownTimer = DogConstants::ATTACK_COOLDOWN;
+}
+
+Vector2 Dog::applyMovementBias(const Vector2 &direction) const
+{
+    Vector2 biased = direction;
+    if (mMovementBias == MovementBias::Horizontal)
+    {
+        biased.x *= DogConstants::BIAS_MAIN_AXIS_WEIGHT;
+        biased.y *= DogConstants::BIAS_OFF_AXIS_WEIGHT;
+    }
+    else
+    {
+        biased.y *= DogConstants::BIAS_MAIN_AXIS_WEIGHT;
+        biased.x *= DogConstants::BIAS_OFF_AXIS_WEIGHT;
+    }
+
+    const float magnitude = Vector2Length(biased);
+    if (magnitude <= std::numeric_limits<float>::epsilon())
+    {
+        return direction;
+    }
+
+    biased.x /= magnitude;
+    biased.y /= magnitude;
+    return biased;
 }
 

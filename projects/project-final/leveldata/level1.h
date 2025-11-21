@@ -13,6 +13,8 @@
 #include "../lib/NavMap.h"
 #include <array>
 #include <vector>
+#include <unordered_map>
+#include <utility>
 
 // Simple test level scene. Add real game logic later.
 class Level1 final : public Scene
@@ -41,12 +43,34 @@ private:
     void refreshMusicNoteSlots();
     void updateMusicNoteBehaviour();
     void updatePlayerAttack(float deltaTime);
+    void spawnMusicNoteForSlot(size_t slotIndex);
+    void spawnPlayer();
+    void clearTrees();
+    void clearEnemies();
+    void clearMusicNotes();
+    void updateCameraFromPlayer(float deltaTime);
+    MapGenerator::GenerationSettings buildGeneratorSettings() const;
+    Vector2 computeMapOrigin() const;
+    void rebuildMap(const Vector2 &origin);
     Enemy* findNearestEnemy(float maxRange) const;
     MusicNote* findAvailableNoteForVariant(MusicNote::Variant variant);
     bool hasEnemyWithinRadius(float radius) const;
     MusicNote::Variant currentNoteVariant() const;
     void advanceNoteVariant();
+    struct ChunkKeyHash
+    {
+        size_t operator()(const std::pair<int, int> &key) const
+        {
+            // Spread bits to reduce collisions across adjacent chunks
+            return (static_cast<size_t>(key.first) * 73856093u) ^
+                   (static_cast<size_t>(key.second) * 19349663u);
+        }
+    };
+    void spawnEnemiesForChunk(const std::pair<int, int> &chunk,
+                              std::vector<Enemy*> &bucket,
+                              const Vector2 &playerPos);
 
+    std::unordered_map<std::pair<int, int>, std::vector<Enemy*>, ChunkKeyHash> mChunkEnemies;
     Player* mPlayer = nullptr;
     Map* mMap = nullptr;
     std::vector<Tree*> mTrees;
