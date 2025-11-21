@@ -20,7 +20,7 @@ public:
     Texture2D *getTexture(const std::string &key);
     bool hasTexture(const std::string &key) const;
 
-    bool loadAtlas(const std::string &textureKey, const std::string &texturePath, const std::string &atlasMetadataPath);
+    bool loadAtlas(const std::string &textureKey, const std::string &texturePath, const char *atlasMetadataPath);
 
     Rectangle getSpriteRect(const std::string &tag, size_t variationIndex = 0) const;
     const std::vector<Rectangle> &getSpriteRects(const std::string &tag) const;

@@ -40,7 +40,7 @@ bool ResourceManager::hasTexture(const std::string &key) const
     return mTextures.find(key) != mTextures.end();
 }
 
-bool ResourceManager::loadAtlas(const std::string &textureKey, const std::string &texturePath, const std::string &atlasMetadataPath)
+bool ResourceManager::loadAtlas(const std::string &textureKey, const std::string &texturePath, const char *atlasMetadataPath)
 {
     Texture2D *atlasTexture = loadTexture(textureKey, texturePath);
     if (!atlasTexture)
@@ -51,7 +51,7 @@ bool ResourceManager::loadAtlas(const std::string &textureKey, const std::string
     std::string contents = readFile(atlasMetadataPath);
     if (contents.empty())
     {
-        LOG_ERROR(TextFormat("Failed to read atlas metadata: %s", atlasMetadataPath.c_str()));
+        LOG_ERROR(TextFormat("Failed to read atlas metadata: %s", atlasMetadataPath));
         return false;
     }
 

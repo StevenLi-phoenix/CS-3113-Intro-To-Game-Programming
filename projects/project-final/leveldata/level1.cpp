@@ -1,5 +1,7 @@
 #include "level1.h"
 #include <cmath>
+#include <algorithm>
+#include "../lib/ResourceManager.h"
 
 void Level1::initialise()
 {
@@ -7,10 +9,12 @@ void Level1::initialise()
     setChunkSize(mChunkSize);
     setChunkLoadRadius(mChunkLoadRadius);
     ensureTileTexture();
+    ensureTreeAtlas();
     if (!mPlayer)
     {
-        mPlayer = new Player(c::ORIGIN, {32.0f, 32.0f});
+        mPlayer = new Player(c::ORIGIN, {90.0f, 125.0f});
         mPlayer->setIsActive(true);
+        mCollidableEntities.push_back(mPlayer);
     }
     if (mPlayer)
     {
@@ -23,9 +27,13 @@ void Level1::update(float deltaTime)
 {
     updateChunkStream();
 
+    for (Entity* entity : mCollidableEntities)
+    {
+        entity->update(deltaTime, mPlayer, mMap, mCollidableEntities);
+    }
+
     if (mPlayer)
     {
-        mPlayer->update(deltaTime, nullptr, mMap);
         updateCameraTarget(mPlayer->getPosition(), deltaTime);
     }
 }
@@ -48,14 +56,25 @@ void Level1::render()
         }
     }
 
-    if (mPlayer)
+    // Sort entities by y position for proper occlusion (lower y renders first)
+    std::sort(mCollidableEntities.begin(), mCollidableEntities.end(),
+        [](const Entity* a, const Entity* b) {
+            return a->getPosition().y < b->getPosition().y;
+        });
+
+    // Render all entities in sorted order
+    for (Entity* entity : mCollidableEntities)
     {
-        mPlayer->render();
+        entity->render();
     }
+
     if (isDebugMode())
     {
         drawChunkDebug();
-        mPlayer->displayCollider();
+        for (Entity* entity : mCollidableEntities)
+        {
+            entity->displayCollider();
+        }
     }
     EndMode2D();
     DrawFPS(10, 10);
@@ -69,6 +88,14 @@ void Level1::shutdown()
     mPlayer = nullptr;
     delete mMap;
     mMap = nullptr;
+
+    for (Tree* tree : mTrees)
+    {
+        delete tree;
+    }
+    mTrees.clear();
+    mCollidableEntities.clear();
+
     mLevelData.clear();
     if (mTileTextureReady)
     {
@@ -139,11 +166,101 @@ void Level1::buildProceduralMap()
                              getChunkStartX(), getChunkStartY(),
                              (tMapEnd - tMapStart) * 1000.0));
     }
+}
 
-    const double t1 = GetTime();
-    LOG_DEBUG(TextFormat("Map rebuild chunkStart=(%d,%d) tiles=%dx%d took=%.2fms",
-                         getChunkStartX(), getChunkStartY(), mMapColumns, mMapRows,
-                         (t1 - t0) * 1000.0));
+void Level1::generateTrees()
+{
+    // Remove old trees from collidable entities
+    for (Tree* tree : mTrees)
+    {
+        auto it = std::find(mCollidableEntities.begin(), mCollidableEntities.end(), tree);
+        if (it != mCollidableEntities.end())
+        {
+            mCollidableEntities.erase(it);
+        }
+        delete tree;
+    }
+    mTrees.clear();
+
+    const double tGenStart = GetTime();
+
+    struct TreeSpawnSettings
+    {
+        unsigned int salt = 0u;
+        float spawnThreshold = 0.995f;
+        int spacing = 1;
+        float minHeightPx = TreeConstants::MIN_SCALE;
+        float maxHeightPx = TreeConstants::MAX_SCALE;
+        float baseRootHeight = TreeConstants::ROOT_COLLIDER_HEIGHT;
+        float minRootWidthRatio = TreeConstants::MIN_ROOT_WIDTH_RATIO;
+        float maxRootWidthRatio = TreeConstants::MAX_ROOT_WIDTH_RATIO;
+    };
+
+    const TreeSpawnSettings spawnSettings{
+        0x3fa8bc91u,
+        0.9945f,
+        1,
+        TreeConstants::MIN_SCALE,
+        TreeConstants::MAX_SCALE,
+        TreeConstants::ROOT_COLLIDER_HEIGHT,
+        TreeConstants::MIN_ROOT_WIDTH_RATIO,
+        TreeConstants::MAX_ROOT_WIDTH_RATIO
+    };
+
+    const int startX = getChunkStartX();
+    const int startY = getChunkStartY();
+
+    const int spacing = std::max(spawnSettings.spacing, 1);
+
+    // Generate trees based on world coordinates using deterministic noise
+    for (int row = 0; row < mMapRows; row += spacing)
+    {
+        for (int col = 0; col < mMapColumns; col += spacing)
+        {
+            const int worldX = startX + col;
+            const int worldY = startY + row;
+
+            float spawnNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt);
+
+            if (spawnNoise < spawnSettings.spawnThreshold)
+            {
+                continue;
+            }
+
+            const float variantNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 1u);
+            const float scaleNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 2u);
+            const float rootWidthNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 3u);
+            const float rootHeightNoise = mMapGenerator.whiteNoise(worldX, worldY, spawnSettings.salt + 4u);
+
+            int treeVariant = static_cast<int>(variantNoise * static_cast<float>(c::TREE_VARIANT_COUNT));
+            treeVariant = std::clamp(treeVariant, 0, c::TREE_VARIANT_COUNT - 1);
+
+            const float treeHeightPx = spawnSettings.minHeightPx +
+                                       scaleNoise * (spawnSettings.maxHeightPx - spawnSettings.minHeightPx);
+
+            const float rootWidthRatio = spawnSettings.minRootWidthRatio +
+                                         rootWidthNoise * (spawnSettings.maxRootWidthRatio - spawnSettings.minRootWidthRatio);
+
+            const float rootHeight = spawnSettings.baseRootHeight *
+                                     (0.75f + rootHeightNoise * 0.5f);
+
+            float worldPosX = (static_cast<float>(worldX) + 0.5f) * mTileSize;
+            float worldPosY = (static_cast<float>(worldY) + 0.5f) * mTileSize;
+
+            Tree* tree = new Tree({worldPosX, worldPosY},
+                                  treeHeightPx,
+                                  treeVariant,
+                                  rootHeight,
+                                  rootWidthRatio);
+            mTrees.push_back(tree);
+            mCollidableEntities.push_back(tree);
+        }
+    }
+
+    const double tGenEnd = GetTime();
+    LOG_DEBUG(TextFormat("Generated %d trees in %.2fms",
+                         static_cast<int>(mTrees.size()),
+                         (tGenEnd - tGenStart) * 1000.0));
 }
 
 void Level1::updateChunkStream(bool forceRebuild)
@@ -155,6 +272,7 @@ void Level1::updateChunkStream(bool forceRebuild)
     if (changed)
     {
         buildProceduralMap();
+        generateTrees();
     }
 }
 
@@ -174,6 +292,21 @@ void Level1::ensureTileTexture()
     UnloadImage(slice);
     UnloadImage(full);
     mTileTextureReady = true;
+}
+
+void Level1::ensureTreeAtlas()
+{
+    ResourceManager &rm = ResourceManager::instance();
+    if (rm.hasTexture(ResourceKeys::WORLD_ATLAS))
+    {
+        return;
+    }
+
+    if (!rm.loadAtlas(ResourceKeys::WORLD_ATLAS, mMapTexturePath, mMapAtlasMetadataPath))
+    {
+        LOG_ERROR(TextFormat("Failed to load world atlas texture (%s) or metadata (%s)",
+                             mMapTexturePath, mMapAtlasMetadataPath));
+    }
 }
 
 void Level1::drawChunkDebug()

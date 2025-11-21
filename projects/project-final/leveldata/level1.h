@@ -6,6 +6,7 @@
 #include "../lib/mapgenerator.h"
 #include "../constants.h"
 #include "player.h"
+#include "tree.h"
 #include <vector>
 
 // Simple test level scene. Add real game logic later.
@@ -25,12 +26,16 @@ public:
 
 private:
     void buildProceduralMap();
+    void generateTrees();
     void updateChunkStream(bool forceRebuild = false);
     void drawChunkDebug();
     void ensureTileTexture();
+    void ensureTreeAtlas();
 
     Player* mPlayer = nullptr;
     Map* mMap = nullptr;
+    std::vector<Tree*> mTrees;
+    std::vector<Entity*> mCollidableEntities; // All collidable entities (trees, rocks, etc.)
     unsigned int mWorldSeed = 1337u;
     MapGenerator mMapGenerator;
     std::vector<unsigned int> mLevelData;
@@ -44,6 +49,7 @@ private:
     const int mTileRows = 1;
     const unsigned int mNoiseSalt = 0x8da6b343u; // decorrelate hash noise
     const char *mMapTexturePath = "assets/ElderAsset1.2.png";
+    const char *mMapAtlasMetadataPath = "assets/atlas_refined.json";
     Rectangle mTileAtlasRegion = {0.0f, 432.0f, 512.0f, 32.0f};
     Texture2D mTileTexture{};
     bool mTileTextureReady = false;

@@ -1,7 +1,37 @@
 #include "player.h"
+#include "../lib/ResourceManager.h"
 
-Player::Player(Vector2 position, Vector2 scale, const char *texturePath) : Entity(position, scale, texturePath)
+Player::Player(Vector2 position, Vector2 scale)
+    : Entity()
 {
+    setPosition(position);
+    setScale(scale);
+    setColliderDimensions(scale);
+
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlasTexture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+    Rectangle spriteRect = rm.getSpriteRect(PlayerConstants::SPRITE_TAG);
+
+    if (atlasTexture && spriteRect.width > 0.0f && spriteRect.height > 0.0f)
+    {
+        setTexture(*atlasTexture);
+        setOwnsTexture(false);
+        setCustomSourceRect(spriteRect);
+    }
+    else if (atlasTexture)
+    {
+        setTexture(*atlasTexture);
+        setOwnsTexture(false);
+    }
+    else
+    {
+        Texture2D fallback = LoadTexture(PlayerConstants::FALLBACK_TEXTURE_PATH);
+        if (fallback.id > 0)
+        {
+            setTexture(fallback);
+            setOwnsTexture(true);
+        }
+    }
 }
 
 Player::~Player()

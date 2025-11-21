@@ -33,6 +33,7 @@ private:
     float mMass = 0.0f; // default disabled for forced-based movement
     
     Vector2 mScale;
+    Vector2 mTextureOffset;
     Vector2 mColliderDimensions;
 
     Texture2D mTexture;
@@ -104,6 +105,7 @@ public:
     void addForce(Vector2 force) { mForce += force; }
     void setAcceleration(Vector2 acceleration) { mAcceleration = acceleration; }
     void setScale(Vector2 scale) { mScale = scale; }
+    void setTextureOffset(Vector2 textureOffset) { mTextureOffset = textureOffset; }
     void setColliderDimensions(Vector2 colliderDimensions) { mColliderDimensions = colliderDimensions; }
     void setTexture(Texture2D texture) { mTexture = texture; }
     void setOwnsTexture(bool ownsTexture) { mOwnsTexture = ownsTexture; }
@@ -140,6 +142,7 @@ public:
     Vector2 getAcceleration() const { return mAcceleration; }
     Vector2 getForce() const { return mForce; }
     Vector2 getScale() const { return mScale; }
+    Vector2 getTextureOffset() const { return mTextureOffset; }
     Vector2 getColliderDimensions() const { return mColliderDimensions; }
     Texture2D getTexture() const { return mTexture; }
     bool ownsTexture() const { return mOwnsTexture; }

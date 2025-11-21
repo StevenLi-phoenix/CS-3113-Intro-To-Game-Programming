@@ -1,0 +1,49 @@
+# priorites
+-- implement level 1
+-- sound effects
+-- proper UI
+
+# level 1
+- walk, melee attack
+- block (stamina)
+
+fix tree rendering
+Add NavMap creation
+Add A*/DFS for pathfinding
+Add enemies spawning (zombie, melle attack only)
+Add pathfinding AI to enemies
+Add enemies attacking player
+Add player attack via arrows (temporary)
+Add UI for health and arrows
+Add UI for inventory
+Add UI for quest log
+
+target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
+
+# level 2
+## enemy: skeleton (ranged attack only)
+## planned for underground level with maze
+## target: reach the exit of the dungeon
+new player abilities:
+- dash
+- run
+
+# level 3, boss level? (if time allows)
+## enemy: spider (ranged attack only)
+## target: use the collected resources to beat the boss
+- roll (dodge) (invincible for a short time)
+
+# future fixes / optimizations
+- Use true collider box instead of point detection
+- Add animations for both player and enemies
+- Add shaders for screen effects
+- CGs
+- Add a way to save/load game
+- enemies ai using pytorch neural network
+- multiplayer mode
+- cloud saving (supabase)
+- replay system
+- leaderboard
+- achievements
+- customizability
+Add UI for mini-map (use shader to the map and also hide undisovered areas)

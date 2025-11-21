@@ -6,6 +6,7 @@ Entity::Entity() :
     mPosition {0.0f, 0.0f}, mMovement {0.0f, 0.0f}, 
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
     mScale {EntityConstants::DEFAULT_SIZE, EntityConstants::DEFAULT_SIZE},
+    mTextureOffset {0.0f, 0.0f},
     mColliderDimensions {EntityConstants::DEFAULT_SIZE, EntityConstants::DEFAULT_SIZE}, 
     mTexture {0}, mOwnsTexture {true}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
     mSpriteSheetDimensions {},
@@ -20,7 +21,7 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath) :
     mParent {nullptr},
     mPosition {position}, mMovement {0.0f, 0.0f}, 
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
-    mScale {scale}, mColliderDimensions {scale}, 
+    mScale {scale}, mTextureOffset {0.0f, 0.0f}, mColliderDimensions {scale}, 
     mTexture {LoadTexture(textureFilepath)}, mOwnsTexture {true}, mTextureType {EntityConstants::SINGLE}, mAngle {0.0f},
     mSpriteSheetDimensions {},
     mAnimationIndices {}, mFrameSpeed {0},
@@ -34,7 +35,7 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, Ent
     mParent {nullptr},
     mPosition {position}, mMovement {0.0f, 0.0f}, 
     mVelocity {0.0f, 0.0f}, mAcceleration {0.0f, 0.0f},
-    mScale {scale}, mColliderDimensions {scale}, 
+    mScale {scale}, mTextureOffset {0.0f, 0.0f}, mColliderDimensions {scale}, 
     mTexture {LoadTexture(textureFilepath)}, mOwnsTexture {true}, mTextureType {textureType}, mAngle {0.0f},
     mSpriteSheetDimensions {spriteSheetDimensions}, 
     mAnimationIndices {animationIndices}, mFrameSpeed {0},
@@ -51,6 +52,7 @@ Entity::Entity(Entity&& other) noexcept :
     mVelocity {other.mVelocity},
     mAcceleration {other.mAcceleration},
     mScale {other.mScale},
+    mTextureOffset {other.mTextureOffset},
     mColliderDimensions {other.mColliderDimensions},
     mTexture {other.mTexture},
     mOwnsTexture {other.mOwnsTexture},
@@ -81,6 +83,7 @@ Entity::Entity(Entity&& other) noexcept :
     other.mAnimationIndices.clear();
     other.mIsActive = false;
     other.mOwnsTexture = false;
+    other.mTextureOffset = {0.0f, 0.0f};
 }
 
 Entity& Entity::operator=(Entity&& other) noexcept
@@ -98,6 +101,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
     mVelocity = other.mVelocity;
     mAcceleration = other.mAcceleration;
     mScale = other.mScale;
+    mTextureOffset = other.mTextureOffset;
     mColliderDimensions = other.mColliderDimensions;
     mTexture = other.mTexture;
     mOwnsTexture = other.mOwnsTexture;
@@ -128,6 +132,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
     other.mAnimationIndices.clear();
     other.mIsActive = false;
     other.mOwnsTexture = false;
+    other.mTextureOffset = {0.0f, 0.0f};
 
     return *this;
 }
@@ -183,6 +188,11 @@ void Entity::checkCollisionY(const std::vector<Entity*> &collidableEntities)
         float yOverlap = ((mColliderDimensions.y + entity->mColliderDimensions.y) / 2.0f) - fabs(yDistance);
         if (yOverlap <= 0.0f) continue;
 
+        float xDistance = mPosition.x - entity->mPosition.x;
+        float xOverlap = ((mColliderDimensions.x + entity->mColliderDimensions.x) / 2.0f) - fabs(xDistance);
+        if (xOverlap <= 0.0f) continue;
+        if (yOverlap > xOverlap) continue;
+
         float direction = 0.0f;
         if (yDistance > 0.0f) direction = 1.0f;
         else if (yDistance < 0.0f) direction = -1.0f;
@@ -217,6 +227,11 @@ void Entity::checkCollisionX(const std::vector<Entity*> &collidableEntities)
         float xDistance = mPosition.x - entity->mPosition.x;
         float xOverlap = ((mColliderDimensions.x + entity->mColliderDimensions.x) / 2.0f) - fabs(xDistance);
         if (xOverlap <= 0.0f) continue;
+
+        float yDistance = mPosition.y - entity->mPosition.y;
+        float yOverlap = ((mColliderDimensions.y + entity->mColliderDimensions.y) / 2.0f) - fabs(yDistance);
+        if (yOverlap <= 0.0f) continue;
+        if (xOverlap > yOverlap) continue;
 
         float direction = 0.0f;
         if (xDistance > 0.0f) direction = 1.0f;
@@ -391,8 +406,8 @@ void Entity::render()
     }
 
     Rectangle destinationArea = {
-        mPosition.x,
-        mPosition.y,
+        mPosition.x + mTextureOffset.x,
+        mPosition.y + mTextureOffset.y,
         static_cast<float>(mScale.x),
         static_cast<float>(mScale.y)
     };

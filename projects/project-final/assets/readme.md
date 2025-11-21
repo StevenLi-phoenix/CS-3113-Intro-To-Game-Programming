@@ -1,0 +1,1 @@
+atlas_overlay.png is for debugging, it is a picture mark with text for game dev. altas_refined.json is the exact corrdiantes of texture. atlas.json is the rough coords that should never be used. ElderAsset1.2.png is the main world atlas.
