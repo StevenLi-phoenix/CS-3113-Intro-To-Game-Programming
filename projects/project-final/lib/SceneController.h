@@ -4,6 +4,7 @@
 #include <memory>
 #include "Helper.h"
 #include "Scene.h"
+#include "../leveldata/DifficultyConfig.h"
 
 class Controller;
 class Settings;
@@ -41,6 +42,7 @@ private:
     std::unique_ptr<Scene> mActiveScene;
     std::unique_ptr<Scene> mPendingScene;
     bool mSettingsVisible = false;
+    DifficultyState mDifficultyState{};
 
     void activateScene(std::unique_ptr<Scene> scene);
     void rebuildSettings(Player* player);

@@ -2,6 +2,7 @@
 #include "Controller.h"
 #include "../leveldata/Settings.h"
 #include "../leveldata/player.h"
+#include <algorithm>
 #include <functional>
 
 SceneController::SceneController() = default;
@@ -134,6 +135,7 @@ void SceneController::activateScene(std::unique_ptr<Scene> scene)
     {
         mActiveScene->initialise();
         mActiveScene->setPaused(false);
+        mActiveScene->onDifficultyPresetChanged(mDifficultyState.index);
     }
 
     Player* player = mActiveScene ? mActiveScene->getPlayer() : nullptr;
@@ -173,10 +175,11 @@ void SceneController::rebuildSettings(Player* player)
                 scenePtr->handlePrimaryAttackAction();
             }
         };
-        difficultyChanged = [scenePtr](int index) {
+        difficultyChanged = [this, scenePtr](int index) {
+            mDifficultyState.index = std::clamp(index, 0, branch::DIFFICULTY_PRESET_COUNT - 1);
             if (scenePtr)
             {
-                scenePtr->onDifficultyPresetChanged(index);
+                scenePtr->onDifficultyPresetChanged(mDifficultyState.index);
             }
         };
         meleeAction = [scenePtr]() {

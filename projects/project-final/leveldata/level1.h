@@ -8,6 +8,8 @@
 #include "../lib/ui/InventoryBar.h"
 #include "../constants.h"
 #include "player.h"
+#include "DifficultyConfig.h"
+#include "ResourceTags.h"
 #include "tree.h"
 #include "dog.h"
 #include "compass.h"
@@ -89,11 +91,13 @@ private:
     void spawnGoldCoin(const Vector2 &position);
     void updateGoldCoins();
     void collectGoldCoin(GoldCoin *coin);
+    void handleEnemyDefeated(Enemy *enemy);
     void resolveBranchImpacts();
     void cleanupBranches();
     void resetBranchInventory();
     bool consumeBranch();
     void addBranches(int amount);
+    void applyDifficulty(const DifficultyState &state);
     void initialiseInventoryUI();
     void updateInventoryUI(float deltaTime);
     void drawInventoryOverlay();
@@ -116,7 +120,6 @@ private:
     bool tutorialInputDetected() const;
     float tutorialOverlayAlpha() const;
     void spawnQuestTarget();
-    void spawnCoinsForQuest(int count);
     int requiredGold() const;
     void updateQuestState();
     void drawQuestLog() const;
@@ -189,8 +192,8 @@ private:
     bool mSkipPlayerChunkForNextEnemySpawn = false;
 
     int mBranchInventory = branch::DEFAULT_INITIAL;
+    DifficultyState mDifficulty;
     int mInitialBranchCount = branch::DEFAULT_INITIAL;
-    int mDifficultyIndex = 1;
     int mBranchCapacity = branch::MAX_HELD;
     int mBoxBranchReward = branch::DEFAULT_BOX_REWARD;
     float mMeleeTimer = 0.0f;

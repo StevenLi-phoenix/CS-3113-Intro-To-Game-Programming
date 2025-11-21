@@ -1,11 +1,9 @@
 #include "compass.h"
 
+#include <algorithm>
+#include <cmath>
 #include "../lib/ResourceManager.h"
-
-namespace
-{
-    constexpr const char *COMPASS_TAG = "COMPASS";
-}
+#include "ResourceTags.h"
 
 Compass::Compass()
     : UIBase()
@@ -19,12 +17,19 @@ void Compass::loadIcon()
 {
     ResourceManager &rm = ResourceManager::instance();
     mIcon = rm.getTexture(ResourceKeys::WORLD_ATLAS);
-    mIconSource = rm.getSpriteRect(COMPASS_TAG);
+    mIconSource = rm.getSpriteRect(tags::COMPASS);
     if (!mIcon || mIconSource.width <= 0.0f || mIconSource.height <= 0.0f)
     {
         mIcon = nullptr;
         mIconSource = {0.0f, 0.0f, 0.0f, 0.0f};
     }
+}
+
+void Compass::setDistanceDisplay(float tileSize, float minDistanceTiles, float maxDistanceTiles)
+{
+    mTileSize = std::max(tileSize, 1.0f);
+    mMinDisplayTiles = std::min(minDistanceTiles, maxDistanceTiles);
+    mMaxDisplayTiles = std::max(minDistanceTiles, maxDistanceTiles);
 }
 
 void Compass::update(float deltaTime,
@@ -58,6 +63,13 @@ void Compass::render()
     }
 
     direction = Vector2Normalize(direction);
+    const float distanceTiles = sqrtf(distSq) / mTileSize;
+    const float clampedDistance = std::clamp(distanceTiles, mMinDisplayTiles, mMaxDisplayTiles);
+    const int displayDistance = static_cast<int>(std::round(clampedDistance));
+    const bool cappedHigh = distanceTiles > mMaxDisplayTiles + 0.01f;
+    const bool cappedLow = distanceTiles < mMinDisplayTiles - 0.01f;
+    const char *distanceSuffix = cappedHigh ? "+" : (cappedLow ? "-" : "");
+    const char *distanceText = TextFormat("Map: %d tiles%s", displayDistance, distanceSuffix);
 
     Vector2 playerScreen = GetWorldToScreen2D(playerPos, *mCamera);
     const Vector2 arrowTip = {
@@ -81,6 +93,9 @@ void Compass::render()
     DrawLineEx(playerScreen, arrowTip, mArrowThickness, mArrowColor);
     DrawTriangle(arrowTip, leftWing, rightWing, Fade(mArrowColor, 0.9f));
 
+    float textX = playerScreen.x - mArrowRadius - 40.0f;
+    float textY = playerScreen.y - mArrowRadius - 12.0f;
+
     if (mIcon && mIconSource.width > 0.0f && mIconSource.height > 0.0f)
     {
         Rectangle iconRect = {
@@ -97,5 +112,13 @@ void Compass::render()
             iconRect.height - 8.0f
         };
         DrawTexturePro(*mIcon, mIconSource, dest, {0.0f, 0.0f}, 0.0f, WHITE);
+        textX = iconRect.x;
+        textY = iconRect.y + iconRect.height + 4.0f;
     }
+
+    DrawText(distanceText,
+             static_cast<int>(textX),
+             static_cast<int>(textY),
+             16,
+             RAYWHITE);
 }

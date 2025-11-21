@@ -22,6 +22,7 @@
 
 Quest log + compass/table objective implemented with gated actions and level trigger.
 
+金币的逻辑目前是有问题的，应该是杀死怪物有概率掉落的
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
 
 # level 2

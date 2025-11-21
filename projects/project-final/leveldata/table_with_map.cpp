@@ -1,10 +1,11 @@
 #include "table_with_map.h"
 
 #include "../lib/ResourceManager.h"
+#include "ResourceTags.h"
 
 namespace
 {
-    constexpr const char *TABLE_TAG = "TABLEWITHMAP";
+    constexpr const char *TABLE_TAG = tags::TABLEWITHMAP;
     constexpr Vector2 DEFAULT_SCALE = {120.0f, 78.0f};
 }
 

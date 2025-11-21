@@ -105,10 +105,14 @@ namespace
         "LARGEROCK"
     };
 
-    constexpr const char *BRANCH_SLOT_ICON_TAG = "BRANCH";
-    constexpr const char *GOLD_SLOT_ICON_TAG = "GOLDCOIN";
-    constexpr int GOLD_REQUIRED[branch::DIFFICULTY_PRESET_COUNT] = {0, 3, 5, 8};
+    constexpr const char *BRANCH_SLOT_ICON_TAG = tags::BRANCH;
+    constexpr const char *GOLD_SLOT_ICON_TAG = tags::GOLDCOIN;
     constexpr float GOLD_PICKUP_RADIUS = 42.0f;
+    constexpr float GOLD_DROP_CHANCE = 0.5f;
+    constexpr float GOLD_DROP_OFFSET_MIN = 6.0f;
+    constexpr float GOLD_DROP_OFFSET_MAX = 14.0f;
+    constexpr float TABLE_DISTANCE_MIN_TILES = 64.0f;
+    constexpr float TABLE_DISTANCE_MAX_TILES = 256.0f;
 
     namespace tutorial
     {
@@ -136,6 +140,7 @@ void Level1::initialise()
     ensureTileTexture();
     spawnPlayer();
     ensureMusicNotes();
+    applyDifficulty(mDifficulty);
     resetBranchInventory();
     initialiseInventoryUI();
     spawnQuestTarget();
@@ -146,6 +151,9 @@ void Level1::initialise()
     mCompassUI->setTarget(mTable.get());
     mCompassUI->setPlayer(mPlayer);
     mCompassUI->setCamera(&mCamera);
+    mCompassUI->setDistanceDisplay(mTileSize,
+                                   TABLE_DISTANCE_MIN_TILES,
+                                   TABLE_DISTANCE_MAX_TILES);
     mSkipPlayerChunkForNextEnemySpawn = true;
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
@@ -638,9 +646,13 @@ void Level1::updatePlayerAttack(float deltaTime)
 
     const int damage = MusicNote::damageForVariant(variant);
     const bool defeated = target->applyDamage(static_cast<float>(damage));
-    if (defeated && isDebugMode())
+    if (defeated)
     {
-        LOG_DEBUG(TextFormat("Music attack defeated enemy[%p] damage=%d", target, damage));
+        handleEnemyDefeated(target);
+        if (isDebugMode())
+        {
+            LOG_DEBUG(TextFormat("Music attack defeated enemy[%p] damage=%d", target, damage));
+        }
     }
 
     note->launchAttack(target->getPosition());
@@ -730,7 +742,11 @@ void Level1::resolveBranchImpacts()
 
             if (projectile->intersects(*enemy))
             {
-                enemy->applyDamage(projectile->getDamage());
+                const bool defeated = enemy->applyDamage(projectile->getDamage());
+                if (defeated)
+                {
+                    handleEnemyDefeated(enemy);
+                }
                 projectile->markSpent();
                 break;
             }
@@ -784,6 +800,13 @@ void Level1::addBranches(int amount)
 
     mBranchInventory = std::clamp(mBranchInventory + amount, 0, mBranchCapacity);
     syncBranchSlot();
+}
+
+void Level1::applyDifficulty(const DifficultyState &state)
+{
+    mDifficulty = state;
+    mInitialBranchCount = std::clamp(mDifficulty.initialBranches(), 0, branch::MAX_HELD);
+    mBoxBranchReward = std::max(1, mDifficulty.boxReward());
 }
 
 void Level1::spawnGoldCoin(const Vector2 &position)
@@ -844,6 +867,38 @@ void Level1::collectGoldCoin(GoldCoin *coin)
     delete coin;
     ++mGoldCount;
     syncGoldSlot();
+}
+
+void Level1::handleEnemyDefeated(Enemy *enemy)
+{
+    if (!enemy)
+    {
+        return;
+    }
+
+    const float dropRoll = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
+    if (dropRoll > GOLD_DROP_CHANCE)
+    {
+        return;
+    }
+
+    const float angle = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f * 2.0f * PI;
+    const float radius = GOLD_DROP_OFFSET_MIN +
+                         (static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f) *
+                         (GOLD_DROP_OFFSET_MAX - GOLD_DROP_OFFSET_MIN);
+    Vector2 dropPos = {
+        enemy->getPosition().x + cosf(angle) * radius,
+        enemy->getPosition().y + sinf(angle) * radius
+    };
+    spawnGoldCoin(dropPos);
+
+    if (isDebugMode())
+    {
+        LOG_DEBUG(TextFormat("Enemy[%p] dropped gold at (%.1f, %.1f)",
+                             enemy,
+                             dropPos.x,
+                             dropPos.y));
+    }
 }
 
 void Level1::updateMeleeTimer(float deltaTime)
@@ -928,7 +983,11 @@ void Level1::applyMeleeDamage(Enemy *target)
     }
     else
     {
-        target->applyDamage(mMeleeDamage);
+        const bool defeated = target->applyDamage(mMeleeDamage);
+        if (defeated)
+        {
+            handleEnemyDefeated(target);
+        }
     }
 }
 
@@ -1219,7 +1278,7 @@ void Level1::initialiseInventoryUI()
     axeSlot.label = "Axe";
     axeSlot.iconTint = Fade(WHITE, 0.9f);
     axeSlot.quantity = 1;
-    applyIcon(axeSlot, "SWORD");
+    applyIcon(axeSlot, tags::AXE);
     mInventory->setSlot(mAxeSlotIndex, axeSlot);
 
     InventorySlot compassSlot;
@@ -1227,7 +1286,7 @@ void Level1::initialiseInventoryUI()
     compassSlot.label = "Compass";
     compassSlot.iconTint = Fade(WHITE, 0.95f);
     compassSlot.quantity = 1;
-    applyIcon(compassSlot, "COMPASS");
+    applyIcon(compassSlot, tags::COMPASS);
     mInventory->setSlot(mCompassSlotIndex, compassSlot);
 
     InventorySlot branchSlot;
@@ -1390,7 +1449,7 @@ void Level1::spawnQuestTarget()
 
     const Vector2 basePos = mPlayer ? mPlayer->getPosition() : mPlayerSpawnPosition;
     const float chunkWorld = static_cast<float>(mChunkSize) * mTileSize;
-    const int minChunks = 4 + mDifficultyIndex; // at least 4 chunks (256 tiles) away, further on harder presets
+    const int minChunks = std::max(1, 1 + mDifficulty.index); // at least 1 chunk (64 tiles) away, slightly further on harder presets
     const float minDistance = chunkWorld * static_cast<float>(minChunks);
     const float noise = mMapGenerator.whiteNoise(static_cast<int>(basePos.x), static_cast<int>(basePos.y), mWorldSeed);
     const float angle = noise * 2.0f * PI;
@@ -1415,39 +1474,11 @@ void Level1::spawnQuestTarget()
     {
         mCollidableEntities.push_back(mTable.get());
     }
-
-    const int goldNeeded = requiredGold();
-    spawnCoinsForQuest(goldNeeded);
 }
 
 int Level1::requiredGold() const
 {
-    const int idx = std::clamp(mDifficultyIndex, 0, branch::DIFFICULTY_PRESET_COUNT - 1);
-    return GOLD_REQUIRED[idx];
-}
-
-void Level1::spawnCoinsForQuest(int count)
-{
-    if (!mTable || count <= 0)
-    {
-        return;
-    }
-
-    const Vector2 tablePos = mTable->getPosition();
-    for (int i = 0; i < count; ++i)
-    {
-        const unsigned int salt = mWorldSeed + static_cast<unsigned int>(i * 17 + 5);
-        const float noise = mMapGenerator.whiteNoise(static_cast<int>(tablePos.x) + i,
-                                                     static_cast<int>(tablePos.y) + i * 3,
-                                                     salt);
-        const float angle = noise * 2.0f * PI;
-        const float radius = 60.0f + 22.0f * static_cast<float>(i % 4);
-        Vector2 pos = {
-            tablePos.x + cosf(angle) * radius,
-            tablePos.y + sinf(angle) * radius
-        };
-        spawnGoldCoin(pos);
-    }
+    return mDifficulty.goldRequirement();
 }
 
 void Level1::updateQuestState()
@@ -1476,7 +1507,7 @@ void Level1::updateQuestState()
 void Level1::drawQuestLog() const
 {
     const float panelWidth = 340.0f;
-    const float panelHeight = 116.0f;
+    const float panelHeight = 150.0f;
     Rectangle panel = {
         16.0f,
         16.0f,
@@ -1514,22 +1545,46 @@ void Level1::drawQuestLog() const
              descSize,
              Fade(LIGHTGRAY, 0.95f));
 
+    int textY = static_cast<int>(panel.y + 64.0f);
+    if (mPlayer && mTable)
+    {
+        const float worldDistance = Vector2Distance(mPlayer->getPosition(), mTable->getPosition());
+        const float tileDistance = worldDistance / mTileSize;
+        const float clampedTiles = std::clamp(tileDistance,
+                                              TABLE_DISTANCE_MIN_TILES,
+                                              TABLE_DISTANCE_MAX_TILES);
+        const int displayDistance = static_cast<int>(std::round(clampedTiles));
+        const bool cappedHigh = tileDistance > TABLE_DISTANCE_MAX_TILES + 0.01f;
+        const bool cappedLow = tileDistance < TABLE_DISTANCE_MIN_TILES - 0.01f;
+        const char *distanceSuffix = cappedHigh ? "+" : (cappedLow ? "-" : "");
+        const char *distanceLine = TextFormat("Map table distance: %d tiles%s",
+                                              displayDistance,
+                                              distanceSuffix);
+        DrawText(distanceLine,
+                 static_cast<int>(panel.x + 12.0f),
+                 textY,
+                 16,
+                 Fade(SKYBLUE, 0.95f));
+        textY += 24;
+    }
+
     if (goldNeeded > 0)
     {
         const std::string goldLine = TextFormat("Gold: %d / %d to activate", mGoldCount, goldNeeded);
         DrawText(goldLine.c_str(),
                  static_cast<int>(panel.x + 12.0f),
-                 static_cast<int>(panel.y + 64.0f),
+                 textY,
                  16,
                  Fade(GOLD, 0.95f));
+        textY += 24;
     }
 
     const std::string hint = goldNeeded > 0
-        ? "Bring enough gold, then touch the table"
+        ? "Defeat enemies to collect gold, then touch the table"
         : "Find the table with map";
     DrawText(hint.c_str(),
              static_cast<int>(panel.x + 12.0f),
-             static_cast<int>(panel.y + 88.0f),
+             textY,
              16,
              Fade(GRAY, 0.9f));
 }
@@ -1609,9 +1664,8 @@ void Level1::onDifficultyPresetChanged(int index)
     }
 
     const int clamped = std::clamp(index, 0, presetCount - 1);
-    mDifficultyIndex = clamped;
-    mInitialBranchCount = std::clamp(branch::PRESET_INITIALS[clamped], 0, branch::MAX_HELD);
-    mBoxBranchReward = std::max(1, branch::PRESET_BOX_REWARDS[clamped]);
+    mDifficulty.index = clamped;
+    applyDifficulty(mDifficulty);
     resetBranchInventory();
     spawnQuestTarget();
     if (mCompassUI)

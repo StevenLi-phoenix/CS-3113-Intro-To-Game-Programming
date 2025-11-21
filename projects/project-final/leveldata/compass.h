@@ -12,6 +12,7 @@ public:
     void setTarget(Entity *target) { mTarget = target; }
     void setPlayer(Entity *player) { mPlayer = player; }
     void setCamera(const Camera2D *camera) { mCamera = camera; }
+    void setDistanceDisplay(float tileSize, float minDistanceTiles, float maxDistanceTiles);
 
     void update(float deltaTime,
                 Entity *player = nullptr,
@@ -29,6 +30,9 @@ private:
     float mArrowThickness = 4.0f;
     Color mArrowColor = RAYWHITE;
     Color mBackground = Fade(BLACK, 0.35f);
+    float mTileSize = 32.0f;
+    float mMinDisplayTiles = 64.0f;
+    float mMaxDisplayTiles = 256.0f;
 
     void loadIcon();
 };
