@@ -161,6 +161,7 @@ private:
     size_t mNoteSequenceIndex = 0;
     bool mIsGameOver = false;
     KeyboardKey mRetryBindingKey = KEY_ENTER;
+    bool mSkipPlayerChunkForNextEnemySpawn = false;
 
     int mBranchInventory = branch::DEFAULT_INITIAL;
     int mInitialBranchCount = branch::DEFAULT_INITIAL;

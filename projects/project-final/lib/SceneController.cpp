@@ -93,6 +93,10 @@ void SceneController::shutdown()
 
 void SceneController::toggleSettings()
 {
+    if (!mSettings)
+    {
+        return;
+    }
     mSettingsVisible = !mSettingsVisible;
     if (mSettings)
     {
@@ -133,46 +137,12 @@ void SceneController::activateScene(std::unique_ptr<Scene> scene)
     }
 
     Player* player = mActiveScene ? mActiveScene->getPlayer() : nullptr;
-    bindPlayerActions(player);
     rebuildSettings(player);
-}
-
-void SceneController::bindPlayerActions(Player* player)
-{
-    if (!mController) return;
-
-    mController->unbindAction("move_left");
-    mController->unbindAction("move_right");
-    mController->unbindAction("move_up");
-    mController->unbindAction("move_down");
-    mController->unbindAction("retry_level");
-    mController->unbindAction("throw_branch");
-    mController->unbindAction("melee_attack");
-
-    if (!player) return;
-
-    mController->bindAction("move_left", KEY_A, Controller::InputEvent::Held, [player](float) {
-        player->moveLeft();
-    });
-    mController->bindAction("move_right", KEY_D, Controller::InputEvent::Held, [player](float) {
-        player->moveRight();
-    });
-    mController->bindAction("move_up", KEY_W, Controller::InputEvent::Held, [player](float) {
-        player->moveUp();
-    });
-    mController->bindAction("move_down", KEY_S, Controller::InputEvent::Held, [player](float) {
-        player->moveDown();
-    });
 }
 
 void SceneController::rebuildSettings(Player* player)
 {
-    if (mSettings)
-    {
-        mSettings->shutdown();
-        mSettings.reset();
-    }
-    if (!player || !mController)
+    if (!mController)
     {
         return;
     }
@@ -217,16 +187,32 @@ void SceneController::rebuildSettings(Player* player)
         };
     }
 
-    mSettings = std::make_unique<Settings>(player,
-                                           mController.get(),
-                                           retryAction,
-                                           retryKeyChanged,
-                                           branchAction,
-                                           difficultyChanged,
-                                           meleeAction);
-    mSettings->initialise();
+    if (!mSettings)
+    {
+        mSettings = std::make_unique<Settings>(player,
+                                               mController.get(),
+                                               retryAction,
+                                               retryKeyChanged,
+                                               branchAction,
+                                               difficultyChanged,
+                                               meleeAction);
+        mSettings->initialise();
+    }
+    else
+    {
+        mSettings->updateContext(player,
+                                 retryAction,
+                                 retryKeyChanged,
+                                 branchAction,
+                                 difficultyChanged,
+                                 meleeAction);
+    }
+
     mSettingsVisible = false;
-    mSettings->setVisible(false);
+    if (mSettings)
+    {
+        mSettings->setVisible(false);
+    }
     if (mActiveScene)
     {
         mActiveScene->setPaused(false);

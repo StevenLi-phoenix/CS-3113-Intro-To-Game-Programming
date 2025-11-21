@@ -30,6 +30,12 @@ public:
     void shutdown() override;
 
     void setVisible(bool visible);
+    void updateContext(Player* player,
+                       std::function<void()> retryCallback,
+                       std::function<void(KeyboardKey)> retryKeyChanged,
+                       std::function<void()> throwBranchCallback,
+                       std::function<void(int)> difficultyChanged,
+                       std::function<void()> meleeAttackCallback);
     bool isVisible() const { return mVisible; }
 
 private:

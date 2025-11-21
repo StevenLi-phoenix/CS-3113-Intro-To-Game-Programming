@@ -112,6 +112,7 @@ void Level1::initialise()
     ensureMusicNotes();
     resetBranchInventory();
     initialiseInventoryUI();
+    mSkipPlayerChunkForNextEnemySpawn = true;
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
     // initialiseLightingShader();
@@ -1063,6 +1064,7 @@ void Level1::resetPlayerForRetry()
     clearBranches();
     resetBranchInventory();
 
+    mSkipPlayerChunkForNextEnemySpawn = true;
     updateChunkStream(true);
     mCamera.target = mPlayer->getPosition();
 }
@@ -1463,6 +1465,9 @@ void Level1::generateEnemies()
                                       (static_cast<float>(startTileX) + static_cast<float>(mMapColumns) * 0.5f) * mTileSize,
                                       (static_cast<float>(startTileY) + static_cast<float>(mMapRows) * 0.5f) * mTileSize
                                   };
+    const bool skipPlayerChunk = mSkipPlayerChunkForNextEnemySpawn;
+    const std::pair<int, int> playerChunk{mCurrentChunkX, mCurrentChunkY};
+    bool skippedPlayerChunk = false;
 
     auto ensureInCollidables = [this](Enemy* enemy)
     {
@@ -1491,6 +1496,11 @@ void Level1::generateEnemies()
             };
 
             std::vector<Enemy*> &bucket = mChunkEnemies[chunkKey];
+            if (skipPlayerChunk && chunkKey == playerChunk)
+            {
+                skippedPlayerChunk = true;
+                continue;
+            }
             if (bucket.empty())
             {
                 spawnEnemiesForChunk(chunkKey, bucket, playerPos);
@@ -1519,7 +1529,7 @@ void Level1::generateEnemies()
         }
     }
 
-    if (mEnemies.empty() && !hasStoredEnemies)
+    if (mEnemies.empty() && !hasStoredEnemies && !(skipPlayerChunk && skippedPlayerChunk))
     {
         const float chunkWorldSize = static_cast<float>(mChunkSize) * mTileSize;
         const float fallbackRadius = chunkWorldSize * 0.35f;
@@ -1544,6 +1554,8 @@ void Level1::generateEnemies()
                             fallbackPos.x,
                             fallbackPos.y));
     }
+
+    mSkipPlayerChunkForNextEnemySpawn = false;
 
     const double tGenEnd = GetTime();
     LOG_DEBUG(TextFormat("Activated %d enemies across %d chunks in %.2fms",

@@ -43,7 +43,6 @@ private:
     bool mSettingsVisible = false;
 
     void activateScene(std::unique_ptr<Scene> scene);
-    void bindPlayerActions(Player* player);
     void rebuildSettings(Player* player);
 };
 

@@ -29,7 +29,9 @@ void MainMenuScene::buildMenu()
     clearButtons();
 
     Vector2 center = { c::SCREEN_WIDTH / 2.0f, c::SCREEN_HEIGHT / 2.0f };
-    float startY = center.y - kButtonSpacing;
+    const int buttonCount = 4;
+    float totalSpan = (buttonCount - 1) * kButtonSpacing;
+    float startY = center.y - totalSpan * 0.3f;
 
     addMenuButton("Play", startY, []() {
         if (gSceneController)
@@ -38,14 +40,21 @@ void MainMenuScene::buildMenu()
         }
     });
 
-    addMenuButton("Credits", startY + kButtonSpacing, []() {
+    addMenuButton("Settings", startY + kButtonSpacing, []() {
+        if (gSceneController)
+        {
+            gSceneController->toggleSettings();
+        }
+    });
+
+    addMenuButton("Credits", startY + kButtonSpacing * 2.0f, []() {
         if (gSceneController)
         {
             gSceneController->requestSceneChange(std::make_unique<CreditsScene>());
         }
     });
 
-    addMenuButton("Quit", startY + kButtonSpacing * 2.0f, []() {
+    addMenuButton("Quit", startY + kButtonSpacing * 3.0f, []() {
         gAppStatus = TERMINATED;
     });
 }

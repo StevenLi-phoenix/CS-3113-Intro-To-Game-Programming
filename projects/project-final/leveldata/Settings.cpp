@@ -3,6 +3,7 @@
 #include "player.h"
 #include "../lib/Music.h"
 #include <algorithm>
+#include <utility>
 
 Settings::Settings(Player* player,
                    Controller* controller,
@@ -126,13 +127,46 @@ void Settings::initialise()
 
 void Settings::buildUI()
 {
-    float buttonWidth = 320.0f;
-    float buttonHeight = 40.0f;
-    float spacing = 12.0f;
-    float startY = 380.0f;
+    const float leftColumnX = c::SCREEN_WIDTH * 0.35f;
+    const float rightColumnX = c::SCREEN_WIDTH * 0.65f;
+    const float leftColumnTop = 190.0f;
+    const float leftColumnSpacing = 90.0f;
+
+    if (mVolumeSlider)
+    {
+        mVolumeSlider->setPosition({leftColumnX, leftColumnTop});
+    }
+    if (mGraphicsDropdown)
+    {
+        mGraphicsDropdown->setPosition({leftColumnX, leftColumnTop + leftColumnSpacing});
+    }
+    if (mHealthDropdown)
+    {
+        mHealthDropdown->setPosition({leftColumnX, leftColumnTop + leftColumnSpacing * 2.0f});
+    }
+
+    const float buttonWidth = 320.0f;
+    const float buttonHeight = 40.0f;
+    const float spacing = 16.0f;
+    const float bottomMargin = 40.0f;
+    float startY = leftColumnTop;
+
+    if (!mActions.empty())
+    {
+        const size_t lastIndex = mActions.size() - 1;
+        float totalStep = static_cast<float>(lastIndex) * (buttonHeight + spacing);
+        float lastButtonY = startY + totalStep;
+        float lastButtonBottom = lastButtonY + buttonHeight * 0.5f;
+        float bottomLimit = c::SCREEN_HEIGHT - bottomMargin;
+        if (lastButtonBottom > bottomLimit)
+        {
+            float overflow = lastButtonBottom - bottomLimit;
+            startY -= overflow;
+        }
+    }
 
     Vector2 start = {
-        c::SCREEN_WIDTH / 2.0f,
+        rightColumnX,
         startY
     };
 
@@ -284,31 +318,29 @@ void Settings::render()
     DrawText("Settings", c::SCREEN_WIDTH / 2 - MeasureText("Settings", 36) / 2, 40, 36, RAYWHITE);
     DrawText(mStatusMessage.c_str(), c::SCREEN_WIDTH / 2 - MeasureText(mStatusMessage.c_str(), 20) / 2, 90, 20, RAYWHITE);
 
-    if (mVolumeSlider)
-    {
-        DrawText(mVolumeLabel.c_str(),
-                 c::SCREEN_WIDTH / 2 - MeasureText(mVolumeLabel.c_str(), 20) / 2,
-                 140,
+    auto drawColumnLabel = [](const std::string& text, const Vector2& anchor, float offsetY) {
+        if (text.empty()) return;
+        int width = MeasureText(text.c_str(), 20);
+        DrawText(text.c_str(),
+                 static_cast<int>(anchor.x - width / 2),
+                 static_cast<int>(anchor.y + offsetY),
                  20,
                  RAYWHITE);
+    };
+
+    if (mVolumeSlider)
+    {
+        drawColumnLabel(mVolumeLabel, mVolumeSlider->getPosition(), -38.0f);
     }
 
     if (mGraphicsDropdown)
     {
-        DrawText(mGraphicsLabel.c_str(),
-                 c::SCREEN_WIDTH / 2 - MeasureText(mGraphicsLabel.c_str(), 20) / 2,
-                 200,
-                 20,
-                 RAYWHITE);
+        drawColumnLabel(mGraphicsLabel, mGraphicsDropdown->getPosition(), -42.0f);
     }
 
     if (mHealthDropdown)
     {
-        DrawText(mHealthLabel.c_str(),
-                 c::SCREEN_WIDTH / 2 - MeasureText(mHealthLabel.c_str(), 20) / 2,
-                 260,
-                 20,
-                 RAYWHITE);
+        drawColumnLabel(mHealthLabel, mHealthDropdown->getPosition(), -42.0f);
     }
 
     std::vector<UIBase*> drawList;
@@ -380,7 +412,7 @@ void Settings::setupGraphicsControl()
         {c::SCREEN_WIDTH / 2.0f, 240.0f},
         {260.0f, 36.0f}
     );
-    mGraphicsDropdown->setZIndex(3);
+    mGraphicsDropdown->setZIndex(8);
     registerElement(mGraphicsDropdown);
     mGraphicsDropdown->setOptions(mGraphicsOptions);
     mGraphicsDropdown->setSelectedIndex(1, false);
@@ -444,6 +476,22 @@ void Settings::setVisible(bool visible)
         mStatusMessage = "Click a button to rebind keys. Press ESC to cancel.";
         cancelRebind();
     }
+}
+
+void Settings::updateContext(Player* player,
+                             std::function<void()> retryCallback,
+                             std::function<void(KeyboardKey)> retryKeyChanged,
+                             std::function<void()> throwBranchCallback,
+                             std::function<void(int)> difficultyChanged,
+                             std::function<void()> meleeAttackCallback)
+{
+    mPlayer = player;
+    mRetryCallback = std::move(retryCallback);
+    mRetryKeyCallback = std::move(retryKeyChanged);
+    mThrowBranchCallback = std::move(throwBranchCallback);
+    mDifficultyCallback = std::move(difficultyChanged);
+    mMeleeCallback = std::move(meleeAttackCallback);
+    applyHealthPreset(mSelectedHealthIndex);
 }
 
 Settings::ActionDefinition* Settings::findAction(const std::string& actionName)
