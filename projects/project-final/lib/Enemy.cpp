@@ -8,7 +8,8 @@ Enemy::Enemy(Vector2 position, float moveSpeed, float detectionRadius)
       mMoveSpeed(moveSpeed),
       mDetectionRadius(detectionRadius),
       mMaxHealth(EnemyConstants::DEFAULT_HEALTH),
-      mHealth(EnemyConstants::DEFAULT_HEALTH)
+      mHealth(EnemyConstants::DEFAULT_HEALTH),
+      mPathSettings(EnemyConstants::DEFAULT_PATH_SETTINGS)
 {
     ResourceManager &rm = ResourceManager::instance();
     Texture2D *texture = rm.getTexture(ResourceKeys::WORLD_ATLAS);
@@ -26,6 +27,8 @@ Enemy::Enemy(Vector2 position, float moveSpeed, float detectionRadius)
         EnemyConstants::DEFAULT_HEIGHT * EnemyConstants::COLLIDER_WIDTH_RATIO,
         EnemyConstants::DEFAULT_HEIGHT * EnemyConstants::COLLIDER_HEIGHT_RATIO
     });
+
+    mLastPathPosition = position;
 }
 
 void Enemy::update(float deltaTime,
@@ -153,3 +156,197 @@ bool Enemy::applyDamage(float amount)
     return false;
 }
 
+void Enemy::setPathSettings(const EnemyConstants::PathSettings &settings)
+{
+    mPathSettings.refreshInterval = std::max(0.0f, settings.refreshInterval);
+    mPathSettings.nodeReachedRadius = std::max(0.0f, settings.nodeReachedRadius);
+    mPathSettings.stuckMoveEps = std::max(0.0f, settings.stuckMoveEps);
+    mPathSettings.stuckRepathTime = std::max(0.0f, settings.stuckRepathTime);
+    mPathSettings.progressEps = std::max(0.0f, settings.progressEps);
+    mPathSettings.progressTimeout = std::max(0.0f, settings.progressTimeout);
+    mPathSettings.failureCooldownScale = std::max(0.0f, settings.failureCooldownScale);
+}
+
+void Enemy::tickPathCooldown(float deltaTime)
+{
+    if (mPathCooldown > 0.0f)
+    {
+        mPathCooldown = std::max(0.0f, mPathCooldown - deltaTime);
+    }
+}
+
+bool Enemy::refreshPathTo(const Vector2 &targetPosition, bool forceRebuild)
+{
+    const NavMap *navMap = getNavMap();
+    if (!navMap)
+    {
+        resetPathState();
+        return false;
+    }
+
+    if (!forceRebuild)
+    {
+        if (hasActivePath() && mPathCooldown > 0.0f)
+        {
+            return false;
+        }
+    }
+
+    const double tRequestStart = GetTime();
+    const std::vector<Vector2> newPath = navMap->findPath(getPosition(), targetPosition);
+    const double elapsedMs = (GetTime() - tRequestStart) * 1000.0;
+    if (newPath.size() >= 2)
+    {
+        mCurrentPath = newPath;
+        mCurrentPathIndex = 1;
+        mHasPath = true;
+        mPathCooldown = mPathSettings.refreshInterval;
+        if (isDebugMode())
+        {
+            LOG_INFO(TextFormat("Enemy[%p] path success nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
+                                this,
+                                mCurrentPath.size(),
+                                elapsedMs,
+                                forceRebuild ? "true" : "false",
+                                getPosition().x,
+                                getPosition().y,
+                                targetPosition.x,
+                                targetPosition.y));
+        }
+        return true;
+    }
+
+    if (isDebugMode())
+    {
+        LOG_WARNING(TextFormat("Enemy[%p] path failed nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
+                               this,
+                               newPath.size(),
+                               elapsedMs,
+                               forceRebuild ? "true" : "false",
+                               getPosition().x,
+                               getPosition().y,
+                               targetPosition.x,
+                               targetPosition.y));
+    }
+    resetPathState();
+    mPathCooldown = mPathSettings.refreshInterval * mPathSettings.failureCooldownScale;
+    return false;
+}
+
+Vector2 Enemy::resolvePathTarget(const Vector2 &fallbackTarget)
+{
+    if (mHasPath && mCurrentPathIndex < mCurrentPath.size())
+    {
+        Vector2 currentTarget = mCurrentPath[mCurrentPathIndex];
+        if (hasReachedTarget(currentTarget, mPathSettings.nodeReachedRadius))
+        {
+            ++mCurrentPathIndex;
+            if (mCurrentPathIndex < mCurrentPath.size())
+            {
+                currentTarget = mCurrentPath[mCurrentPathIndex];
+            }
+            else
+            {
+                resetPathState();
+                return fallbackTarget;
+            }
+        }
+        return currentTarget;
+    }
+    return fallbackTarget;
+}
+
+bool Enemy::detectPathStall(float deltaTime, float distanceToTarget)
+{
+    bool requestRepath = false;
+    const float movedDistance = Vector2Distance(mLastPathPosition, getPosition());
+    if (movedDistance < mPathSettings.stuckMoveEps)
+    {
+        mStuckTimer += deltaTime;
+    }
+    else
+    {
+        mStuckTimer = 0.0f;
+    }
+
+    if (!mHasLastDistance)
+    {
+        mLastDistanceToTarget = distanceToTarget;
+        mHasLastDistance = true;
+        mProgressTimer = 0.0f;
+    }
+    else
+    {
+        if (distanceToTarget > mLastDistanceToTarget - mPathSettings.progressEps)
+        {
+            mProgressTimer += deltaTime;
+        }
+        else
+        {
+            mProgressTimer = 0.0f;
+        }
+        mLastDistanceToTarget = distanceToTarget;
+    }
+
+    if (mStuckTimer >= mPathSettings.stuckRepathTime ||
+        mProgressTimer >= mPathSettings.progressTimeout)
+    {
+        requestRepath = true;
+        if (isDebugMode())
+        {
+            LOG_DEBUG(TextFormat("Enemy[%p] repath due to %s (stuck=%.2f progress=%.2f)",
+                                 this,
+                                 mStuckTimer >= mPathSettings.stuckRepathTime ? "movement stall" : "no progress",
+                                 mStuckTimer,
+                                 mProgressTimer));
+        }
+        mStuckTimer = 0.0f;
+        mProgressTimer = 0.0f;
+    }
+
+    mLastPathPosition = getPosition();
+    return requestRepath;
+}
+
+bool Enemy::hasReachedTarget(const Vector2 &target, float radius) const
+{
+    const Vector2 diff = {
+        target.x - getPosition().x,
+        target.y - getPosition().y
+    };
+    const float distanceSq = diff.x * diff.x + diff.y * diff.y;
+    return distanceSq <= radius * radius;
+}
+
+void Enemy::resetPathState()
+{
+    mHasPath = false;
+    mCurrentPath.clear();
+    mCurrentPathIndex = 1;
+    mStuckTimer = 0.0f;
+    mProgressTimer = 0.0f;
+    mHasLastDistance = false;
+    mLastPathPosition = getPosition();
+}
+
+bool Enemy::hasActivePath() const
+{
+    return mHasPath && mCurrentPathIndex < mCurrentPath.size();
+}
+
+std::vector<Vector2> Enemy::activePathPoints() const
+{
+    std::vector<Vector2> points;
+    if (!hasActivePath())
+    {
+        return points;
+    }
+
+    points.reserve(mCurrentPath.size() - mCurrentPathIndex + 1);
+    points.push_back(getPosition());
+    for (size_t i = mCurrentPathIndex; i < mCurrentPath.size(); ++i)
+    {
+        points.push_back(mCurrentPath[i]);
+    }
+    return points;
+}

@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <vector>
 
 namespace
 {
@@ -60,7 +59,6 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
 
     setVelocity({0.0f, 0.0f});
     mPatrolHome = position;
-    mLastPosition = position;
     mPatrolTarget = position;
     mHasPatrolTarget = false;
     if (isDebugMode())
@@ -86,7 +84,6 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
     if (playerDetected)
     {
         mChaseLoseTimer = DogConstants::CHASE_EXIT_GRACE;
-        mLastKnownPlayerPos = player->getPosition();
     }
     else if (mChaseLoseTimer > 0.0f)
     {
@@ -97,13 +94,10 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
 
     if (shouldChase)
     {
-        if (mPathCooldown > 0.0f)
-        {
-            mPathCooldown = std::max(0.0f, mPathCooldown - deltaTime);
-        }
-        refreshPathToPlayer(player, false);
+        tickPathCooldown(deltaTime);
+        refreshPathTo(player->getPosition(), false);
 
-        Vector2 targetPosition = resolveTargetPosition(player->getPosition());
+        Vector2 targetPosition = resolvePathTarget(player->getPosition());
 
         if (!mIsChasing)
         {
@@ -141,7 +135,10 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
         }
         const float playerDistance = Vector2Distance(player->getPosition(), getPosition());
         attemptAttack(player, playerDistance);
-        handleStuckDetection(deltaTime, distance, player);
+        if (detectPathStall(deltaTime, distance))
+        {
+            refreshPathTo(player->getPosition(), true);
+        }
     }
     else
     {
@@ -152,8 +149,6 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
         resetChaseState();
         updatePatrol(deltaTime);
     }
-
-    mLastPosition = getPosition();
 }
 
 Rectangle Dog::resolveSpriteRect(int variant) const
@@ -174,7 +169,7 @@ Rectangle Dog::resolveSpriteRect(int variant) const
 void Dog::updatePatrol(float deltaTime)
 {
     mPatrolTimer -= deltaTime;
-    if (!mHasPatrolTarget || mPatrolTimer <= 0.0f || hasReachedTarget(mPatrolTarget, DogConstants::PATH_NODE_REACHED_RADIUS))
+    if (!mHasPatrolTarget || mPatrolTimer <= 0.0f || hasReachedTarget(mPatrolTarget, getPathNodeReachedRadius()))
     {
         mPatrolTarget = randomPatrolTarget();
         mHasPatrolTarget = true;
@@ -218,167 +213,16 @@ void Dog::updatePatrol(float deltaTime)
     }
 }
 
-void Dog::refreshPathToPlayer(Entity *player, bool forceRebuild)
-{
-    const NavMap *navMap = getNavMap();
-    if (!navMap || !player)
-    {
-        resetPathState();
-        return;
-    }
-
-    if (!forceRebuild)
-    {
-        const bool pathActive = mHasPath && mCurrentPathIndex < mCurrentPath.size();
-        if (pathActive && mPathCooldown > 0.0f)
-        {
-            if (isDebugMode())
-            {
-                // TODO: remove this
-                // LOG_DEBUG(TextFormat("Dog[%p] path refresh skipped (cooldown %.2f)",this,mPathCooldown));
-            }
-            return;
-        }
-    }
-
-    const double tRequestStart = GetTime();
-    const std::vector<Vector2> newPath = navMap->findPath(getPosition(), player->getPosition());
-    const double elapsedMs = (GetTime() - tRequestStart) * 1000.0;
-    if (newPath.size() >= 2)
-    {
-        mCurrentPath = newPath;
-        mCurrentPathIndex = 1;
-        if (isDebugMode())
-        {
-            LOG_INFO(TextFormat("Dog[%p] path success nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
-                                this,
-                                mCurrentPath.size(),
-                                elapsedMs,
-                                forceRebuild ? "true" : "false",
-                                getPosition().x,
-                                getPosition().y,
-                                player->getPosition().x,
-                                player->getPosition().y));
-        }
-        mHasPath = true;
-        mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL;
-    }
-    else
-    {
-        if (isDebugMode())
-        {
-            LOG_WARNING(TextFormat("Dog[%p] path failed nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
-                                   this,
-                                   newPath.size(),
-                                   elapsedMs,
-                                   forceRebuild ? "true" : "false",
-                                   getPosition().x,
-                                   getPosition().y,
-                                   player->getPosition().x,
-                                   player->getPosition().y));
-        }
-        resetPathState();
-        mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL * 0.5f;
-    }
-}
-
-Vector2 Dog::resolveTargetPosition(const Vector2 &playerPosition)
-{
-    if (mHasPath && mCurrentPathIndex < mCurrentPath.size())
-    {
-        Vector2 currentTarget = mCurrentPath[mCurrentPathIndex];
-        if (hasReachedTarget(currentTarget, DogConstants::PATH_NODE_REACHED_RADIUS))
-        {
-            ++mCurrentPathIndex;
-            if (mCurrentPathIndex < mCurrentPath.size())
-            {
-                currentTarget = mCurrentPath[mCurrentPathIndex];
-            }
-            else
-            {
-                resetPathState();
-                return playerPosition;
-            }
-        }
-        return currentTarget;
-    }
-    return playerPosition;
-}
-
-void Dog::handleStuckDetection(float deltaTime, float distanceToTarget, Entity *player)
-{
-    bool requestRepath = false;
-    const float movedDistance = Vector2Distance(mLastPosition, getPosition());
-    if (movedDistance < DogConstants::STUCK_MOVE_EPS)
-    {
-        mStuckTimer += deltaTime;
-    }
-    else
-    {
-        mStuckTimer = 0.0f;
-    }
-
-    if (!mHasLastDistance)
-    {
-        mLastDistanceToTarget = distanceToTarget;
-        mHasLastDistance = true;
-        mProgressTimer = 0.0f;
-    }
-    else
-    {
-        if (distanceToTarget > mLastDistanceToTarget - DogConstants::PROGRESS_EPS)
-        {
-            mProgressTimer += deltaTime;
-        }
-        else
-        {
-            mProgressTimer = 0.0f;
-        }
-        mLastDistanceToTarget = distanceToTarget;
-    }
-
-    if (mStuckTimer >= DogConstants::STUCK_REPATH_TIME ||
-        mProgressTimer >= DogConstants::PROGRESS_TIMEOUT)
-    {
-        requestRepath = true;
-        if (isDebugMode())
-        {
-            LOG_DEBUG(TextFormat("Dog[%p] repath due to %s (stuck=%.2f progress=%.2f)",
-                                 this,
-                                 mStuckTimer >= DogConstants::STUCK_REPATH_TIME ? "movement stall" : "no progress",
-                                 mStuckTimer,
-                                 mProgressTimer));
-        }
-        mStuckTimer = 0.0f;
-        mProgressTimer = 0.0f;
-    }
-
-    if (requestRepath)
-    {
-        refreshPathToPlayer(player, true);
-    }
-}
-
 void Dog::resetChaseState()
 {
-    if (mHasPath && isDebugMode())
+    if (hasActivePath() && isDebugMode())
     {
         LOG_DEBUG(TextFormat("Dog[%p] cleared path after losing target", this));
     }
     mIsChasing = false;
     resetPathState();
-    mPathCooldown = 0.0f;
-    mStuckTimer = 0.0f;
-    mProgressTimer = 0.0f;
-    mHasLastDistance = false;
+    setPathCooldown(0.0f);
     mChaseLoseTimer = 0.0f;
-}
-
-void Dog::resetPathState()
-{
-    mHasPath = false;
-    mCurrentPath.clear();
-    mCurrentPathIndex = 1;
 }
 
 Vector2 Dog::randomPatrolTarget() const
@@ -389,16 +233,6 @@ Vector2 Dog::randomPatrolTarget() const
         mPatrolHome.x + cosf(angle) * radius,
         mPatrolHome.y + sinf(angle) * radius
     };
-}
-
-bool Dog::hasReachedTarget(const Vector2 &target, float radius) const
-{
-    const Vector2 diff = {
-        target.x - getPosition().x,
-        target.y - getPosition().y
-    };
-    const float distanceSq = diff.x * diff.x + diff.y * diff.y;
-    return distanceSq <= radius * radius;
 }
 
 void Dog::attemptAttack(Entity *player, float distanceToPlayer)
@@ -456,21 +290,4 @@ Vector2 Dog::applyMovementBias(const Vector2 &direction) const
     biased.x /= magnitude;
     biased.y /= magnitude;
     return biased;
-}
-
-std::vector<Vector2> Dog::activePathPoints() const
-{
-    std::vector<Vector2> points;
-    if (!hasActivePath())
-    {
-        return points;
-    }
-
-    points.reserve(mCurrentPath.size() - mCurrentPathIndex + 1);
-    points.push_back(getPosition());
-    for (size_t i = mCurrentPathIndex; i < mCurrentPath.size(); ++i)
-    {
-        points.push_back(mCurrentPath[i]);
-    }
-    return points;
 }

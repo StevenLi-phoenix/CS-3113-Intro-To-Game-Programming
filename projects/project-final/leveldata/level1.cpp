@@ -324,12 +324,11 @@ void Level1::render()
         mNavMap.clearDebugPaths();
         for (Enemy* enemy : mEnemies)
         {
-            Dog *dog = dynamic_cast<Dog*>(enemy);
-            if (!dog || !dog->hasActivePath())
+            if (!enemy || !enemy->hasActivePath())
             {
                 continue;
             }
-            std::vector<Vector2> path = dog->activePathPoints();
+            std::vector<Vector2> path = enemy->activePathPoints();
             if (path.size() >= 2)
             {
                 mNavMap.addDebugPath(path, BLUE);
