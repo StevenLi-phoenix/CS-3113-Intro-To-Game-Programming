@@ -6,7 +6,6 @@
 # level 1
 - [x] walk, 
 - [x] melee attack (temp: x key)
-- [ ] block (stamina)
 
 [x] fix tree rendering
 [x] Add NavMap creation
@@ -22,16 +21,40 @@
 
 Quest log + compass/table objective implemented with gated actions and level trigger.
 
-金币的逻辑目前是有问题的，应该是杀死怪物有概率掉落的
+金币的逻辑目前是有问题的，应该是杀死怪物有概率掉落的 [x]
 target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
+
+# Player Feedback & Improvements (from 11/21 survey)
+## Level 1 UX & Accessibility
+- [ ] Add ability to recall/reopen tutorial during gameplay (F2 or menu option)
+- [ ] Make settings/keybindings more visible and descriptive in F1 panel
+- [ ] Consider longer tutorial with option to close and reopen
+
+## Level 1 Gameplay Balance
+- [ ] Rebalance enemy spawning - reduce enemy count or spawn rate in early game
+- [ ] Improve "surrounded by enemies" scenario - add dodge/block ability or escape mechanic
+- [ ] Consider additional punishment for poor positioning rather than instant death
+
+## Level 1 Content & Progression
+- [ ] Implement weapon progression system - unlock new weapons after defeating X enemies
+- [ ] Implement rock mining mechanic with rock-based/iron ore weapons (superior to branches)
+- [ ] Expand weapon variety beyond branches and arrows
+- [ ] Add more varied enemy types for Level 1
+
+## Positive Feedback to Maintain
+- Branch throwing mechanic (well-received)
+- Farming/crafting system for survival
+- Gold coin drop RNG rewards
+- Mode adjustment function
 
 # level 2
 ## enemy: skeleton (ranged attack only)
 ## planned for underground level with maze
 ## target: reach the exit of the dungeon
 new player abilities:
-- dash
-- run
+- [ ] block (stamina)
+- [ ] dash
+- [ ] run (just a temporary ability to move faster)
 
 # level 3, boss level? (if time allows)
 ## enemy: spider (ranged attack only)
@@ -52,3 +75,7 @@ new player abilities:
 - achievements
 - customizability
 Add UI for mini-map (use shader to the map and also hide undisovered areas)
+
+Stone spawning corner case, when stone spawns at the chunk edge, and player cross the chunk edge, the stone will be removed. But place back when player cross back the chunk edge.
+
+Minimap: plug the map data to a shader and render it then add points for game objects(trees, rocks, enemies, boxes, gold coins, table with map, compass current target, etc.)

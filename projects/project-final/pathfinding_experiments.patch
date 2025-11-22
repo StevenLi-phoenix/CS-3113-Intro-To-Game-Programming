@@ -1,0 +1,1528 @@
+diff --git a/projects/project-final/TODO b/projects/project-final/TODO
+index 10177d1..d7b36fb 100644
+--- a/projects/project-final/TODO
++++ b/projects/project-final/TODO
+@@ -6,7 +6,6 @@
+ # level 1
+ - [x] walk, 
+ - [x] melee attack (temp: x key)
+-- [ ] block (stamina)
+ 
+ [x] fix tree rendering
+ [x] Add NavMap creation
+@@ -22,16 +21,40 @@
+ 
+ Quest log + compass/table objective implemented with gated actions and level trigger.
+ 
+-金币的逻辑目前是有问题的，应该是杀死怪物有概率掉落的
++金币的逻辑目前是有问题的，应该是杀死怪物有概率掉落的 [x]
+ target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
+ 
++# Player Feedback & Improvements (from 11/21 survey)
++## Level 1 UX & Accessibility
++- [ ] Add ability to recall/reopen tutorial during gameplay (F2 or menu option)
++- [ ] Make settings/keybindings more visible and descriptive in F1 panel
++- [ ] Consider longer tutorial with option to close and reopen
++
++## Level 1 Gameplay Balance
++- [ ] Rebalance enemy spawning - reduce enemy count or spawn rate in early game
++- [ ] Improve "surrounded by enemies" scenario - add dodge/block ability or escape mechanic
++- [ ] Consider additional punishment for poor positioning rather than instant death
++
++## Level 1 Content & Progression
++- [ ] Implement weapon progression system - unlock new weapons after defeating X enemies
++- [ ] Implement rock mining mechanic with rock-based/iron ore weapons (superior to branches)
++- [ ] Expand weapon variety beyond branches and arrows
++- [ ] Add more varied enemy types for Level 1
++
++## Positive Feedback to Maintain
++- Branch throwing mechanic (well-received)
++- Farming/crafting system for survival
++- Gold coin drop RNG rewards
++- Mode adjustment function
++
+ # level 2
+ ## enemy: skeleton (ranged attack only)
+ ## planned for underground level with maze
+ ## target: reach the exit of the dungeon
+ new player abilities:
+-- dash
+-- run
++- [ ] block (stamina)
++- [ ] dash
++- [ ] run (just a temporary ability to move faster)
+ 
+ # level 3, boss level? (if time allows)
+ ## enemy: spider (ranged attack only)
+@@ -52,3 +75,7 @@ new player abilities:
+ - achievements
+ - customizability
+ Add UI for mini-map (use shader to the map and also hide undisovered areas)
++
++Stone spawning corner case, when stone spawns at the chunk edge, and player cross the chunk edge, the stone will be removed. But place back when player cross back the chunk edge.
++
++Minimap: plug the map data to a shader and render it then add points for game objects(trees, rocks, enemies, boxes, gold coins, table with map, compass current target, etc.)
+\ No newline at end of file
+diff --git a/projects/project-final/constants.h b/projects/project-final/constants.h
+index 840478a..19a4af3 100644
+--- a/projects/project-final/constants.h
++++ b/projects/project-final/constants.h
+@@ -56,4 +56,8 @@ namespace lighting {
+     constexpr float CURSOR_LIGHT_INTENSITY = 0.9f;
+ }
+ 
++namespace pathfinding {
++    constexpr int MAX_PATH_REQUESTS_PER_FRAME = 3;
++}
++
+ #endif
+diff --git a/projects/project-final/leveldata/dog.cpp b/projects/project-final/leveldata/dog.cpp
+index d6d19a2..974a2e8 100644
+--- a/projects/project-final/leveldata/dog.cpp
++++ b/projects/project-final/leveldata/dog.cpp
+@@ -51,6 +51,7 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
+                                         mVariant,
+                                         DogConstants::PATROL_SPEED))
+ {
++    setIsPushable(true);
+     Rectangle spriteRect = resolveSpriteRect(mVariant);
+     applySpriteRect(spriteRect,
+                     mDesiredHeight,
+@@ -74,7 +75,9 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
+     }
+ }
+ 
+-void Dog::updateBehaviour(float deltaTime, Entity *player)
++void Dog::updateBehaviour(float deltaTime,
++                          Entity *player,
++                          const std::vector<Entity*> &blockers)
+ {
+     const bool playerValid = player && player->getIsActive();
+     if (mAttackCooldownTimer > 0.0f)
+@@ -101,7 +104,7 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
+         {
+             mPathCooldown = std::max(0.0f, mPathCooldown - deltaTime);
+         }
+-        refreshPathToPlayer(player, false);
++        refreshPathToPlayer(player, blockers, false);
+ 
+         Vector2 targetPosition = resolveTargetPosition(player->getPosition());
+ 
+@@ -128,6 +131,8 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
+                 biasedDirection.x * mChaseSpeed,
+                 biasedDirection.y * mChaseSpeed
+             };
++            const Vector2 steer = separationSteer(blockers);
++            velocity = applySteering(velocity, steer);
+             setVelocity(velocity);
+ 
+             if (biasedDirection.x > 0.1f)
+@@ -141,7 +146,7 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
+         }
+         const float playerDistance = Vector2Distance(player->getPosition(), getPosition());
+         attemptAttack(player, playerDistance);
+-        handleStuckDetection(deltaTime, distance, player);
++        handleStuckDetection(deltaTime, distance, player, blockers);
+     }
+     else
+     {
+@@ -218,7 +223,9 @@ void Dog::updatePatrol(float deltaTime)
+     }
+ }
+ 
+-void Dog::refreshPathToPlayer(Entity *player, bool forceRebuild)
++void Dog::refreshPathToPlayer(Entity *player,
++                              const std::vector<Entity*> &blockers,
++                              bool forceRebuild)
+ {
+     const NavMap *navMap = getNavMap();
+     if (!navMap || !player)
+@@ -241,8 +248,40 @@ void Dog::refreshPathToPlayer(Entity *player, bool forceRebuild)
+         }
+     }
+ 
++    std::vector<Entity*> maskBlockers;
++    maskBlockers.reserve(blockers.size());
++    for (Entity* entity : blockers)
++    {
++        if (!entity || entity == this || entity == player)
++        {
++            continue;
++        }
++        if (!entity->getIsPushable())
++        {
++            continue;
++        }
++        if (!entity->getIsActive() || !entity->getCanCollide())
++        {
++            continue;
++        }
++        maskBlockers.push_back(entity);
++    }
++
++    const float radius = getColliderClearanceRadius();
++
+     const double tRequestStart = GetTime();
+-    const std::vector<Vector2> newPath = navMap->findPath(getPosition(), player->getPosition());
++    bool throttledPrimary = false;
++    bool usedFallbackPrimary = false;
++    const std::vector<Vector2> newPath = navMap->findPathWithMask(getPosition(),
++                                                                  player->getPosition(),
++                                                                  radius,
++                                                                  maskBlockers,
++                                                                  &usedFallbackPrimary,
++                                                                  &throttledPrimary);
++    if (throttledPrimary)
++    {
++        return;
++    }
+     const double elapsedMs = (GetTime() - tRequestStart) * 1000.0;
+     if (newPath.size() >= 2)
+     {
+@@ -265,6 +304,152 @@ void Dog::refreshPathToPlayer(Entity *player, bool forceRebuild)
+     }
+     else
+     {
++        // Fallback 1: use another enemy that already has a path to the player (same goal).
++        Vector2 followTarget{};
++        bool hasFollow = false;
++        float bestFollowDist = std::numeric_limits<float>::infinity();
++        bool usedFallbackFollow = false;
++        bool throttledFollow = false;
++        for (Entity* entity : blockers)
++        {
++            Dog *otherDog = dynamic_cast<Dog*>(entity);
++            if (!otherDog || otherDog == this || !otherDog->hasActivePath())
++            {
++                continue;
++            }
++            Vector2 target = otherDog->currentPathTarget();
++            const float goalDist = Vector2Distance(target, player->getPosition());
++            if (goalDist > DogConstants::ATTACK_RANGE * 1.3f)
++            {
++                continue;
++            }
++            const float selfToTarget = Vector2Distance(getPosition(), target);
++            if (selfToTarget < bestFollowDist)
++            {
++                bestFollowDist = selfToTarget;
++                followTarget = target;
++                hasFollow = true;
++            }
++        }
++
++        if (hasFollow)
++        {
++            const std::vector<Vector2> followPath = navMap->findPathWithMask(getPosition(),
++                                                                              followTarget,
++                                                                              radius,
++                                                                              maskBlockers,
++                                                                              &usedFallbackFollow,
++                                                                              &throttledFollow);
++            if (throttledFollow)
++            {
++                return;
++            }
++            if (followPath.size() >= 2)
++            {
++                mCurrentPath = followPath;
++                mCurrentPathIndex = 1;
++                mHasPath = true;
++                mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL;
++                if (isDebugMode())
++                {
++                    LOG_INFO(TextFormat("Dog[%p] path via follow success nodes=%zu time=%.2fms target=(%.1f,%.1f)",
++                                        this,
++                                        mCurrentPath.size(),
++                                        elapsedMs,
++                                        followTarget.x,
++                                        followTarget.y));
++                }
++                return;
++            }
++            if (isDebugMode())
++            {
++                LOG_WARNING(TextFormat("Dog[%p] follow path failed usedFallback=%s blockers=%zu",
++                                       this,
++                                       usedFallbackFollow ? "true" : "false",
++                                       maskBlockers.size()));
++            }
++        }
++
++        // Fallback 2: anchor near player.
++        Vector2 anchorTarget{};
++        bool hasAnchor = false;
++        const float anchorRadius = DogConstants::ATTACK_RANGE * 1.1f;
++        float bestAnchorDist = std::numeric_limits<float>::infinity();
++        for (Entity* entity : blockers)
++        {
++            if (!entity || entity == this || entity == player)
++            {
++                continue;
++            }
++            Enemy *enemy = dynamic_cast<Enemy*>(entity);
++            if (!enemy || !enemy->getIsActive())
++            {
++                continue;
++            }
++            const float distToPlayer = Vector2Distance(enemy->getPosition(), player->getPosition());
++            if (distToPlayer > anchorRadius)
++            {
++                continue;
++            }
++            if (distToPlayer < bestAnchorDist)
++            {
++                bestAnchorDist = distToPlayer;
++                Vector2 dir = {
++                    enemy->getPosition().x - player->getPosition().x,
++                    enemy->getPosition().y - player->getPosition().y
++                };
++                const float len = Vector2Length(dir);
++                if (len > 0.001f)
++                {
++                    dir.x /= len;
++                    dir.y /= len;
++                    const float slotRadius = anchorRadius * 0.8f;
++                    anchorTarget = {
++                        player->getPosition().x + dir.x * slotRadius,
++                        player->getPosition().y + dir.y * slotRadius
++                    };
++                    hasAnchor = true;
++                }
++            }
++        }
++
++        if (hasAnchor)
++        {
++            const std::vector<Vector2> anchorPath = navMap->findPathWithMask(getPosition(),
++                                                                             anchorTarget,
++                                                                             radius,
++                                                                             maskBlockers,
++                                                                             nullptr,
++                                                                             &throttledPrimary);
++            if (throttledPrimary)
++            {
++                return;
++            }
++            if (anchorPath.size() >= 2)
++            {
++                mCurrentPath = anchorPath;
++                mCurrentPathIndex = 1;
++                mHasPath = true;
++                mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL;
++                if (isDebugMode())
++                {
++                    LOG_INFO(TextFormat("Dog[%p] path via anchor success nodes=%zu time=%.2fms anchor=(%.1f,%.1f)",
++                                        this,
++                                        mCurrentPath.size(),
++                                        elapsedMs,
++                                        anchorTarget.x,
++                                        anchorTarget.y));
++                }
++                return;
++            }
++            if (isDebugMode())
++            {
++                LOG_WARNING(TextFormat("Dog[%p] anchor path failed blockers=%zu",
++                                       this,
++                                       maskBlockers.size()));
++            }
++        }
++
+         if (isDebugMode())
+         {
+             LOG_WARNING(TextFormat("Dog[%p] path failed nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
+@@ -276,9 +461,14 @@ void Dog::refreshPathToPlayer(Entity *player, bool forceRebuild)
+                                    getPosition().y,
+                                    player->getPosition().x,
+                                    player->getPosition().y));
++            LOG_WARNING(TextFormat("Dog[%p] path detail: usedFallbackPrimary=%s throttledPrimary=%s blockers=%zu",
++                                   this,
++                                   usedFallbackPrimary ? "true" : "false",
++                                   throttledPrimary ? "true" : "false",
++                                   maskBlockers.size()));
+         }
+         resetPathState();
+-        mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL * 0.5f;
++        mPathCooldown = DogConstants::PATH_REFRESH_INTERVAL * 2.0f;
+     }
+ }
+ 
+@@ -305,7 +495,10 @@ Vector2 Dog::resolveTargetPosition(const Vector2 &playerPosition)
+     return playerPosition;
+ }
+ 
+-void Dog::handleStuckDetection(float deltaTime, float distanceToTarget, Entity *player)
++void Dog::handleStuckDetection(float deltaTime,
++                               float distanceToTarget,
++                               Entity *player,
++                               const std::vector<Entity*> &blockers)
+ {
+     bool requestRepath = false;
+     const float movedDistance = Vector2Distance(mLastPosition, getPosition());
+@@ -355,7 +548,8 @@ void Dog::handleStuckDetection(float deltaTime, float distanceToTarget, Entity *
+ 
+     if (requestRepath)
+     {
+-        refreshPathToPlayer(player, true);
++        // Rebuild path using current blocker state
++        refreshPathToPlayer(player, blockers, true);
+     }
+ }
+ 
+@@ -458,3 +652,85 @@ Vector2 Dog::applyMovementBias(const Vector2 &direction) const
+     return biased;
+ }
+ 
++Vector2 Dog::separationSteer(const std::vector<Entity*> &blockers) const
++{
++    Vector2 force = {0.0f, 0.0f};
++    const float radius = std::max(getColliderClearanceRadius() * 2.0f, 1.0f);
++    const float radiusSq = radius * radius;
++
++    for (Entity* entity : blockers)
++    {
++        if (!entity || entity == this || !entity->getIsActive() || !entity->getCanCollide())
++        {
++            continue;
++        }
++        Vector2 delta = {
++            getPosition().x - entity->getPosition().x,
++            getPosition().y - entity->getPosition().y
++        };
++        const float distSq = delta.x * delta.x + delta.y * delta.y;
++        if (distSq <= 0.0001f || distSq > radiusSq)
++        {
++            continue;
++        }
++        const float dist = sqrtf(distSq);
++        Vector2 away = {
++            delta.x / dist,
++            delta.y / dist
++        };
++        const float weight = 1.0f - (dist / radius);
++        force.x += away.x * weight;
++        force.y += away.y * weight;
++    }
++
++    return force;
++}
++
++Vector2 Dog::applySteering(const Vector2 &baseVelocity, const Vector2 &steer) const
++{
++    const float steerStrength = 30.0f;
++    Vector2 vel = {
++        baseVelocity.x + steer.x * steerStrength,
++        baseVelocity.y + steer.y * steerStrength
++    };
++
++    // Light damping to avoid jitter
++    vel.x *= 0.98f;
++    vel.y *= 0.98f;
++
++    const float speed = Vector2Length(vel);
++    const float maxSpeed = mChaseSpeed;
++    if (speed > maxSpeed && speed > 0.0001f)
++    {
++        vel.x = vel.x / speed * maxSpeed;
++        vel.y = vel.y / speed * maxSpeed;
++    }
++
++    return vel;
++}
++std::vector<Vector2> Dog::activePathPoints() const
++{
++    std::vector<Vector2> points;
++    if (!hasActivePath())
++    {
++        return points;
++    }
++
++    // Include current position so the rendered polyline starts from the dog.
++    points.reserve(mCurrentPath.size() - mCurrentPathIndex + 1);
++    points.push_back(getPosition());
++    for (size_t i = mCurrentPathIndex; i < mCurrentPath.size(); ++i)
++    {
++        points.push_back(mCurrentPath[i]);
++    }
++    return points;
++}
++
++Vector2 Dog::currentPathTarget() const
++{
++    if (!hasActivePath())
++    {
++        return getPosition();
++    }
++    return mCurrentPath.back();
++}
+diff --git a/projects/project-final/leveldata/dog.h b/projects/project-final/leveldata/dog.h
+index 60b0735..166466a 100644
+--- a/projects/project-final/leveldata/dog.h
++++ b/projects/project-final/leveldata/dog.h
+@@ -41,7 +41,9 @@ public:
+         int variant = 0,
+         float desiredHeightPixels = DogConstants::DEFAULT_HEIGHT);
+ protected:
+-    void updateBehaviour(float deltaTime, Entity *player) override;
++    void updateBehaviour(float deltaTime,
++                         Entity *player,
++                         const std::vector<Entity*> &blockers) override;
+ 
+ private:
+     enum class MovementBias
+@@ -52,15 +54,26 @@ private:
+ 
+     Rectangle resolveSpriteRect(int variant) const;
+     void updatePatrol(float deltaTime);
+-    void refreshPathToPlayer(Entity *player, bool forceRebuild);
++    void refreshPathToPlayer(Entity *player,
++                             const std::vector<Entity*> &blockers,
++                             bool forceRebuild);
+     Vector2 resolveTargetPosition(const Vector2 &playerPosition);
+-    void handleStuckDetection(float deltaTime, float distanceToTarget, Entity *player);
++    void handleStuckDetection(float deltaTime,
++                              float distanceToTarget,
++                              Entity *player,
++                              const std::vector<Entity*> &blockers);
+     void resetChaseState();
+     void resetPathState();
+     Vector2 randomPatrolTarget() const;
+     bool hasReachedTarget(const Vector2 &target, float radius) const;
+     void attemptAttack(Entity *player, float distanceToPlayer);
+     Vector2 applyMovementBias(const Vector2 &direction) const;
++    Vector2 separationSteer(const std::vector<Entity*> &blockers) const;
++    Vector2 applySteering(const Vector2 &baseVelocity, const Vector2 &steer) const;
++public:
++    bool hasActivePath() const { return mHasPath && mCurrentPathIndex < mCurrentPath.size(); }
++    std::vector<Vector2> activePathPoints() const;
++    Vector2 currentPathTarget() const;
+ 
+     int mVariant;
+     float mDesiredHeight;
+@@ -84,7 +97,7 @@ private:
+     float mChaseLoseTimer = 0.0f;
+     Vector2 mLastKnownPlayerPos{};
+     float mAttackCooldownTimer = 0.0f;
++    bool mPathBlocked = false;
+ };
+ 
+ #endif // DOG_H
+-
+diff --git a/projects/project-final/leveldata/level1.cpp b/projects/project-final/leveldata/level1.cpp
+index 0c47228..22b3889 100644
+--- a/projects/project-final/leveldata/level1.cpp
++++ b/projects/project-final/leveldata/level1.cpp
+@@ -55,7 +55,7 @@ namespace
+ 
+     constexpr EnemySpawnSettings ENEMY_SPAWN_SETTINGS{
+         0x5f3759d5u,
+-        0.8f,
++        0.7f,
+         4,
+         DogConstants::MIN_HEIGHT,
+         DogConstants::MAX_HEIGHT,
+@@ -136,6 +136,7 @@ void Level1::initialise()
+     LOG_INFO("Level1 initialised");
+     setChunkSize(mChunkSize);
+     setChunkLoadRadius(mChunkLoadRadius);
++    mNavMap.setMaxRequestsPerFrame(pathfinding::MAX_PATH_REQUESTS_PER_FRAME);
+     ensureTreeAtlas();
+     ensureTileTexture();
+     spawnPlayer();
+@@ -167,6 +168,7 @@ void Level1::initialise()
+ 
+ void Level1::update(float deltaTime)
+ {
++    mNavMap.beginFrame();
+     advanceDayNightCycle(deltaTime);
+     updateChunkStream();
+     ensureMusicNotes();
+@@ -186,6 +188,8 @@ void Level1::update(float deltaTime)
+     updatePlayerAttack(deltaTime);
+     updateMeleeTimer(deltaTime);
+ 
++    rebuildNavIfDirty();
++
+     updateCameraFromPlayer(deltaTime);
+     updateGameOverState();
+     updateInventoryUI(deltaTime);
+@@ -302,12 +306,12 @@ void Level1::render()
+         entity->render();
+     }
+ 
+-    if (isDebugMode())
+-    {
+-        drawChunkDebug();
+-        for (Entity* entity : mCollidableEntities)
++        if (isDebugMode())
+         {
+-            entity->displayCollider();
++            drawChunkDebug();
++            for (Entity* entity : mCollidableEntities)
++            {
++                entity->displayCollider();
+             if (Dog *dog = dynamic_cast<Dog*>(entity))
+             {
+                 const Vector2 center = dog->getPosition();
+@@ -321,6 +325,24 @@ void Level1::render()
+                 DrawCircleLinesV(center, effectiveRadius, Fade(RED, 0.7f));
+             }
+         }
++        if (isDebugMode())
++        {
++            mNavMap.clearDebugPaths();
++            for (Enemy* enemy : mEnemies)
++            {
++                Dog *dog = dynamic_cast<Dog*>(enemy);
++                if (!dog || !dog->hasActivePath())
++                {
++                    continue;
++                }
++                std::vector<Vector2> path = dog->activePathPoints();
++                if (path.size() >= 2)
++                {
++                    mNavMap.addDebugPath(path, BLUE);
++                }
++            }
++            mNavMap.debugRender();
++        }
+     }
+     EndMode2D();
+ 
+@@ -424,6 +446,7 @@ void Level1::clearMusicNotes()
+ 
+ void Level1::cleanupInactiveTrees()
+ {
++    bool removedAny = false;
+     auto it = mActiveTrees.begin();
+     while (it != mActiveTrees.end())
+     {
+@@ -436,6 +459,7 @@ void Level1::cleanupInactiveTrees()
+                 tree->setCanCollide(false);
+                 removeCollidableEntity(mCollidableEntities, tree);
+             }
++            removedAny = true;
+             it = mActiveTrees.erase(it);
+         }
+         else
+@@ -443,6 +467,11 @@ void Level1::cleanupInactiveTrees()
+             ++it;
+         }
+     }
++
++    if (removedAny)
++    {
++        markNavDirty();
++    }
+ }
+ 
+ void Level1::clearBranches()
+@@ -1035,6 +1064,7 @@ void Level1::collectBox(Box *box)
+ 
+     box->markCollected();
+     removeCollidableEntity(mCollidableEntities, box);
++    markNavDirty();
+     addBranches(mBoxBranchReward);
+ 
+     if (isDebugMode())
+@@ -1763,24 +1793,6 @@ void Level1::buildProceduralMap()
+         mLevelData.assign(mMapColumns * mMapRows, 1);
+     }
+ 
+-    const double tNavStart = GetTime();
+-    mNavMap.build(mLevelData.data(),
+-                  mMapColumns,
+-                  mMapRows,
+-                  mTileSize,
+-                  getChunkStartX(),
+-                  getChunkStartY());
+-    const double tNavEnd = GetTime();
+-    if (isDebugMode())
+-    {
+-        LOG_DEBUG(TextFormat("NavMap build chunkStart=(%d,%d) size=%dx%d took=%.2fms",
+-                             getChunkStartX(),
+-                             getChunkStartY(),
+-                             mMapColumns,
+-                             mMapRows,
+-                             (tNavEnd - tNavStart) * 1000.0));
+-    }
+-
+     const Vector2 mapOrigin = computeMapOrigin();
+     rebuildMap(mapOrigin);
+ }
+@@ -1814,6 +1826,63 @@ Vector2 Level1::computeMapOrigin() const
+     };
+ }
+ 
++void Level1::rebuildNavIfDirty()
++{
++    if (!mNavMapDirty)
++    {
++        return;
++    }
++    rebuildNavMapWithObstacles();
++}
++
++void Level1::rebuildNavMapWithObstacles()
++{
++    std::vector<Entity*> obstacles;
++    obstacles.reserve(mCollidableEntities.size());
++
++    for (Entity* entity : mCollidableEntities)
++    {
++        if (!entity || !entity->getIsActive() || !entity->getCanCollide())
++        {
++            continue;
++        }
++        if (entity == mPlayer)
++        {
++            continue;
++        }
++        if (std::find(mEnemies.begin(), mEnemies.end(), entity) != mEnemies.end())
++        {
++            continue;
++        }
++        obstacles.push_back(entity);
++    }
++
++    const float agentRadius = 0.0f;
++
++    const double tNavStart = GetTime();
++    mNavMap.build(mLevelData.data(),
++                  mMapColumns,
++                  mMapRows,
++                  mTileSize,
++                  getChunkStartX(),
++                  getChunkStartY(),
++                  obstacles,
++                  agentRadius);
++    const double tNavEnd = GetTime();
++    if (isDebugMode())
++    {
++        LOG_DEBUG(TextFormat("NavMap build chunkStart=(%d,%d) size=%dx%d obstacles=%zu agentRadius=%.1f took=%.2fms",
++                             getChunkStartX(),
++                             getChunkStartY(),
++                             mMapColumns,
++                             mMapRows,
++                             obstacles.size(),
++                             agentRadius,
++                             (tNavEnd - tNavStart) * 1000.0));
++    }
++    mNavMapDirty = false;
++}
++
+ void Level1::rebuildMap(const Vector2 &origin)
+ {
+     const double tMapStart = GetTime();
+@@ -2385,6 +2454,7 @@ void Level1::updateChunkStream(bool forceRebuild)
+         generateRocks();
+         generateEnemies();
+         updateBoxesForStream();
++        rebuildNavMapWithObstacles();
+     }
+ }
+ 
+diff --git a/projects/project-final/leveldata/level1.h b/projects/project-final/leveldata/level1.h
+index 0434d7a..35e9d85 100644
+--- a/projects/project-final/leveldata/level1.h
++++ b/projects/project-final/leveldata/level1.h
+@@ -51,6 +51,9 @@ public:
+ 
+ private:
+     void buildProceduralMap();
++    void rebuildNavMapWithObstacles();
++    void markNavDirty() { mNavMapDirty = true; }
++    void rebuildNavIfDirty();
+     void generateRocks();
+     void generateEnemies();
+     void updateChunkStream(bool forceRebuild = false);
+@@ -216,6 +219,7 @@ private:
+     bool mTutorialOverlayDismissed = false;
+     float mTutorialOverlayDisplayTimer = 0.0f;
+     float mTutorialOverlayFadeTimer = 0.0f;
++    bool mNavMapDirty = false;
+ };
+ 
+ #endif
+diff --git a/projects/project-final/lib/Enemy.cpp b/projects/project-final/lib/Enemy.cpp
+index df8e409..57dc7c8 100644
+--- a/projects/project-final/lib/Enemy.cpp
++++ b/projects/project-final/lib/Enemy.cpp
+@@ -38,7 +38,7 @@ void Enemy::update(float deltaTime,
+         return;
+     }
+ 
+-    updateBehaviour(deltaTime, player);
++    updateBehaviour(deltaTime, player, collidableEntities);
+     Entity::update(deltaTime, player, map, collidableEntities);
+ }
+ 
+@@ -152,4 +152,3 @@ bool Enemy::applyDamage(float amount)
+     }
+     return false;
+ }
+-
+diff --git a/projects/project-final/lib/Enemy.h b/projects/project-final/lib/Enemy.h
+index 7f3313e..2581c9d 100644
+--- a/projects/project-final/lib/Enemy.h
++++ b/projects/project-final/lib/Enemy.h
+@@ -50,7 +50,9 @@ protected:
+     float getDetectionRadius() const { return mDetectionRadius; }
+     void setDetectionRadius(float radius) { mDetectionRadius = radius; }
+ 
+-    virtual void updateBehaviour(float deltaTime, Entity *player) {}
++    virtual void updateBehaviour(float deltaTime,
++                                 Entity *player,
++                                 const std::vector<Entity*> &blockers) {}
+ 
+ private:
+     float mMoveSpeed;
+@@ -61,4 +63,3 @@ private:
+ };
+ 
+ #endif // ENEMY_H
+-
+diff --git a/projects/project-final/lib/Entity.cpp b/projects/project-final/lib/Entity.cpp
+index e2af1ea..939ac33 100644
+--- a/projects/project-final/lib/Entity.cpp
++++ b/projects/project-final/lib/Entity.cpp
+@@ -1,4 +1,5 @@
+ #include "Entity.h"
++#include <cmath>
+ #include <utility>
+ 
+ Entity::Entity() : 
+@@ -13,7 +14,8 @@ Entity::Entity() :
+     mAnimationIndices {}, mFrameSpeed {0},
+     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
+     mSpeed {EntityConstants::DEFAULT_SPEED},
+-    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false}
++    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false},
++    mIsPushable {false}
+ {
+ }
+ 
+@@ -27,7 +29,8 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath) :
+     mAnimationIndices {}, mFrameSpeed {0},
+     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
+     mSpeed {EntityConstants::DEFAULT_SPEED},
+-    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false}
++    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false},
++    mIsPushable {false}
+ {
+ }
+ 
+@@ -41,7 +44,8 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, Ent
+     mAnimationIndices {animationIndices}, mFrameSpeed {0},
+     mIsActive {true}, enableControl {false}, mAIActive {false}, canCollide {true}, mIsTextureAtlas {false}, mIsHorizontalFlipped {false}, mIsVerticalFlipped {false},
+     mSpeed {EntityConstants::DEFAULT_SPEED},
+-    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false}
++    mIsCollidingTop {false}, mIsCollidingBottom {false}, mIsCollidingRight {false}, mIsCollidingLeft {false},
++    mIsPushable {false}
+ {
+ }
+ 
+@@ -76,7 +80,8 @@ Entity::Entity(Entity&& other) noexcept :
+     mIsCollidingTop {other.mIsCollidingTop},
+     mIsCollidingBottom {other.mIsCollidingBottom},
+     mIsCollidingRight {other.mIsCollidingRight},
+-    mIsCollidingLeft {other.mIsCollidingLeft}
++    mIsCollidingLeft {other.mIsCollidingLeft},
++    mIsPushable {other.mIsPushable}
+ {
+     other.mParent = nullptr;
+     other.mTexture = Texture2D{};
+@@ -126,6 +131,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
+     mIsCollidingBottom = other.mIsCollidingBottom;
+     mIsCollidingRight = other.mIsCollidingRight;
+     mIsCollidingLeft = other.mIsCollidingLeft;
++    mIsPushable = other.mIsPushable;
+ 
+     other.mParent = nullptr;
+     other.mTexture = Texture2D{};
+@@ -178,6 +184,13 @@ bool Entity::intersects(const Entity &other) const
+     return isColliding(&other);
+ }
+ 
++float Entity::getColliderClearanceRadius() const
++{
++    const float dx = mColliderDimensions.x;
++    const float dy = mColliderDimensions.y;
++    return 0.5f * std::sqrt(dx * dx + dy * dy);
++}
++
+ void Entity::checkCollisionY(const std::vector<Entity*> &collidableEntities)
+ {
+     for (Entity *entity : collidableEntities)
+diff --git a/projects/project-final/lib/Entity.h b/projects/project-final/lib/Entity.h
+index ab39cfe..484cb6f 100644
+--- a/projects/project-final/lib/Entity.h
++++ b/projects/project-final/lib/Entity.h
+@@ -67,6 +67,7 @@ private:
+     bool mIsCollidingBottom = false;
+     bool mIsCollidingRight  = false;
+     bool mIsCollidingLeft   = false;
++    bool mIsPushable = false;
+ 
+     bool isColliding(const Entity *other) const;
+     bool isColliding(Map *map) const;
+@@ -97,6 +98,11 @@ public:
+     bool intersects(const Entity &other) const;
+     void displayCollider();
+ 
++    float getColliderClearanceRadius() const;
++
++    void setIsPushable(bool pushable) { mIsPushable = pushable; }
++    bool getIsPushable() const { return mIsPushable; }
++
+     // setters and getters
+     void setZIndex(int value) { zIndex = value; }
+     void setPosition(Vector2 position) { mPosition = position; }
+diff --git a/projects/project-final/lib/NavMap.cpp b/projects/project-final/lib/NavMap.cpp
+index f76575d..1c21c35 100644
+--- a/projects/project-final/lib/NavMap.cpp
++++ b/projects/project-final/lib/NavMap.cpp
+@@ -1,4 +1,5 @@
+ #include "NavMap.h"
++#include "Entity.h"
+ 
+ #include <algorithm>
+ #include <cmath>
+@@ -37,7 +38,9 @@ void NavMap::build(const unsigned int *tiles,
+                    int rows,
+                    float tileSize,
+                    int chunkStartX,
+-                   int chunkStartY)
++                   int chunkStartY,
++                   const std::vector<Entity*> &obstacles,
++                   float agentRadius)
+ {
+     if (!tiles || columns <= 0 || rows <= 0 || tileSize <= 0.0f)
+     {
+@@ -62,6 +65,8 @@ void NavMap::build(const unsigned int *tiles,
+             mWalkable[row * columns + col] = 1;
+         }
+     }
++
++    rasterizeObstacles(obstacles, agentRadius, mWalkable);
+ }
+ 
+ bool NavMap::worldToGrid(const Vector2 &worldPos, int &gridX, int &gridY) const
+@@ -93,13 +98,18 @@ Vector2 NavMap::gridToWorld(int gridX, int gridY) const
+ }
+ 
+ bool NavMap::isWalkable(int gridX, int gridY) const
++{
++    return isWalkable(mWalkable, gridX, gridY);
++}
++
++bool NavMap::isWalkable(const std::vector<uint8_t> &walkable, int gridX, int gridY) const
+ {
+     if (gridX < 0 || gridX >= mColumns || gridY < 0 || gridY >= mRows)
+     {
+         return false;
+     }
+ 
+-    return mWalkable[static_cast<size_t>(gridY * mColumns + gridX)] != 0;
++    return walkable[static_cast<size_t>(gridY * mColumns + gridX)] != 0;
+ }
+ 
+ int NavMap::toIndex(int gridX, int gridY) const
+@@ -132,7 +142,67 @@ std::vector<Vector2> NavMap::reconstructPath(const std::vector<int> &cameFrom, i
+     return path;
+ }
+ 
+-std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
++void NavMap::rasterizeObstacles(const std::vector<Entity*> &obstacles,
++                                float padding,
++                                std::vector<uint8_t> &walkable) const
++{
++    if (obstacles.empty() || mColumns <= 0 || mRows <= 0 || mTileSize <= 0.0f)
++    {
++        return;
++    }
++
++    const float appliedPadding = std::max(padding, 0.0f);
++
++    for (const Entity* entity : obstacles)
++    {
++        if (!entity || !entity->getCanCollide() || !entity->getIsActive())
++        {
++            continue;
++        }
++
++        const Vector2 colliderSize = entity->getColliderDimensions();
++        if (colliderSize.x <= 0.0f || colliderSize.y <= 0.0f)
++        {
++            continue;
++        }
++
++        const Vector2 pos = entity->getPosition();
++        const float halfWidth = colliderSize.x * 0.5f + appliedPadding;
++        const float halfHeight = colliderSize.y * 0.5f + appliedPadding;
++
++        const float minWorldX = pos.x - halfWidth;
++        const float maxWorldX = pos.x + halfWidth;
++        const float minWorldY = pos.y - halfHeight;
++        const float maxWorldY = pos.y + halfHeight;
++
++        int minGridX = static_cast<int>(std::floor(minWorldX / mTileSize)) - mChunkStartX;
++        int maxGridX = static_cast<int>(std::floor(maxWorldX / mTileSize)) - mChunkStartX;
++        int minGridY = static_cast<int>(std::floor(minWorldY / mTileSize)) - mChunkStartY;
++        int maxGridY = static_cast<int>(std::floor(maxWorldY / mTileSize)) - mChunkStartY;
++
++        minGridX = std::max(0, minGridX);
++        minGridY = std::max(0, minGridY);
++        maxGridX = std::min(mColumns - 1, maxGridX);
++        maxGridY = std::min(mRows - 1, maxGridY);
++
++        for (int y = minGridY; y <= maxGridY; ++y)
++        {
++            for (int x = minGridX; x <= maxGridX; ++x)
++            {
++                const int idx = toIndex(x, y);
++                if (idx >= 0)
++                {
++                    walkable[static_cast<size_t>(idx)] = 0;
++                }
++            }
++        }
++    }
++}
++
++std::vector<Vector2> NavMap::findPathAStar(int startIndex,
++                                           int goalIndex,
++                                           const std::vector<uint8_t> &walkable,
++                                           const std::vector<float> *futureCosts) const
+ {
+     const int totalNodes = mColumns * mRows;
+     if (startIndex < 0 || goalIndex < 0 || totalNodes <= 0)
+@@ -189,7 +259,7 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
+             const int neighbourX = currentX + offset[0];
+             const int neighbourY = currentY + offset[1];
+             const int neighbourIndex = toIndex(neighbourX, neighbourY);
+-            if (neighbourIndex < 0 || !isWalkable(neighbourX, neighbourY))
++            if (neighbourIndex < 0 || !isWalkable(walkable, neighbourX, neighbourY))
+             {
+                 continue;
+             }
+@@ -200,15 +270,19 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
+                 const int adjXIndex = toIndex(currentX + offset[0], currentY);
+                 const int adjYIndex = toIndex(currentX, currentY + offset[1]);
+                 if (adjXIndex < 0 || adjYIndex < 0 ||
+-                    !isWalkable(currentX + offset[0], currentY) ||
+-                    !isWalkable(currentX, currentY + offset[1]))
++                    !isWalkable(walkable, currentX + offset[0], currentY) ||
++                    !isWalkable(walkable, currentX, currentY + offset[1]))
+                 {
+                     continue;
+                 }
+             }
+ 
+             const float stepCost = isDiagonalStep ? kDiagonalCost : kCardinalCost;
+-            const float tentativeG = gScore[static_cast<size_t>(current.index)] + stepCost;
++            float tentativeG = gScore[static_cast<size_t>(current.index)] + stepCost;
++            if (futureCosts && !futureCosts->empty())
++            {
++                tentativeG += (*futureCosts)[static_cast<size_t>(neighbourIndex)];
++            }
+             if (tentativeG >= gScore[static_cast<size_t>(neighbourIndex)])
+             {
+                 continue;
+@@ -225,7 +299,9 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
+     return {};
+ }
+ 
+-std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
++std::vector<Vector2> NavMap::findPathDFS(int startIndex,
++                                         int goalIndex,
++                                         const std::vector<uint8_t> &walkable) const
+ {
+     const int totalNodes = mColumns * mRows;
+     if (startIndex < 0 || goalIndex < 0 || totalNodes <= 0)
+@@ -257,7 +333,7 @@ std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
+             const int neighbourX = currentX + offset[0];
+             const int neighbourY = currentY + offset[1];
+             const int neighbourIndex = toIndex(neighbourX, neighbourY);
+-            if (neighbourIndex < 0 || !isWalkable(neighbourX, neighbourY))
++            if (neighbourIndex < 0 || !isWalkable(walkable, neighbourX, neighbourY))
+             {
+                 continue;
+             }
+@@ -276,8 +352,17 @@ std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
+     return {};
+ }
+ 
+-std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &worldGoal) const
++std::vector<Vector2> NavMap::findPathWithWalkable(const Vector2 &worldStart,
++                                                  const Vector2 &worldGoal,
++                                                  const std::vector<uint8_t> &walkable,
++                                                  bool *usedFallback,
++                                                  const std::vector<float> *futureCosts) const
+ {
++    if (usedFallback)
++    {
++        *usedFallback = false;
++    }
++
+     if (!hasData())
+     {
+         return {};
+@@ -294,7 +379,39 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
+         return {};
+     }
+ 
+-    if (!isWalkable(startX, startY) || !isWalkable(goalX, goalY))
++    if (!isWalkable(walkable, startX, startY))
++    {
++        int newX = 0;
++        int newY = 0;
++        if (!findNearestWalkable(startX, startY, walkable, newX, newY))
++        {
++            return {};
++        }
++        startX = newX;
++        startY = newY;
++        if (usedFallback)
++        {
++            *usedFallback = true;
++        }
++    }
++
++    if (!isWalkable(walkable, goalX, goalY))
++    {
++        int newX = 0;
++        int newY = 0;
++        if (!findClosestWalkableByDistance(goalX, goalY, walkable, newX, newY))
++        {
++            return {};
++        }
++        goalX = newX;
++        goalY = newY;
++        if (usedFallback)
++        {
++            *usedFallback = true;
++        }
++    }
++
++    if (startX == goalX && startY == goalY)
+     {
+         return {};
+     }
+@@ -304,7 +421,7 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
+ 
+     const double tStart = GetTime();
+     bool usedAStar = true;
+-    auto path = findPathAStar(startIndex, goalIndex);
++    auto path = findPathAStar(startIndex, goalIndex, walkable, futureCosts);
+     if (!path.empty())
+     {
+         if (isDebugMode())
+@@ -317,26 +434,301 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
+                                  goalY,
+                                  static_cast<int>(path.size()),
+                                  elapsedMs));
++            cacheDebugPath(path, RED);
+         }
+         return path;
+     }
+ 
+-    usedAStar = false;
+-    path = findPathDFS(startIndex, goalIndex);
+     const double elapsedMs = (GetTime() - tStart) * 1000.0;
+     if (isDebugMode())
+     {
+-        LOG_DEBUG(TextFormat("NavMap path %s (%d,%d)->(%d,%d) %s nodes=%d took=%.2fms",
+-                             usedAStar ? "A*" : "DFS",
++        LOG_DEBUG(TextFormat("NavMap path A* (%d,%d)->(%d,%d) failed took=%.2fms",
+                              startX,
+                              startY,
+                              goalX,
+                              goalY,
+-                             path.empty() ? "failed" : "ok",
+-                             static_cast<int>(path.size()),
+                              elapsedMs));
+     }
+-    return path;
++    return {};
++}
++
++std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &worldGoal) const
++{
++    return findPathWithWalkable(worldStart, worldGoal, mWalkable);
++}
++
++bool NavMap::findNearestWalkable(int gridX,
++                                 int gridY,
++                                 const std::vector<uint8_t> &walkable,
++                                 int &outX,
++                                 int &outY,
++                                 int maxRadius) const
++{
++    if (walkable.empty() || maxRadius <= 0)
++    {
++        return false;
++    }
++
++    if (isWalkable(walkable, gridX, gridY))
++    {
++        outX = gridX;
++        outY = gridY;
++        return true;
++    }
++
++    const int totalNodes = mColumns * mRows;
++    if (totalNodes <= 0 || gridX < 0 || gridX >= mColumns || gridY < 0 || gridY >= mRows)
++    {
++        return false;
++    }
++
++    struct Node { int x; int y; int dist; };
++    std::queue<Node> q;
++    std::vector<uint8_t> visited(static_cast<size_t>(totalNodes), 0);
++
++    const int startIndex = toIndex(gridX, gridY);
++    if (startIndex < 0)
++    {
++        return false;
++    }
++    visited[static_cast<size_t>(startIndex)] = 1;
++    q.push({gridX, gridY, 0});
++
++    // Use cardinal directions to expand evenly outward
++    const int kOffsets[4][2] = {
++        {1, 0},
++        {-1, 0},
++        {0, 1},
++        {0, -1}
++    };
++
++    while (!q.empty())
++    {
++        Node current = q.front();
++        q.pop();
++
++        const int nextDist = current.dist + 1;
++        if (nextDist > maxRadius)
++        {
++            continue;
++        }
++
++        for (const auto &offset : kOffsets)
++        {
++            const int nx = current.x + offset[0];
++            const int ny = current.y + offset[1];
++            const int nIndex = toIndex(nx, ny);
++            if (nIndex < 0 || visited[static_cast<size_t>(nIndex)])
++            {
++                continue;
++            }
++            visited[static_cast<size_t>(nIndex)] = 1;
++
++            if (isWalkable(walkable, nx, ny))
++            {
++                outX = nx;
++                outY = ny;
++                return true;
++            }
++
++            q.push({nx, ny, nextDist});
++        }
++    }
++
++    return false;
+ }
+ 
++std::vector<Vector2> NavMap::findPathWithMask(const Vector2 &worldStart,
++                                              const Vector2 &worldGoal,
++                                              float clearance,
++                                              const std::vector<Entity*> &blockers,
++                                              bool *usedFallback,
++                                              bool *throttled) const
++{
++    if (!consumeBudget(throttled))
++    {
++        return {};
++    }
++
++    if (!hasData())
++    {
++        return {};
++    }
++
++    std::vector<uint8_t> masked = mWalkable;
++    rasterizeObstacles(blockers, clearance, masked);
++    std::vector<float> futureCosts(masked.size(), 0.0f);
++    buildFutureCosts(blockers, futureCosts);
++    return findPathWithWalkable(worldStart, worldGoal, masked, usedFallback, &futureCosts);
++}
++
++bool NavMap::findClosestWalkableByDistance(int gridX,
++                                           int gridY,
++                                           const std::vector<uint8_t> &walkable,
++                                           int &outX,
++                                           int &outY) const
++{
++    if (walkable.empty() || mColumns <= 0 || mRows <= 0)
++    {
++        return false;
++    }
++
++    int bestX = -1;
++    int bestY = -1;
++    int bestDistSq = std::numeric_limits<int>::max();
++
++    for (int y = 0; y < mRows; ++y)
++    {
++        for (int x = 0; x < mColumns; ++x)
++        {
++            const int idx = toIndex(x, y);
++            if (idx < 0 || !isWalkable(walkable, x, y))
++            {
++                continue;
++            }
++
++            const int dx = x - gridX;
++            const int dy = y - gridY;
++            const int distSq = dx * dx + dy * dy;
++            if (distSq < bestDistSq)
++            {
++                bestDistSq = distSq;
++                bestX = x;
++                bestY = y;
++            }
++        }
++    }
++
++    if (bestX < 0 || bestY < 0)
++    {
++        return false;
++    }
++
++    outX = bestX;
++    outY = bestY;
++    return true;
++}
++
++bool NavMap::consumeBudget(bool *throttled) const
++{
++    if (mRequestsThisFrame >= mMaxRequestsPerFrame)
++    {
++        if (throttled)
++        {
++            *throttled = true;
++        }
++        return false;
++    }
++    ++mRequestsThisFrame;
++    return true;
++}
++
++void NavMap::cacheDebugPath(const std::vector<Vector2> &path, Color color) const
++{
++    if (path.size() < 2)
++    {
++        return;
++    }
++
++    const size_t maxPaths = 64;
++    if (mDebugPaths.size() >= maxPaths)
++    {
++        mDebugPaths.erase(mDebugPaths.begin());
++    }
++
++    DebugPath entry;
++    entry.nodes = path;
++    entry.color = color;
++    mDebugPaths.push_back(std::move(entry));
++}
++
++void NavMap::debugRender() const
++{
++    if (!isDebugMode() || mDebugPaths.empty())
++    {
++        return;
++    }
++
++    const float thickness = 2.0f;
++    for (const DebugPath &entry : mDebugPaths)
++    {
++        if (entry.nodes.size() < 2)
++        {
++            continue;
++        }
++        for (size_t i = 1; i < entry.nodes.size(); ++i)
++        {
++            DrawLineEx(entry.nodes[i - 1], entry.nodes[i], thickness, entry.color);
++        }
++    }
+ 
++    // Only keep paths generated this frame; clear history after drawing.
++    mDebugPaths.clear();
++}
++
++void NavMap::clearDebugPaths() const
++{
++    mDebugPaths.clear();
++}
++
++void NavMap::addDebugPath(const std::vector<Vector2> &path, Color color) const
++{
++    cacheDebugPath(path, color);
++}
++
++void NavMap::beginFrame()
++{
++    mRequestsThisFrame = 0;
++}
++
++void NavMap::setMaxRequestsPerFrame(int maxRequests)
++{
++    mMaxRequestsPerFrame = std::max(1, maxRequests);
++}
++void NavMap::buildFutureCosts(const std::vector<Entity*> &blockers,
++                              std::vector<float> &futureCosts,
++                              float timeStep,
++                              int steps) const
++{
++    if (futureCosts.empty() || !hasData() || steps <= 0)
++    {
++        return;
++    }
++
++    const float weights[] = {16.0f, 8.0f, 4.0f, 2.0f, 1.0f};
++    const int weightCount = static_cast<int>(sizeof(weights) / sizeof(weights[0]));
++
++    for (const Entity* entity : blockers)
++    {
++        if (!entity || !entity->getIsActive())
++        {
++            continue;
++        }
++        Vector2 pos = entity->getPosition();
++        Vector2 vel = entity->getVelocity();
++
++        for (int k = 1; k <= steps; ++k)
++        {
++            const float t = timeStep * static_cast<float>(k);
++            Vector2 predict = {
++                pos.x + vel.x * t,
++                pos.y + vel.y * t
++            };
++
++            int gx = 0;
++            int gy = 0;
++            if (!worldToGrid(predict, gx, gy))
++            {
++                continue;
++            }
++            const int idx = toIndex(gx, gy);
++            if (idx < 0)
++            {
++                continue;
++            }
++
++            const int weightIndex = std::min(k - 1, weightCount - 1);
++            futureCosts[static_cast<size_t>(idx)] += weights[weightIndex];
++        }
++    }
++}
+diff --git a/projects/project-final/lib/NavMap.h b/projects/project-final/lib/NavMap.h
+index c6728d5..ae7d39e 100644
+--- a/projects/project-final/lib/NavMap.h
++++ b/projects/project-final/lib/NavMap.h
+@@ -5,6 +5,8 @@
+ #include <vector>
+ #include <cstdint>
+ 
++class Entity;
++
+ class NavMap
+ {
+ public:
+@@ -13,19 +15,69 @@ public:
+                int rows,
+                float tileSize,
+                int chunkStartX,
+-               int chunkStartY);
++               int chunkStartY,
++               const std::vector<Entity*> &obstacles,
++               float agentRadius);
+ 
+     bool hasData() const { return mColumns > 0 && mRows > 0 && !mWalkable.empty(); }
+     bool worldToGrid(const Vector2 &worldPos, int &gridX, int &gridY) const;
+     Vector2 gridToWorld(int gridX, int gridY) const;
+     std::vector<Vector2> findPath(const Vector2 &worldStart, const Vector2 &worldGoal) const;
++    std::vector<Vector2> findPathWithMask(const Vector2 &worldStart,
++                                          const Vector2 &worldGoal,
++                                          float clearance,
++                                          const std::vector<Entity*> &blockers,
++                                          bool *usedFallback = nullptr,
++                                          bool *throttled = nullptr) const;
++    void addDebugPath(const std::vector<Vector2> &path, Color color) const;
++    void clearDebugPaths() const;
++    void debugRender() const;
++    void beginFrame();
++    void setMaxRequestsPerFrame(int maxRequests);
+ 
+ private:
++    bool isWalkable(const std::vector<uint8_t> &walkable, int gridX, int gridY) const;
+     bool isWalkable(int gridX, int gridY) const;
+     int toIndex(int gridX, int gridY) const;
+     std::vector<Vector2> reconstructPath(const std::vector<int> &cameFrom, int currentIndex) const;
+-    std::vector<Vector2> findPathAStar(int startIndex, int goalIndex) const;
+-    std::vector<Vector2> findPathDFS(int startIndex, int goalIndex) const;
++    std::vector<Vector2> findPathAStar(int startIndex,
++                                       int goalIndex,
++                                       const std::vector<uint8_t> &walkable,
++                                       const std::vector<float> *futureCosts) const;
++    std::vector<Vector2> findPathDFS(int startIndex,
++                                     int goalIndex,
++                                     const std::vector<uint8_t> &walkable) const;
++    std::vector<Vector2> findPathWithWalkable(const Vector2 &worldStart,
++                                              const Vector2 &worldGoal,
++                                              const std::vector<uint8_t> &walkable,
++                                              bool *usedFallback = nullptr,
++                                              const std::vector<float> *futureCosts = nullptr) const;
++    bool findNearestWalkable(int gridX,
++                             int gridY,
++                             const std::vector<uint8_t> &walkable,
++                             int &outX,
++                             int &outY,
++                             int maxRadius = 4) const;
++    bool findClosestWalkableByDistance(int gridX,
++                                       int gridY,
++                                       const std::vector<uint8_t> &walkable,
++                                       int &outX,
++                                       int &outY) const;
++    bool consumeBudget(bool *throttled) const;
++    void buildFutureCosts(const std::vector<Entity*> &blockers,
++                          std::vector<float> &futureCosts,
++                          float timeStep = 0.1f,
++                          int steps = 5) const;
++    void cacheDebugPath(const std::vector<Vector2> &path, Color color) const;
++    void rasterizeObstacles(const std::vector<Entity*> &obstacles,
++                             float padding,
++                             std::vector<uint8_t> &walkable) const;
++
++    struct DebugPath
++    {
++        std::vector<Vector2> nodes;
++        Color color;
++    };
+ 
+     std::vector<uint8_t> mWalkable;
+     int mColumns = 0;
+@@ -33,8 +85,9 @@ private:
+     float mTileSize = 1.0f;
+     int mChunkStartX = 0;
+     int mChunkStartY = 0;
++    mutable std::vector<DebugPath> mDebugPaths;
++    mutable int mRequestsThisFrame = 0;
++    int mMaxRequestsPerFrame = 4;
+ };
+ 
+ #endif // NAVMAP_H
+-
+-

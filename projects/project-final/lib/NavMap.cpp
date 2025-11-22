@@ -335,8 +335,62 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
                              path.empty() ? "failed" : "ok",
                              static_cast<int>(path.size()),
                              elapsedMs));
+        if (!path.empty())
+        {
+            cacheDebugPath(path, usedAStar ? RED : BLUE);
+        }
     }
     return path;
 }
 
+void NavMap::cacheDebugPath(const std::vector<Vector2> &path, Color color) const
+{
+    if (path.size() < 2)
+    {
+        return;
+    }
+
+    const size_t maxPaths = 64;
+    if (mDebugPaths.size() >= maxPaths)
+    {
+        mDebugPaths.erase(mDebugPaths.begin());
+    }
+
+    DebugPath entry;
+    entry.nodes = path;
+    entry.color = color;
+    mDebugPaths.push_back(std::move(entry));
+}
+
+void NavMap::addDebugPath(const std::vector<Vector2> &path, Color color) const
+{
+    cacheDebugPath(path, color);
+}
+
+void NavMap::clearDebugPaths() const
+{
+    mDebugPaths.clear();
+}
+
+void NavMap::debugRender() const
+{
+    if (!isDebugMode() || mDebugPaths.empty())
+    {
+        return;
+    }
+
+    const float thickness = 2.0f;
+    for (const DebugPath &entry : mDebugPaths)
+    {
+        if (entry.nodes.size() < 2)
+        {
+            continue;
+        }
+        for (size_t i = 1; i < entry.nodes.size(); ++i)
+        {
+            DrawLineEx(entry.nodes[i - 1], entry.nodes[i], thickness, entry.color);
+        }
+    }
+    mDebugPaths.clear();
+}
 

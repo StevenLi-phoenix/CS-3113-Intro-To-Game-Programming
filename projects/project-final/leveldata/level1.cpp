@@ -321,6 +321,21 @@ void Level1::render()
                 DrawCircleLinesV(center, effectiveRadius, Fade(RED, 0.7f));
             }
         }
+        mNavMap.clearDebugPaths();
+        for (Enemy* enemy : mEnemies)
+        {
+            Dog *dog = dynamic_cast<Dog*>(enemy);
+            if (!dog || !dog->hasActivePath())
+            {
+                continue;
+            }
+            std::vector<Vector2> path = dog->activePathPoints();
+            if (path.size() >= 2)
+            {
+                mNavMap.addDebugPath(path, BLUE);
+            }
+        }
+        mNavMap.debugRender();
     }
     EndMode2D();
 

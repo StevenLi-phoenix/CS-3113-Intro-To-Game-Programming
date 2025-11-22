@@ -40,6 +40,8 @@ public:
     Dog(Vector2 position,
         int variant = 0,
         float desiredHeightPixels = DogConstants::DEFAULT_HEIGHT);
+    bool hasActivePath() const { return mHasPath && mCurrentPathIndex < mCurrentPath.size(); }
+    std::vector<Vector2> activePathPoints() const;
 protected:
     void updateBehaviour(float deltaTime, Entity *player) override;
 
@@ -87,4 +89,3 @@ private:
 };
 
 #endif // DOG_H
-

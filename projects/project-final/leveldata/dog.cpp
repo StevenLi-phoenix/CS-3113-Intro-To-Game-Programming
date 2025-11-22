@@ -458,3 +458,19 @@ Vector2 Dog::applyMovementBias(const Vector2 &direction) const
     return biased;
 }
 
+std::vector<Vector2> Dog::activePathPoints() const
+{
+    std::vector<Vector2> points;
+    if (!hasActivePath())
+    {
+        return points;
+    }
+
+    points.reserve(mCurrentPath.size() - mCurrentPathIndex + 1);
+    points.push_back(getPosition());
+    for (size_t i = mCurrentPathIndex; i < mCurrentPath.size(); ++i)
+    {
+        points.push_back(mCurrentPath[i]);
+    }
+    return points;
+}
