@@ -9,7 +9,7 @@ namespace DogConstants
     constexpr int STANDING_VARIANT = 99;
     constexpr float DEFAULT_HEIGHT = 28.0f;
     constexpr float MIN_HEIGHT = 24.0f;
-    constexpr float MAX_HEIGHT = 36.0f;
+    constexpr float MAX_HEIGHT = 80.0f;
     constexpr float CHASE_SPEED = 45.0f;
     constexpr float PATROL_SPEED = 10.0f;
     constexpr float DETECTION_RADIUS = 400.0f;

@@ -21,6 +21,10 @@ private:
     Color mBackgroundColor;
     Color mBorderColor;
     Color mTextColor;
+    Texture2D *mIcon = nullptr; // non-owning
+    Rectangle mIconSource{0.0f, 0.0f, 0.0f, 0.0f};
+    Vector2 mIconSize{32.0f, 32.0f};
+    float mIconSpacing = 8.0f;
     int mFontSize;
     float mBorderThickness;
     Callback mOnClick;
@@ -47,6 +51,7 @@ public:
     void setTextColor(Color color) { mTextColor = color; }
     void setFontSize(int size) { mFontSize = size; }
     void setBorderThickness(float thickness) { mBorderThickness = thickness; }
+    void setIcon(Texture2D *icon, const Rectangle &source, Vector2 size = {32.0f, 32.0f});
     void setOnClick(Callback callback) { mOnClick = callback; }
     
     bool isMouseOver() const;

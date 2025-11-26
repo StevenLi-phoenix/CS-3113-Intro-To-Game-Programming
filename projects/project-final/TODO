@@ -47,6 +47,12 @@ target: reach the entrance of the dungeon (a entity will a lvlchg trigger)
 - Gold coin drop RNG rewards
 - Mode adjustment function
 
+-- adjust tutorial, to include npc with dialog box and conversations
+
+-- resize the size of boss, and make it more visible
+-- write VFX for glowing
+-- move camera to the boss when boss is spawned (game paused)
+
 # level 2
 ## enemy: skeleton (ranged attack only)
 ## planned for underground level with maze

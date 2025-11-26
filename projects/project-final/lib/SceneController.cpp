@@ -151,9 +151,8 @@ void SceneController::rebuildSettings(Player* player)
 
     std::function<void()> retryAction;
     std::function<void(KeyboardKey)> retryKeyChanged;
-    std::function<void()> branchAction;
+    std::function<void()> primaryAction;
     std::function<void(int)> difficultyChanged;
-    std::function<void()> meleeAction;
     if (mActiveScene)
     {
         Scene* scenePtr = mActiveScene.get();
@@ -169,7 +168,7 @@ void SceneController::rebuildSettings(Player* player)
                 scenePtr->onRetryBindingChanged(key);
             }
         };
-        branchAction = [scenePtr]() {
+        primaryAction = [scenePtr]() {
             if (scenePtr)
             {
                 scenePtr->handlePrimaryAttackAction();
@@ -182,12 +181,6 @@ void SceneController::rebuildSettings(Player* player)
                 scenePtr->onDifficultyPresetChanged(mDifficultyState.index);
             }
         };
-        meleeAction = [scenePtr]() {
-            if (scenePtr)
-            {
-                scenePtr->handleMeleeAttackAction();
-            }
-        };
     }
 
     if (!mSettings)
@@ -196,9 +189,8 @@ void SceneController::rebuildSettings(Player* player)
                                                mController.get(),
                                                retryAction,
                                                retryKeyChanged,
-                                               branchAction,
-                                               difficultyChanged,
-                                               meleeAction);
+                                               primaryAction,
+                                               difficultyChanged);
         mSettings->initialise();
     }
     else
@@ -206,9 +198,8 @@ void SceneController::rebuildSettings(Player* player)
         mSettings->updateContext(player,
                                  retryAction,
                                  retryKeyChanged,
-                                 branchAction,
-                                 difficultyChanged,
-                                 meleeAction);
+                                 primaryAction,
+                                 difficultyChanged);
     }
 
     mSettingsVisible = false;

@@ -16,9 +16,13 @@
 #include "rock.h"
 #include "table_with_map.h"
 #include "LevelSelectScene.h"
+#include "ResourceTags.h"
+#include "level1_consts.h"
+#include "attack_enemy.h"
 #include "../lib/SceneController.h"
 
 extern SceneController* gSceneController;
+using namespace level1_consts;
 
 namespace
 {
@@ -115,33 +119,20 @@ namespace
     constexpr float GOLD_DROP_OFFSET_MAX = 14.0f;
     constexpr float TABLE_DISTANCE_MIN_TILES = 64.0f;
     constexpr float TABLE_DISTANCE_MAX_TILES = 256.0f;
-    constexpr float SHOP_INTERACT_RADIUS = 120.0f;
-    constexpr int SWORD_COST = 8;
-    constexpr int SHURIKEN_COST = 6;
-    constexpr float SWORD_DAMAGE_BONUS = 0.2f;     // +20% per purchase
-    constexpr float SHURIKEN_DAMAGE_BONUS = 0.2f;  // +20% per purchase
     constexpr float BOSS_HEALTH = 32.0f;
     constexpr float BOSS_SUMMON_INTERVAL = 6.0f;
     constexpr int BOSS_MAX_MINIONS = 3;
     constexpr float BOSS_SUMMON_RADIUS = 220.0f;
     constexpr float BOSS_BAR_DISTANCE = 540.0f;
-    constexpr float BOSS_HEIGHT = DogConstants::MAX_HEIGHT * 1.25f;
+    constexpr float BOSS_HEIGHT = DogConstants::MAX_HEIGHT * 0.8f;
+    constexpr float BOSS_INDICATOR_MARGIN = 42.0f;
+    constexpr float BOSS_INDICATOR_ARROW_SIZE = 18.0f;
 
-    namespace tutorial
-    {
-        constexpr float AUTO_HIDE_SECONDS = 10.0f;
-        constexpr float FADE_SECONDS = 1.0f;
-        constexpr int MAX_GAMEPADS = 4;
-        constexpr const char *TITLE = "Getting Started";
-        constexpr const char *LINES[] = {
-            "WASD or Arrow Keys to move your character",
-            "Left click anywhere to toss a branch at that spot",
-            "Press Z to auto-throw at the nearest enemy, X for melee",
-            "Press F1 for settings, rebinding, and tips",
-            "Seek the table with a map to reach the next level"
-        };
-        constexpr size_t LINE_COUNT = sizeof(LINES) / sizeof(LINES[0]);
-    }
+    constexpr float SUMMON_EFFECT_DURATION = 0.9f;
+    constexpr float SUMMON_EFFECT_START_RADIUS = 30.0f;
+    constexpr float SUMMON_EFFECT_END_RADIUS = 190.0f;
+    constexpr Color SUMMON_EFFECT_COLOR = {255, 170, 64, 255};
+
 }
 
 void Level1::initialise()
@@ -152,10 +143,17 @@ void Level1::initialise()
     ensureTreeAtlas();
     ensureTileTexture();
     spawnPlayer();
+    mLastPlayerHealth = mPlayer ? mPlayer->getHealth() : PlayerConstants::MAX_HEALTH;
+    mHurtOverlayTimer = 0.0f;
+    mBossSummonEffects.clear();
+    mMeleeEffects.clear();
+    ensureHurtShader();
     ensureMusicNotes();
     applyDifficulty(mDifficulty);
     resetBranchInventory();
     mMeleeDamage = combat::MELEE_DAMAGE;
+    mPotionCapacity = POTION_CAPACITY_DEFAULT;
+    mPotionCount = 0;
     mBranchDamage = branch::PROJECTILE_DAMAGE;
     mSwordUpgradeCount = 0;
     mShurikenUpgradeCount = 0;
@@ -187,6 +185,7 @@ void Level1::initialise()
     mTutorialOverlayDismissed = false;
     mTutorialOverlayDisplayTimer = 0.0f;
     mTutorialOverlayFadeTimer = 0.0f;
+    mTutorialReopenHintTimer = 0.0f;
 }
 
 void Level1::update(float deltaTime)
@@ -194,6 +193,8 @@ void Level1::update(float deltaTime)
     updateShop(deltaTime);
     if (mShopOpen)
     {
+        updateHurtOverlay(deltaTime);
+        updateMeleeEffects(deltaTime);
         return;
     }
 
@@ -329,7 +330,11 @@ void Level1::update(float deltaTime)
     updateGoldCoins();
     updatePlayerAttack(deltaTime);
     updateMeleeTimer(deltaTime);
+    updateMeleeEffects(deltaTime);
     updateBossFight(deltaTime);
+    updateBossSummonEffects(deltaTime);
+    updateSpreadProjectiles(deltaTime);
+    updateHurtOverlay(deltaTime);
     if (profile) profiler.mark("combat", "combat");
 
     updateCameraFromPlayer(deltaTime);
@@ -355,6 +360,8 @@ void Level1::spawnPlayer()
         mPlayer->setVelocity({0.0f, 0.0f});
         mPlayer->setForce({0.0f, 0.0f});
         mPlayer->restoreFullHealth();
+        mLastPlayerHealth = mPlayer->getHealth();
+        mHurtOverlayTimer = 0.0f;
         mIsGameOver = false;
         mCamera.target = mPlayer->getPosition();
         return;
@@ -363,6 +370,9 @@ void Level1::spawnPlayer()
     mPlayer = new Player(c::ORIGIN, {54.0f, 75.0f});
     updatePlayerSpawnPoint(mPlayer->getPosition());
     mPlayer->restoreFullHealth();
+    mLastPlayerHealth = mPlayer->getHealth();
+    mHurtOverlayTimer = 0.0f;
+    mMeleeEffects.clear();
     resetBranchInventory();
     mCollidableEntities.push_back(mPlayer);
     mCamera.target = mPlayer->getPosition();
@@ -450,6 +460,9 @@ void Level1::render()
     {
         entity->render();
     }
+    drawMeleeEffects();
+    drawBossSummonEffects();
+    drawSpreadProjectiles();
 
     if (isDebugMode())
     {
@@ -499,7 +512,9 @@ void Level1::render()
     drawTutorialOverlay();
     drawGameOverOverlay();
     drawBossBar();
+    drawBossDirectionIndicator();
     drawShopOverlay();
+    drawHurtOverlay();
     DrawFPS(0, 60);
 }
 
@@ -517,6 +532,12 @@ void Level1::shutdown()
     clearBoxes();
     clearTrees();
     clearRocks();
+    mBossSummonEffects.clear();
+    mMeleeEffects.clear();
+    mHurtShader.unload();
+    mHurtShaderReady = false;
+    mHurtOverlayTimer = 0.0f;
+    mTutorialReopenHintTimer = 0.0f;
     mCollidableEntities.clear();
 
     delete mPlayer;
@@ -602,6 +623,8 @@ void Level1::clearEnemies()
     mBossMinions.clear();
     mBossSpawned = false;
     mBossDefeated = false;
+    mBossSummonEffects.clear();
+    mMeleeEffects.clear();
     mEnemies.clear();
 }
 
@@ -1018,11 +1041,41 @@ void Level1::addBranches(int amount)
     syncBranchSlot();
 }
 
+void Level1::addPotions(int amount)
+{
+    if (amount <= 0)
+    {
+        return;
+    }
+    mPotionCapacity = std::max(POTION_CAPACITY_DEFAULT, mPotionCapacity);
+    mPotionCount = std::clamp(mPotionCount + amount, 0, mPotionCapacity);
+    syncPotionSlot();
+}
+
 void Level1::applyDifficulty(const DifficultyState &state)
 {
     mDifficulty = state;
     mInitialBranchCount = std::clamp(mDifficulty.initialBranches(), 0, branch::MAX_HELD);
     mBoxBranchReward = std::max(1, mDifficulty.boxReward());
+    mPotionCapacity = POTION_CAPACITY_DEFAULT;
+}
+
+bool Level1::usePotion()
+{
+    if (!mPlayer || mPotionCount <= 0)
+    {
+        return false;
+    }
+    if (mPlayer->getHealth() >= mPlayer->getMaxHealth() - 0.01f)
+    {
+        return false;
+    }
+    --mPotionCount;
+    mPlayer->heal(POTION_HEAL_AMOUNT);
+    syncPotionSlot();
+    syncGoldSlot();
+    LOG_INFO(TextFormat("Potion used: +%.1f HP (potions left=%d)", POTION_HEAL_AMOUNT, mPotionCount));
+    return true;
 }
 
 void Level1::spawnGoldCoin(const Vector2 &position)
@@ -1221,6 +1274,20 @@ void Level1::spawnBossMinion()
     mBossMinions.push_back(dog);
     mEnemies.push_back(dog);
     mCollidableEntities.push_back(dog);
+    mBossSummonEffects.push_back({
+        mBoss->getPosition(),
+        0.0f,
+        SUMMON_EFFECT_DURATION,
+        SUMMON_EFFECT_START_RADIUS,
+        SUMMON_EFFECT_END_RADIUS
+    });
+    mBossSummonEffects.push_back({
+        pos,
+        0.0f,
+        SUMMON_EFFECT_DURATION * 0.8f,
+        SUMMON_EFFECT_START_RADIUS * 0.6f,
+        SUMMON_EFFECT_END_RADIUS * 0.65f
+    });
 
     LOG_INFO(TextFormat("Boss summoned dog[%p] at (%.1f, %.1f)", dog, pos.x, pos.y));
 }
@@ -1313,6 +1380,44 @@ void Level1::updateBossFight(float deltaTime)
     }
 }
 
+void Level1::updateBossSummonEffects(float deltaTime)
+{
+    auto it = mBossSummonEffects.begin();
+    while (it != mBossSummonEffects.end())
+    {
+        it->elapsed += deltaTime;
+        if (it->elapsed >= it->duration)
+        {
+            it = mBossSummonEffects.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void Level1::drawBossSummonEffects()
+{
+    if (mBossSummonEffects.empty())
+    {
+        return;
+    }
+
+    for (const SummonEffect &fx : mBossSummonEffects)
+    {
+        const float progress = std::clamp(fx.elapsed / std::max(fx.duration, 0.0001f), 0.0f, 1.0f);
+        const float eased = progress * (2.0f - progress);
+        const float radius = fx.startRadius + (fx.endRadius - fx.startRadius) * eased;
+        const float alpha = std::clamp(1.0f - eased, 0.0f, 1.0f);
+        const Color outline = Fade(SUMMON_EFFECT_COLOR, alpha * 0.9f);
+        const Color fill = Fade(SUMMON_EFFECT_COLOR, alpha * 0.25f);
+
+        DrawCircleV(fx.origin, radius * 0.65f, fill);
+        DrawCircleLinesV(fx.origin, radius, outline);
+    }
+}
+
 void Level1::drawBossBar() const
 {
     if (!mBoss || !mPlayer)
@@ -1358,6 +1463,74 @@ void Level1::drawBossBar() const
              RAYWHITE);
 }
 
+void Level1::drawBossDirectionIndicator() const
+{
+    if (!mBoss || !mBoss->getIsActive() || mBossDefeated)
+    {
+        return;
+    }
+
+    Vector2 bossScreen = GetWorldToScreen2D(mBoss->getPosition(), mCamera);
+    const float minX = BOSS_INDICATOR_MARGIN;
+    const float maxX = static_cast<float>(c::SCREEN_WIDTH) - BOSS_INDICATOR_MARGIN;
+    const float minY = BOSS_INDICATOR_MARGIN;
+    const float maxY = static_cast<float>(c::SCREEN_HEIGHT) - BOSS_INDICATOR_MARGIN;
+
+    if (bossScreen.x >= minX && bossScreen.x <= maxX &&
+        bossScreen.y >= minY && bossScreen.y <= maxY)
+    {
+        return;
+    }
+
+    Vector2 screenCenter = { static_cast<float>(c::SCREEN_WIDTH) * 0.5f,
+                             static_cast<float>(c::SCREEN_HEIGHT) * 0.5f };
+    Vector2 direction = {
+        bossScreen.x - screenCenter.x,
+        bossScreen.y - screenCenter.y
+    };
+    const float magnitude = Vector2Length(direction);
+    if (magnitude < 0.001f)
+    {
+        return;
+    }
+    direction.x /= magnitude;
+    direction.y /= magnitude;
+
+    Vector2 clampedPos = {
+        std::clamp(bossScreen.x, minX, maxX),
+        std::clamp(bossScreen.y, minY, maxY)
+    };
+
+    const Vector2 tip = {
+        clampedPos.x + direction.x * BOSS_INDICATOR_ARROW_SIZE,
+        clampedPos.y + direction.y * BOSS_INDICATOR_ARROW_SIZE
+    };
+    const Vector2 base = {
+        clampedPos.x - direction.x * (BOSS_INDICATOR_ARROW_SIZE * 0.5f),
+        clampedPos.y - direction.y * (BOSS_INDICATOR_ARROW_SIZE * 0.5f)
+    };
+    const Vector2 perpendicular = { -direction.y, direction.x };
+    const Vector2 leftWing = {
+        base.x + perpendicular.x * (BOSS_INDICATOR_ARROW_SIZE * 0.55f),
+        base.y + perpendicular.y * (BOSS_INDICATOR_ARROW_SIZE * 0.55f)
+    };
+    const Vector2 rightWing = {
+        base.x - perpendicular.x * (BOSS_INDICATOR_ARROW_SIZE * 0.55f),
+        base.y - perpendicular.y * (BOSS_INDICATOR_ARROW_SIZE * 0.55f)
+    };
+
+    DrawCircleV(clampedPos, 9.0f, Fade(BLACK, 0.35f));
+    DrawTriangle(tip, leftWing, rightWing, Fade(RED, 0.95f));
+    DrawTriangleLines(tip, leftWing, rightWing, Fade(RAYWHITE, 0.8f));
+    const char *label = "Boss";
+    const int fontSize = 16;
+    DrawText(label,
+             static_cast<int>(clampedPos.x + direction.x * (BOSS_INDICATOR_ARROW_SIZE + 6.0f)),
+             static_cast<int>(clampedPos.y + direction.y * (BOSS_INDICATOR_ARROW_SIZE + 6.0f)),
+             fontSize,
+             RAYWHITE);
+}
+
 void Level1::updateMeleeTimer(float deltaTime)
 {
     if (mMeleeTimer > 0.0f)
@@ -1381,6 +1554,7 @@ void Level1::tryMeleeAttack()
 
     applyMeleeDamage(target);
     mMeleeTimer = std::max(mMeleeCooldown, 0.05f);
+    spawnMeleeEffect();
 }
 
 Enemy* Level1::findNearestMeleeTarget(float range) const
@@ -1503,214 +1677,15 @@ void Level1::collectBox(Box *box)
     }
 }
 
-void Level1::drawPlayerHUD() const
-{
-    if (!mPlayer)
-    {
-        return;
-    }
-
-    const float maxHealth = std::max(mPlayer->getMaxHealth(), 0.001f);
-    const float healthRatio = std::clamp(mPlayer->getHealth() / maxHealth, 0.0f, 1.0f);
-    const Vector2 playerScreenPos = GetWorldToScreen2D(mPlayer->getPosition(), mCamera);
-
-    const Vector2 playerScale = mPlayer->getScale();
-    const float barWidth = std::max(playerScale.x * 0.9f, 60.0f);
-    const float barHeight = 8.0f;
-    const float verticalOffset = -playerScale.y * 0.65f;
-
-    Rectangle barBackground = {
-        playerScreenPos.x - barWidth * 0.5f,
-        playerScreenPos.y + verticalOffset - barHeight,
-        barWidth,
-        barHeight
-    };
-
-    Rectangle barFill = barBackground;
-    barFill.width = barBackground.width * healthRatio;
-
-    DrawRectangleRounded(barBackground, 0.4f, 8, Fade(BLACK, 0.55f));
-    DrawRectangleRec(barFill, RED);
-    DrawRectangleLinesEx(barBackground, 1.0f, Fade(WHITE, 0.85f));
-
-}
-
-void Level1::drawInventoryOverlay()
-{
-    if (mInventoryBar)
-    {
-        mInventoryBar->render();
-    }
-}
-
-void Level1::updateInventoryUI(float deltaTime)
-{
-    if (mInventoryBar)
-    {
-        mInventoryBar->update(deltaTime);
-    }
-}
-
-void Level1::updateTutorialOverlay(float deltaTime)
-{
-    if (!mTutorialOverlayVisible)
-    {
-        return;
-    }
-
-    mTutorialOverlayDisplayTimer += deltaTime;
-
-    if (!mTutorialOverlayDismissed)
-    {
-        const bool interacted = tutorialInputDetected();
-        if (interacted || mTutorialOverlayDisplayTimer >= tutorial::AUTO_HIDE_SECONDS)
-        {
-            mTutorialOverlayDismissed = true;
-            mTutorialOverlayFadeTimer = 0.0f;
-        }
-        return;
-    }
-
-    mTutorialOverlayFadeTimer += deltaTime;
-    if (mTutorialOverlayFadeTimer >= tutorial::FADE_SECONDS)
-    {
-        mTutorialOverlayVisible = false;
-    }
-}
-
-void Level1::drawTutorialOverlay() const
-{
-    if (!mTutorialOverlayVisible || isPaused())
-    {
-        return;
-    }
-
-    const float alpha = tutorialOverlayAlpha();
-    if (alpha <= 0.0f)
-    {
-        return;
-    }
-
-    const float headerHeight = 70.0f;
-    const float lineSpacing = 28.0f;
-    const float footerHeight = 40.0f;
-    const float panelHeight = headerHeight +
-                              static_cast<float>(tutorial::LINE_COUNT) * lineSpacing +
-                              footerHeight;
-
-    DrawRectangle(0,
-                  0,
-                  c::SCREEN_WIDTH,
-                  static_cast<int>(panelHeight),
-                  Fade(BLACK, 0.55f * alpha));
-
-    const int titleFontSize = 32;
-    const int titleWidth = MeasureText(tutorial::TITLE, titleFontSize);
-    DrawText(tutorial::TITLE,
-             (c::SCREEN_WIDTH - titleWidth) / 2,
-             18,
-             titleFontSize,
-             Fade(RAYWHITE, alpha));
-
-    int lineY = 70;
-    const int lineFontSize = 22;
-    for (size_t i = 0; i < tutorial::LINE_COUNT; ++i)
-    {
-        const char *line = tutorial::LINES[i];
-        const int lineWidth = MeasureText(line, lineFontSize);
-        DrawText(line,
-                 (c::SCREEN_WIDTH - lineWidth) / 2,
-                 lineY,
-                 lineFontSize,
-                 Fade(LIGHTGRAY, alpha));
-        lineY += static_cast<int>(lineSpacing);
-    }
-
-    const char *dismissHint = "Move, click, or wait a moment to hide this hint";
-    const int hintFontSize = 18;
-    const int hintWidth = MeasureText(dismissHint, hintFontSize);
-    DrawText(dismissHint,
-             (c::SCREEN_WIDTH - hintWidth) / 2,
-             lineY,
-             hintFontSize,
-             Fade(GRAY, alpha));
-}
-
-bool Level1::tutorialInputDetected() const
-{
-    for (int key = KEY_NULL + 1; key <= KEY_KB_MENU; ++key)
-    {
-        if (IsKeyPressed(static_cast<KeyboardKey>(key)))
-        {
-            return true;
-        }
-    }
-
-    constexpr MouseButton mouseButtons[] = {
-        MOUSE_BUTTON_LEFT,
-        MOUSE_BUTTON_RIGHT,
-        MOUSE_BUTTON_MIDDLE
-    };
-    for (MouseButton button : mouseButtons)
-    {
-        if (IsMouseButtonPressed(button))
-        {
-            return true;
-        }
-    }
-
-    for (int pad = 0; pad < tutorial::MAX_GAMEPADS; ++pad)
-    {
-        if (!IsGamepadAvailable(pad))
-        {
-            continue;
-        }
-
-        for (int button = GAMEPAD_BUTTON_UNKNOWN + 1;
-             button <= GAMEPAD_BUTTON_RIGHT_THUMB;
-             ++button)
-        {
-            if (IsGamepadButtonPressed(pad, static_cast<GamepadButton>(button)))
-            {
-                return true;
-            }
-        }
-
-        const int axisCount = GetGamepadAxisCount(pad);
-        for (int axis = 0; axis < axisCount; ++axis)
-        {
-            if (std::fabs(GetGamepadAxisMovement(pad, axis)) > 0.35f)
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-float Level1::tutorialOverlayAlpha() const
-{
-    if (!mTutorialOverlayVisible)
-    {
-        return 0.0f;
-    }
-    if (!mTutorialOverlayDismissed)
-    {
-        return 1.0f;
-    }
-    const float remaining = 1.0f - (mTutorialOverlayFadeTimer / tutorial::FADE_SECONDS);
-    return std::clamp(remaining, 0.0f, 1.0f);
-}
-
 void Level1::initialiseInventoryUI()
 {
-    const size_t slotCount = 4;
+    const size_t slotCount = 5;
     mInventory = std::make_unique<Inventory>(slotCount);
     mAxeSlotIndex = 0;
     mCompassSlotIndex = 1;
     mBranchSlotIndex = 2;
     mGoldSlotIndex = 3;
+    mPotionSlotIndex = 4;
     mGoldCount = 0;
 
     ResourceManager &rm = ResourceManager::instance();
@@ -1762,6 +1737,14 @@ void Level1::initialiseInventoryUI()
     applyIcon(goldSlot, GOLD_SLOT_ICON_TAG);
     mInventory->setSlot(mGoldSlotIndex, goldSlot);
 
+    InventorySlot potionSlot;
+    potionSlot.id = "potion";
+    potionSlot.label = "Potion";
+    potionSlot.iconTint = Fade(GREEN, 0.9f);
+    potionSlot.quantity = mPotionCount;
+    applyIcon(potionSlot, tags::POTION);
+    mInventory->setSlot(mPotionSlotIndex, potionSlot);
+
     mInventory->setSelectedIndex(mBranchSlotIndex);
 
     if (!mInventoryBar)
@@ -1776,6 +1759,7 @@ void Level1::initialiseInventoryUI()
     syncBranchSlot();
     syncGoldSlot();
     syncWeaponSlot();
+    syncPotionSlot();
 }
 
 void Level1::syncBranchSlot()
@@ -1926,6 +1910,42 @@ void Level1::syncWeaponSlot()
     mInventory->setSlot(mAxeSlotIndex, slot);
 }
 
+void Level1::syncPotionSlot()
+{
+    if (!mInventory)
+    {
+        return;
+    }
+    if (mInventory->getSlotCount() == 0)
+    {
+        return;
+    }
+    if (mPotionSlotIndex >= mInventory->getSlotCount())
+    {
+        mPotionSlotIndex = 0;
+    }
+
+    InventorySlot slot = mInventory->getSlot(mPotionSlotIndex);
+    slot.id = "potion";
+    slot.label = "Potion";
+    slot.quantity = mPotionCount;
+    slot.iconTint = Fade(GREEN, 0.9f);
+
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlas = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+    if (atlas)
+    {
+        Rectangle iconRect = rm.getSpriteRect(tags::POTION);
+        if (iconRect.width > 0.0f && iconRect.height > 0.0f)
+        {
+            slot.icon = atlas;
+            slot.iconSource = iconRect;
+        }
+    }
+
+    mInventory->setSlot(mPotionSlotIndex, slot);
+}
+
 bool Level1::isBranchSelected() const
 {
     return mInventory && mInventory->getSelectedIndex() == mBranchSlotIndex;
@@ -1939,6 +1959,11 @@ bool Level1::isCompassSelected() const
 bool Level1::isAxeSelected() const
 {
     return mInventory && mInventory->getSelectedIndex() == mAxeSlotIndex;
+}
+
+bool Level1::isPotionSelected() const
+{
+    return mInventory && mInventory->getSelectedIndex() == mPotionSlotIndex;
 }
 
 void Level1::spawnQuestTarget()
@@ -2108,244 +2133,6 @@ bool Level1::isPlayerNearTable(float radius) const
     return distance <= radius;
 }
 
-void Level1::ensureShopUI()
-{
-    if (!mShopButtons.empty())
-    {
-        return;
-    }
-
-    auto makeButton = []() -> std::unique_ptr<Button>
-    {
-        auto btn = std::make_unique<Button>();
-        btn->setScale({180.0f, 46.0f});
-        btn->setBackgroundColor(Fade(DARKBLUE, 0.78f));
-        btn->setBorderColor(Fade(RAYWHITE, 0.8f));
-        btn->setTextColor(RAYWHITE);
-        btn->setFontSize(18);
-        return btn;
-    };
-
-    mShopButtons.push_back(makeButton());
-    mShopButtons.push_back(makeButton());
-    mShopButtons.push_back(makeButton());
-    updateShopButtonsLayout();
-}
-
-void Level1::updateShopButtonsLayout()
-{
-    if (mShopButtons.size() < 3)
-    {
-        return;
-    }
-    const float centerX = c::SCREEN_WIDTH * 0.5f;
-    const float topY = 150.0f;
-    const float spacing = 200.0f;
-
-    mShopButtons[0]->setPosition({centerX - spacing, topY});
-    mShopButtons[1]->setPosition({centerX, topY});
-    mShopButtons[2]->setPosition({centerX + spacing, topY});
-}
-
-void Level1::handleShopClose()
-{
-    mShopOpen = false;
-    Button::updateGlobalCursor();
-}
-
-void Level1::updateShop(float deltaTime)
-{
-    (void)deltaTime;
-    const bool nearTable = isPlayerNearTable(SHOP_INTERACT_RADIUS);
-    if (!nearTable)
-    {
-        if (mShopOpen)
-        {
-            handleShopClose();
-        }
-        mShopSuppressed = false;
-        return;
-    }
-
-    if (!mBossSpawned)
-    {
-        spawnBoss();
-    }
-
-    if (mShopSuppressed)
-    {
-        return;
-    }
-
-    ensureShopUI();
-    updateShopButtonsLayout();
-
-    mShopOpen = true;
-
-    if (IsKeyPressed(KEY_Q))
-    {
-        handleShopClose();
-        mShopSuppressed = true;
-        return;
-    }
-
-    auto purchaseSword = [&]()
-    {
-        if (mGoldCount < SWORD_COST)
-        {
-            return;
-        }
-        mGoldCount -= SWORD_COST;
-        ++mSwordUpgradeCount;
-        mMeleeDamage = combat::MELEE_DAMAGE *
-                       (1.0f + static_cast<float>(mSwordUpgradeCount) * SWORD_DAMAGE_BONUS);
-        syncGoldSlot();
-        syncWeaponSlot();
-        LOG_INFO(TextFormat("Purchased Sword level %d, melee damage=%.1f",
-                            mSwordUpgradeCount,
-                            mMeleeDamage));
-    };
-
-    auto purchaseShuriken = [&]()
-    {
-        if (mGoldCount < SHURIKEN_COST)
-        {
-            return;
-        }
-        mGoldCount -= SHURIKEN_COST;
-        ++mShurikenUpgradeCount;
-        mRecoverableThrows = true;
-        mBranchCapacity = std::max(mBranchCapacity, 999);
-        mBranchDamage = branch::PROJECTILE_DAMAGE *
-                        (1.0f + static_cast<float>(mShurikenUpgradeCount) * SHURIKEN_DAMAGE_BONUS);
-        mBranchInventory = std::clamp(mBranchInventory + 1, 0, mBranchCapacity);
-        syncGoldSlot();
-        syncBranchSlot();
-        LOG_INFO(TextFormat("Purchased Shuriken level %d, throw damage=%.1f",
-                            mShurikenUpgradeCount,
-                            mBranchDamage));
-    };
-
-    if (IsKeyPressed(KEY_ONE))
-    {
-        purchaseSword();
-    }
-    if (IsKeyPressed(KEY_TWO))
-    {
-        purchaseShuriken();
-    }
-
-    if (mShopButtons.size() >= 3)
-    {
-        const std::string swordLabel = TextFormat("Sword +20%% [%dG]", SWORD_COST);
-        const std::string shurikenLabel = TextFormat("Shuriken +20%% [%dG]", SHURIKEN_COST);
-        mShopButtons[0]->setText(swordLabel);
-        mShopButtons[1]->setText(shurikenLabel);
-        mShopButtons[2]->setText("Close (Q)");
-
-        const Color affordSword = mGoldCount >= SWORD_COST ? Fade(DARKGREEN, 0.82f) : Fade(DARKGRAY, 0.82f);
-        const Color affordShuriken = mGoldCount >= SHURIKEN_COST ? Fade(DARKGREEN, 0.82f) : Fade(DARKGRAY, 0.82f);
-        mShopButtons[0]->setBackgroundColor(affordSword);
-        mShopButtons[1]->setBackgroundColor(affordShuriken);
-        mShopButtons[2]->setBackgroundColor(Fade(MAROON, 0.78f));
-
-        mShopButtons[0]->setOnClick(purchaseSword);
-        mShopButtons[1]->setOnClick(purchaseShuriken);
-        mShopButtons[2]->setOnClick([&]() { handleShopClose(); mShopSuppressed = true; });
-
-        for (auto &btn : mShopButtons)
-        {
-            if (btn)
-            {
-                btn->update(deltaTime);
-            }
-        }
-    }
-}
-
-void Level1::drawShopOverlay() const
-{
-    if (!mShopOpen)
-    {
-        return;
-    }
-
-    DrawRectangle(0, 0, c::SCREEN_WIDTH, c::SCREEN_HEIGHT, Fade(BLACK, 0.55f));
-
-    const float panelWidth = 680.0f;
-    const float panelHeight = 220.0f;
-    Rectangle panel = {
-        (c::SCREEN_WIDTH - panelWidth) * 0.5f,
-        40.0f,
-        panelWidth,
-        panelHeight
-    };
-    DrawRectangleRounded(panel, 0.2f, 6, Fade(BLACK, 0.6f));
-    DrawRectangleLinesEx(panel, 2.0f, Fade(WHITE, 0.5f));
-
-    const char *title = "Map Table Shop (Paused)";
-    const int titleSize = 22;
-    const int titleWidth = MeasureText(title, titleSize);
-    DrawText(title,
-             static_cast<int>(panel.x + (panel.width - titleWidth) * 0.5f),
-             static_cast<int>(panel.y + 10.0f),
-             titleSize,
-             RAYWHITE);
-
-    const std::string swordLine = TextFormat("Sword bonus: +%d%%   Melee: %.1f",
-                                             mSwordUpgradeCount * static_cast<int>(SWORD_DAMAGE_BONUS * 100.0f),
-                                             mMeleeDamage);
-    const std::string shurikenLine = TextFormat("Shuriken bonus: +%d%%   Throw: %.1f   Reclaimable",
-                                                mShurikenUpgradeCount * static_cast<int>(SHURIKEN_DAMAGE_BONUS * 100.0f),
-                                                mBranchDamage);
-    DrawText(swordLine.c_str(),
-             static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + 44.0f),
-             18,
-             LIGHTGRAY);
-    DrawText(shurikenLine.c_str(),
-             static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + 70.0f),
-             18,
-             LIGHTGRAY);
-
-    const std::string goldLine = TextFormat("Gold: %d", mGoldCount);
-    DrawText(goldLine.c_str(),
-             static_cast<int>(panel.x + panel.width - 160.0f),
-             static_cast<int>(panel.y + 44.0f),
-             18,
-             GOLD);
-
-    const char *hint = "Game frozen: click or press 1/2 to buy (stacks), press Q or Close to exit, reclaim throws by walking over them";
-    DrawText(hint,
-             static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + panel.height - 32.0f),
-             16,
-             Fade(RAYWHITE, 0.92f));
-
-    for (const auto &btn : mShopButtons)
-    {
-        if (btn)
-        {
-            btn->render();
-        }
-    }
-}
-
-void Level1::drawCompassIndicator()
-{
-    if (!mCompassUI)
-    {
-        return;
-    }
-    const bool shouldShow = isCompassSelected() && !mQuestComplete;
-    mCompassUI->setIsActive(shouldShow);
-    if (shouldShow)
-    {
-        mCompassUI->render();
-    }
-}
-
 void Level1::updateGameOverState()
 {
     if (!mPlayer)
@@ -2378,24 +2165,34 @@ void Level1::handlePrimaryAttackAction()
     {
         return;
     }
-    if (!isBranchSelected() || isCompassSelected())
+    if (isCompassSelected())
     {
         return;
     }
-    tryThrowBranchAtEnemy();
+
+    if (isPotionSelected())
+    {
+        if (usePotion())
+        {
+            return;
+        }
+    }
+
+    if (isAxeSelected())
+    {
+        tryMeleeAttack();
+        return;
+    }
+
+    if (isBranchSelected())
+    {
+        tryThrowBranchAtEnemy();
+    }
 }
 
 void Level1::handleMeleeAttackAction()
 {
-    if (mIsGameOver)
-    {
-        return;
-    }
-    if (!isAxeSelected())
-    {
-        return;
-    }
-    tryMeleeAttack();
+    handlePrimaryAttackAction();
 }
 
 void Level1::onDifficultyPresetChanged(int index)
@@ -2429,11 +2226,18 @@ void Level1::resetPlayerForRetry()
     mPlayer->setVelocity({0.0f, 0.0f});
     mPlayer->setForce({0.0f, 0.0f});
     mPlayer->restoreFullHealth();
+    mLastPlayerHealth = mPlayer->getHealth();
+    mHurtOverlayTimer = 0.0f;
+    mTutorialReopenHintTimer = 0.0f;
+    mMeleeEffects.clear();
     mAttackTimer = 0.0f;
     mMeleeTimer = 0.0f;
     mIsGameOver = false;
     clearBranches();
     resetBranchInventory();
+    mPotionCapacity = POTION_CAPACITY_DEFAULT;
+    mPotionCount = 0;
+    syncPotionSlot();
     clearGoldCoins(true);
     if (mBoss)
     {
@@ -2454,6 +2258,7 @@ void Level1::resetPlayerForRetry()
     mBossSpawned = false;
     mBossDefeated = false;
     mBossSummonTimer = 0.0f;
+    mBossSummonEffects.clear();
     mSwordUpgradeCount = 0;
     mShurikenUpgradeCount = 0;
     mMeleeDamage = combat::MELEE_DAMAGE;

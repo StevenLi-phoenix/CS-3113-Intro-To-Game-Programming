@@ -19,9 +19,8 @@ public:
              Controller* controller,
              std::function<void()> retryCallback = {},
              std::function<void(KeyboardKey)> retryKeyChanged = {},
-             std::function<void()> throwBranchCallback = {},
-             std::function<void(int)> difficultyChanged = {},
-             std::function<void()> meleeAttackCallback = {});
+             std::function<void()> primaryActionCallback = {},
+             std::function<void(int)> difficultyChanged = {});
     ~Settings() override = default;
 
     void initialise() override;
@@ -33,9 +32,8 @@ public:
     void updateContext(Player* player,
                        std::function<void()> retryCallback,
                        std::function<void(KeyboardKey)> retryKeyChanged,
-                       std::function<void()> throwBranchCallback,
-                       std::function<void(int)> difficultyChanged,
-                       std::function<void()> meleeAttackCallback);
+                       std::function<void()> primaryActionCallback,
+                       std::function<void(int)> difficultyChanged);
     bool isVisible() const { return mVisible; }
 
 private:
@@ -77,9 +75,8 @@ private:
 
     std::function<void()> mRetryCallback;
     std::function<void(KeyboardKey)> mRetryKeyCallback;
-    std::function<void()> mThrowBranchCallback;
+    std::function<void()> mPrimaryActionCallback;
     std::function<void(int)> mDifficultyCallback;
-    std::function<void()> mMeleeCallback;
 
     std::vector<UIBase*> mUIElements;
 

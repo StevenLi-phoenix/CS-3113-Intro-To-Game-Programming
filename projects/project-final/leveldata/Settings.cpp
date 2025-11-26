@@ -9,9 +9,8 @@ Settings::Settings(Player* player,
                    Controller* controller,
                    std::function<void()> retryCallback,
                    std::function<void(KeyboardKey)> retryKeyChanged,
-                   std::function<void()> throwBranchCallback,
-                   std::function<void(int)> difficultyChanged,
-                   std::function<void()> meleeAttackCallback)
+                   std::function<void()> primaryActionCallback,
+                   std::function<void(int)> difficultyChanged)
     : mPlayer(player),
       mController(controller),
       mVisible(false),
@@ -32,9 +31,8 @@ Settings::Settings(Player* player,
       mSelectedHealthIndex(1),
       mRetryCallback(retryCallback),
       mRetryKeyCallback(retryKeyChanged),
-      mThrowBranchCallback(throwBranchCallback),
-      mDifficultyCallback(difficultyChanged),
-      mMeleeCallback(meleeAttackCallback)
+      mPrimaryActionCallback(primaryActionCallback),
+      mDifficultyCallback(difficultyChanged)
 {
     configureActions();
     mStatusMessage = "Click a control to rebind keys. Press F1 to close settings.";
@@ -80,21 +78,12 @@ void Settings::configureActions()
         nullptr
     });
     mActions.push_back({
-        "throw_branch",
-        "Throw Branch",
+        "primary_action",
+        "Use Item",
         KEY_Z,
         KEY_Z,
         Controller::InputEvent::Pressed,
-        [this](float) { if (mThrowBranchCallback) mThrowBranchCallback(); },
-        nullptr
-    });
-    mActions.push_back({
-        "melee_attack",
-        "Melee Attack",
-        KEY_X,
-        KEY_X,
-        Controller::InputEvent::Pressed,
-        [this](float) { if (mMeleeCallback) mMeleeCallback(); },
+        [this](float) { if (mPrimaryActionCallback) mPrimaryActionCallback(); },
         nullptr
     });
     mActions.push_back({
@@ -481,16 +470,14 @@ void Settings::setVisible(bool visible)
 void Settings::updateContext(Player* player,
                              std::function<void()> retryCallback,
                              std::function<void(KeyboardKey)> retryKeyChanged,
-                             std::function<void()> throwBranchCallback,
-                             std::function<void(int)> difficultyChanged,
-                             std::function<void()> meleeAttackCallback)
+                             std::function<void()> primaryActionCallback,
+                             std::function<void(int)> difficultyChanged)
 {
     mPlayer = player;
     mRetryCallback = std::move(retryCallback);
     mRetryKeyCallback = std::move(retryKeyChanged);
-    mThrowBranchCallback = std::move(throwBranchCallback);
+    mPrimaryActionCallback = std::move(primaryActionCallback);
     mDifficultyCallback = std::move(difficultyChanged);
-    mMeleeCallback = std::move(meleeAttackCallback);
     applyHealthPreset(mSelectedHealthIndex);
 }
 

@@ -139,15 +139,27 @@ void Button::render()
     DrawFilledRectangle(buttonRect, bgColor);
     DrawRectangleBorder(buttonRect, mBorderThickness, mBorderColor);
     
-    // Draw text centered in button
+    float iconOffsetX = 0.0f;
+    if (mIcon && mIconSource.width != 0.0f && mIconSource.height != 0.0f && mIconSize.x > 0.0f && mIconSize.y > 0.0f)
+    {
+        Rectangle dest = {
+            buttonRect.x + 10.0f,
+            position.y - mIconSize.y * 0.5f,
+            mIconSize.x,
+            mIconSize.y
+        };
+        DrawTexturePro(*mIcon, mIconSource, dest, {0.0f, 0.0f}, 0.0f, WHITE);
+        iconOffsetX = dest.width + mIconSpacing;
+    }
+
+    // Draw text centered or offset if icon present
     if (!mText.empty())
     {
         Vector2 textSize = MeasureTextEx(GetFontDefault(), mText.c_str(), mFontSize, 1.0f);
         Vector2 textPosition = {
-            position.x - textSize.x / 2.0f,
+            position.x - textSize.x / 2.0f + iconOffsetX * 0.5f,
             position.y - textSize.y / 2.0f
         };
-        
         DrawText(mText.c_str(), textPosition.x, textPosition.y, mFontSize, mTextColor);
     }
 }
@@ -168,4 +180,11 @@ void Button::updateGlobalCursor()
 void Button::shutdown()
 {
     Entity::shutdown();
+}
+
+void Button::setIcon(Texture2D *icon, const Rectangle &source, Vector2 size)
+{
+    mIcon = icon;
+    mIconSource = source;
+    mIconSize = size;
 }

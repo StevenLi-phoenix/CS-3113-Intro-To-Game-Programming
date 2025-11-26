@@ -13,6 +13,7 @@
 #include "ResourceTags.h"
 #include "tree.h"
 #include "dog.h"
+#include "spread_projectile.h"
 #include "compass.h"
 #include "table_with_map.h"
 #include "music_note.h"
@@ -100,13 +101,16 @@ private:
     void resetBranchInventory();
     bool consumeBranch();
     void addBranches(int amount);
+    void addPotions(int amount);
     void applyDifficulty(const DifficultyState &state);
+    bool usePotion();
     void initialiseInventoryUI();
     void updateInventoryUI(float deltaTime);
     void drawInventoryOverlay();
     void syncBranchSlot();
     void syncGoldSlot();
     void syncWeaponSlot();
+    void syncPotionSlot();
     void updateTreesForStream();
     void updateBoxesForStream();
     void spawnBoxesForChunk(const std::pair<int, int> &chunk,
@@ -135,6 +139,17 @@ private:
     void spawnBossMinion();
     void updateBossFight(float deltaTime);
     void drawBossBar() const;
+    void drawBossDirectionIndicator() const;
+    void drawBossSummonEffects();
+    void updateBossSummonEffects(float deltaTime);
+    void updateHurtOverlay(float deltaTime);
+    void drawHurtOverlay();
+    void updateMeleeEffects(float deltaTime);
+    void drawMeleeEffects();
+    void spawnMeleeEffect();
+    void updateSpreadProjectiles(float deltaTime);
+    void drawSpreadProjectiles() const;
+    void ensureHurtShader();
     void cleanupBossMinions();
     void pruneEnemyList(Enemy *enemy);
     void ensureShopUI();
@@ -144,6 +159,7 @@ private:
     bool isBranchSelected() const;
     bool isCompassSelected() const;
     bool isAxeSelected() const;
+    bool isPotionSelected() const;
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -218,6 +234,8 @@ private:
     float mMeleeCooldown = combat::MELEE_COOLDOWN;
     float mMeleeRange = combat::MELEE_RANGE;
     float mMeleeDamage = combat::MELEE_DAMAGE;
+    int mPotionCount = 0;
+    int mPotionCapacity = 3;
     float mBranchDamage = branch::PROJECTILE_DAMAGE;
     int mSwordUpgradeCount = 0;
     int mShurikenUpgradeCount = 0;
@@ -231,6 +249,7 @@ private:
     size_t mCompassSlotIndex = 1;
     size_t mBranchSlotIndex = 2;
     size_t mGoldSlotIndex = 3;
+    size_t mPotionSlotIndex = 4;
     int mGoldCount = 0;
 
     std::string mQuestDescription = "Survive and find the table with map";
@@ -242,11 +261,39 @@ private:
     float mBossSummonTimer = 0.0f;
     std::vector<std::unique_ptr<Button>> mShopButtons;
     float mBossRepathTimer = 0.0f;
+    struct SummonEffect
+    {
+        Vector2 origin{0.0f, 0.0f};
+        float elapsed = 0.0f;
+        float duration = 1.0f;
+        float startRadius = 24.0f;
+        float endRadius = 140.0f;
+    };
+    std::vector<SummonEffect> mBossSummonEffects;
+
+    struct MeleeEffect
+    {
+        Vector2 position{0.0f, 0.0f};
+        float elapsed = 0.0f;
+        float duration = 0.35f;
+        int frameCount = 4;
+        bool facesLeft = false;
+        float scale = 1.0f;
+    };
+    std::vector<MeleeEffect> mMeleeEffects;
+
+    std::vector<SpreadProjectile> mSpreadProjectiles;
+
+    float mHurtOverlayTimer = 0.0f;
+    float mLastPlayerHealth = PlayerConstants::MAX_HEALTH;
+    ShaderProgram mHurtShader;
+    bool mHurtShaderReady = false;
 
     bool mTutorialOverlayVisible = false;
     bool mTutorialOverlayDismissed = false;
     float mTutorialOverlayDisplayTimer = 0.0f;
     float mTutorialOverlayFadeTimer = 0.0f;
+    float mTutorialReopenHintTimer = 0.0f;
 };
 
 #endif
