@@ -1,4 +1,7 @@
 #include "Entity.h"
+#include "../constants.h"
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 Entity::Entity() : 
@@ -69,6 +72,7 @@ Entity::Entity(Entity&& other) noexcept :
     enableControl {other.enableControl},
     mAIActive {other.mAIActive},
     canCollide {other.canCollide},
+    mIsPushable {other.mIsPushable},
     mIsTextureAtlas {other.mIsTextureAtlas},
     mIsHorizontalFlipped {other.mIsHorizontalFlipped},
     mIsVerticalFlipped {other.mIsVerticalFlipped},
@@ -84,6 +88,7 @@ Entity::Entity(Entity&& other) noexcept :
     other.mIsActive = false;
     other.mOwnsTexture = false;
     other.mTextureOffset = {0.0f, 0.0f};
+    other.mIsPushable = false;
 }
 
 Entity& Entity::operator=(Entity&& other) noexcept
@@ -118,6 +123,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
     enableControl = other.enableControl;
     mAIActive = other.mAIActive;
     canCollide = other.canCollide;
+    mIsPushable = other.mIsPushable;
     mIsTextureAtlas = other.mIsTextureAtlas;
     mIsHorizontalFlipped = other.mIsHorizontalFlipped;
     mIsVerticalFlipped = other.mIsVerticalFlipped;
@@ -133,6 +139,7 @@ Entity& Entity::operator=(Entity&& other) noexcept
     other.mIsActive = false;
     other.mOwnsTexture = false;
     other.mTextureOffset = {0.0f, 0.0f};
+    other.mIsPushable = false;
 
     return *this;
 }
@@ -326,6 +333,57 @@ void Entity::checkCollisionX(Map *map)
     }
 }
 
+void Entity::applyPushForces(const std::vector<Entity*> &collidableEntities)
+{
+    if (!mIsPushable)
+    {
+        return;
+    }
+
+    const float selfRadius = 0.5f * std::max(mColliderDimensions.x, mColliderDimensions.y);
+
+    for (Entity *entity : collidableEntities)
+    {
+        if (!entity || entity == this || !entity->getIsActive() || !entity->getCanCollide())
+        {
+            continue;
+        }
+
+        const bool shouldPush = entity->getIsPushable() || entity->getEnableControl();
+        if (!shouldPush)
+        {
+            continue;
+        }
+
+        Vector2 delta = {
+            mPosition.x - entity->mPosition.x,
+            mPosition.y - entity->mPosition.y
+        };
+
+        const float otherRadius = 0.5f * std::max(entity->getColliderDimensions().x,
+                                                 entity->getColliderDimensions().y);
+        const float desired = (selfRadius + otherRadius) * physics::PUSH_RADIUS_SCALE;
+        const float distSq = delta.x * delta.x + delta.y * delta.y;
+        if (distSq <= 0.0001f || distSq > desired * desired)
+        {
+            continue;
+        }
+
+        const float dist = std::sqrt(distSq);
+        const float overlap = desired - dist;
+        if (overlap <= 0.0f)
+        {
+            continue;
+        }
+
+        delta.x /= dist;
+        delta.y /= dist;
+        const float impulse = physics::PUSH_IMPULSE * (overlap / desired);
+        mVelocity.x += delta.x * impulse;
+        mVelocity.y += delta.y * impulse;
+    }
+}
+
 void Entity::animate(float deltaTime)
 {
     mAnimationTime += deltaTime;
@@ -349,6 +407,7 @@ void Entity::update(float deltaTime, Entity *player, Map *map, const std::vector
 
     if (mMass > 0.0f) {mAcceleration += mForce * deltaTime / mMass; mForce = {0.0f, 0.0f};}
     mVelocity += mAcceleration * deltaTime;
+    applyPushForces(collidableEntities);
     mPosition += mVelocity * deltaTime;
     mPosition += mMovement;
     mMovement = {0.0f, 0.0f};

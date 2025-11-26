@@ -53,6 +53,7 @@ private:
     bool enableControl = false; // True if the entity is controllable by the player, false if it is not
     bool mAIActive = false; // If script AIupdate is called, this will be true
     bool canCollide = true; // True if the entity can collide with other entities, false if it cannot
+    bool mIsPushable = false;
     bool mIsTextureAtlas = false; // True if the entity has a texture atlas, false if it does not
     bool mIsHorizontalFlipped = false; // True if the entity is horizontally flipped, false if it is not
     bool mIsVerticalFlipped = false; // True if the entity is vertically flipped, false if it is not
@@ -78,6 +79,7 @@ private:
     void checkCollisionX(const std::vector<Entity*> &collidableEntities);
     void checkCollisionX(Map *map);
 
+    void applyPushForces(const std::vector<Entity*> &collidableEntities);
     void animate(float deltaTime);
     virtual void AIupdate(float deltaTime);
 public:
@@ -123,6 +125,7 @@ public:
     void setEnableControl(bool enableControl) { enableControl = enableControl; }
     void setAIActive(bool mAIActive) { this->mAIActive = mAIActive; }
     void setCanCollide(bool value) { canCollide = value; }
+    void setIsPushable(bool value) { mIsPushable = value; }
     void setIsTextureAtlas(bool isTextureAtlas) { mIsTextureAtlas = isTextureAtlas; }
     void setIsHorizontalFlipped(bool isHorizontalFlipped) { mIsHorizontalFlipped = isHorizontalFlipped; }
     void setIsVerticalFlipped(bool isVerticalFlipped) { mIsVerticalFlipped = isVerticalFlipped; }
@@ -162,6 +165,7 @@ public:
     bool getEnableControl() const { return enableControl; }
     bool getAIActive() const { return mAIActive; }
     bool getCanCollide() const { return canCollide; }
+    bool getIsPushable() const { return mIsPushable; }
     bool getIsTextureAtlas() const { return mIsTextureAtlas; }
     bool getIsHorizontalFlipped() const { return mIsHorizontalFlipped; }
     bool getTextureFacesLeft() const { return mTextureFacesLeft; }
