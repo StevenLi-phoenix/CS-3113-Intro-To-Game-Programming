@@ -6,6 +6,7 @@
 namespace DogConstants
 {
     constexpr int VARIANT_COUNT = 4;
+    constexpr int STANDING_VARIANT = 99;
     constexpr float DEFAULT_HEIGHT = 28.0f;
     constexpr float MIN_HEIGHT = 24.0f;
     constexpr float MAX_HEIGHT = 36.0f;
@@ -33,6 +34,11 @@ public:
     Dog(Vector2 position,
         int variant = 0,
         float desiredHeightPixels = DogConstants::DEFAULT_HEIGHT);
+    void setPatrolSpeed(float speed) { mPatrolSpeed = std::max(0.0f, speed); }
+    void setChaseSpeed(float speed) { mChaseSpeed = std::max(0.0f, speed); }
+    void setBaseMoveSpeed(float speed) { setMoveSpeed(speed); }
+    void setBaseDetectionRadius(float radius) { setDetectionRadius(radius); }
+    float getChaseSpeedValue() const { return mChaseSpeed; }
 protected:
     void updateBehaviour(float deltaTime,
                          Entity *player,

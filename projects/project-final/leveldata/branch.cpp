@@ -11,14 +11,18 @@ Branch::Branch(const Vector2 &start,
                const Vector2 &direction,
                float travelDistance,
                float speed,
-               float damage)
+               float damage,
+               bool useShuriken)
     : Entity(),
-      mDirection(direction),
-      mTravelDistance(std::max(travelDistance, branch::MIN_THROW_DISTANCE)),
-      mSpeed(std::max(speed, 1.0f)),
-      mTraveled(0.0f),
-      mDamage(std::max(damage, 0.0f)),
-      mSpent(false)
+    mDirection(direction),
+    mTravelDistance(std::max(travelDistance, branch::MIN_THROW_DISTANCE)),
+    mSpeed(std::max(speed, 1.0f)),
+    mTraveled(0.0f),
+    mDamage(std::max(damage, 0.0f)),
+    mSpent(false),
+    mRecoverable(false),
+    mCollected(false),
+    mUseShuriken(useShuriken)
 {
     const float length = Vector2Length(mDirection);
     if (length <= 0.0001f)
@@ -48,7 +52,6 @@ void Branch::update(float deltaTime,
 
     if (mSpent || !getIsActive())
     {
-        mSpent = true;
         return;
     }
 
@@ -69,7 +72,27 @@ void Branch::markSpent()
     }
     mSpent = true;
     setVelocity({0.0f, 0.0f});
+    if (mRecoverable)
+    {
+        setIsActive(true);
+        setCanCollide(false);
+    }
+    else
+    {
+        setIsActive(false);
+    }
+}
+
+void Branch::markCollected()
+{
+    if (mCollected)
+    {
+        return;
+    }
+    mCollected = true;
+    mSpent = true;
     setIsActive(false);
+    setCanCollide(false);
 }
 
 void Branch::configureSprite()
@@ -85,10 +108,11 @@ void Branch::configureSprite()
     setTexture(*atlas);
     setOwnsTexture(false);
 
-    Rectangle spriteRect = rm.getSpriteRect(BRANCH_SPRITE_TAG);
+    const char *tag = mUseShuriken ? "SMALLSHURIKEN" : BRANCH_SPRITE_TAG;
+    Rectangle spriteRect = rm.getSpriteRect(tag);
     if (spriteRect.width <= 0.0f || spriteRect.height <= 0.0f)
     {
-        LOG_WARNING(TextFormat("Branch: missing sprite rect for tag '%s'", BRANCH_SPRITE_TAG));
+        LOG_WARNING(TextFormat("Branch: missing sprite rect for tag '%s'", tag));
         Vector2 fallbackSize = {32.0f, 10.0f};
         setScale(fallbackSize);
         setColliderDimensions({fallbackSize.x * 0.7f, fallbackSize.y * COLLIDER_HEIGHT_RATIO});
@@ -104,4 +128,3 @@ void Branch::configureSprite()
     setCustomSourceRect(spriteRect);
     setColliderDimensions({spriteSize.x * 0.7f, spriteSize.y * COLLIDER_HEIGHT_RATIO});
 }
-

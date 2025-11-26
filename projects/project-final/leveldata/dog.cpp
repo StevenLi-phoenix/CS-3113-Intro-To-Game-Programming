@@ -9,6 +9,10 @@ namespace
 {
 int normalizeVariantIndex(int variant)
 {
+    if (variant == DogConstants::STANDING_VARIANT)
+    {
+        return variant;
+    }
     if (DogConstants::VARIANT_COUNT <= 0)
     {
         return 0;
@@ -155,6 +159,16 @@ void Dog::updateBehaviour(float deltaTime,
 
 Rectangle Dog::resolveSpriteRect(int variant) const
 {
+    if (variant == DogConstants::STANDING_VARIANT)
+    {
+        ResourceManager &rm = ResourceManager::instance();
+        Rectangle rect = rm.getSpriteRect("STANDINGDOG");
+        if (rect.width > 0.0f && rect.height > 0.0f)
+        {
+            return rect;
+        }
+    }
+
     variant = std::clamp(variant, 0, DogConstants::VARIANT_COUNT - 1);
 
     ResourceManager &rm = ResourceManager::instance();

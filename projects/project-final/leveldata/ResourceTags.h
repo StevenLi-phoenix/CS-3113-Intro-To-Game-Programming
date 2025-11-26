@@ -4,6 +4,7 @@
 namespace tags
 {
     constexpr const char *BRANCH = "BRANCH";
+    constexpr const char *SHURIKEN = "SMALLSHURIKEN";
     constexpr const char *GOLDCOIN = "GOLDCOIN";
     constexpr const char *COMPASS = "COMPASS";
     constexpr const char *TABLEWITHMAP = "TABLEWITHMAP";

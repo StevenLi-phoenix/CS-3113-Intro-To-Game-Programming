@@ -7,6 +7,7 @@
 #include "../lib/ResourceManager.h"
 #include "../lib/Inventory.h"
 #include "../lib/ui/InventoryBar.h"
+#include "../lib/ui/Button.h"
 #include "../lib/Profiler.h"
 #include "branch.h"
 #include "box.h"
@@ -56,7 +57,7 @@ namespace
 
     constexpr EnemySpawnSettings ENEMY_SPAWN_SETTINGS{
         0x5f3759d5u,
-        0.5f,
+        0.9f,
         4,
         DogConstants::MIN_HEIGHT,
         DogConstants::MAX_HEIGHT,
@@ -114,6 +115,17 @@ namespace
     constexpr float GOLD_DROP_OFFSET_MAX = 14.0f;
     constexpr float TABLE_DISTANCE_MIN_TILES = 64.0f;
     constexpr float TABLE_DISTANCE_MAX_TILES = 256.0f;
+    constexpr float SHOP_INTERACT_RADIUS = 120.0f;
+    constexpr int SWORD_COST = 8;
+    constexpr int SHURIKEN_COST = 6;
+    constexpr float SWORD_DAMAGE_BONUS = 0.2f;     // +20% per purchase
+    constexpr float SHURIKEN_DAMAGE_BONUS = 0.2f;  // +20% per purchase
+    constexpr float BOSS_HEALTH = 32.0f;
+    constexpr float BOSS_SUMMON_INTERVAL = 6.0f;
+    constexpr int BOSS_MAX_MINIONS = 3;
+    constexpr float BOSS_SUMMON_RADIUS = 220.0f;
+    constexpr float BOSS_BAR_DISTANCE = 540.0f;
+    constexpr float BOSS_HEIGHT = DogConstants::MAX_HEIGHT * 1.25f;
 
     namespace tutorial
     {
@@ -143,6 +155,17 @@ void Level1::initialise()
     ensureMusicNotes();
     applyDifficulty(mDifficulty);
     resetBranchInventory();
+    mMeleeDamage = combat::MELEE_DAMAGE;
+    mBranchDamage = branch::PROJECTILE_DAMAGE;
+    mSwordUpgradeCount = 0;
+    mShurikenUpgradeCount = 0;
+    mRecoverableThrows = false;
+    mShopOpen = false;
+    mShopSuppressed = false;
+    mBossSpawned = false;
+    mBossDefeated = false;
+    mBossSummonTimer = 0.0f;
+    mQuestDescription = "Reach the map table, shop, and defeat the guardian";
     initialiseInventoryUI();
     spawnQuestTarget();
     if (!mCompassUI)
@@ -168,6 +191,12 @@ void Level1::initialise()
 
 void Level1::update(float deltaTime)
 {
+    updateShop(deltaTime);
+    if (mShopOpen)
+    {
+        return;
+    }
+
     const bool profile = isDebugMode();
     FrameProfiler profiler(profile);
 
@@ -287,6 +316,7 @@ void Level1::update(float deltaTime)
     if (profile) profiler.mark("entities", "entities");
 
     resolveBranchImpacts();
+    updateBranchPickups();
     cleanupBranches();
     cleanupInactiveTrees();
     if (mNavStaticsDirty)
@@ -299,6 +329,7 @@ void Level1::update(float deltaTime)
     updateGoldCoins();
     updatePlayerAttack(deltaTime);
     updateMeleeTimer(deltaTime);
+    updateBossFight(deltaTime);
     if (profile) profiler.mark("combat", "combat");
 
     updateCameraFromPlayer(deltaTime);
@@ -467,6 +498,8 @@ void Level1::render()
     drawQuestLog();
     drawTutorialOverlay();
     drawGameOverOverlay();
+    drawBossBar();
+    drawShopOverlay();
     DrawFPS(0, 60);
 }
 
@@ -551,6 +584,24 @@ void Level1::clearEnemies()
     }
 
     mChunkEnemies.clear();
+    if (mBoss)
+    {
+        removeCollidableEntity(mCollidableEntities, mBoss);
+        delete mBoss;
+        mBoss = nullptr;
+    }
+    for (Dog* minion : mBossMinions)
+    {
+        if (!minion)
+        {
+            continue;
+        }
+        removeCollidableEntity(mCollidableEntities, minion);
+        delete minion;
+    }
+    mBossMinions.clear();
+    mBossSpawned = false;
+    mBossDefeated = false;
     mEnemies.clear();
 }
 
@@ -847,7 +898,14 @@ bool Level1::tryThrowBranchAt(const Vector2 &worldTarget)
         return false;
     }
 
-    Branch *projectile = new Branch(start, direction, travelDistance);
+    Branch *projectile = new Branch(start,
+                                    direction,
+                                    travelDistance,
+                                    branch::THROW_SPEED,
+                                    mBranchDamage,
+                                    mRecoverableThrows);
+    projectile->setRecoverable(mRecoverableThrows);
+    projectile->setUseShuriken(mRecoverableThrows);
     mBranches.push_back(projectile);
     mCollidableEntities.push_back(projectile);
     return true;
@@ -904,7 +962,21 @@ void Level1::cleanupBranches()
     while (it != mBranches.end())
     {
         Branch* projectile = *it;
-        if (!projectile || projectile->isSpent() || !projectile->getIsActive())
+        if (!projectile)
+        {
+            removeCollidableEntity(mCollidableEntities, projectile);
+            delete projectile;
+            it = mBranches.erase(it);
+            continue;
+        }
+
+        if (projectile->isRecoverable() && projectile->isSpent() && !projectile->isCollected())
+        {
+            ++it;
+            continue;
+        }
+
+        if (projectile->isCollected() || (!projectile->isRecoverable() && (projectile->isSpent() || !projectile->getIsActive())))
         {
             removeCollidableEntity(mCollidableEntities, projectile);
             delete projectile;
@@ -1000,6 +1072,40 @@ void Level1::updateGoldCoins()
     }
 }
 
+void Level1::updateBranchPickups()
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    auto it = mBranches.begin();
+    while (it != mBranches.end())
+    {
+        Branch *branch = *it;
+        if (!branch)
+        {
+            it = mBranches.erase(it);
+            continue;
+        }
+
+        if (branch->isRecoverable() && branch->isSpent() && !branch->isCollected())
+        {
+            if (mPlayer->intersects(*branch))
+            {
+                branch->markCollected();
+                removeCollidableEntity(mCollidableEntities, branch);
+                mBranchInventory = std::clamp(mBranchInventory + 1, 0, mBranchCapacity);
+                syncBranchSlot();
+            }
+            ++it;
+            continue;
+        }
+
+        ++it;
+    }
+}
+
 void Level1::collectGoldCoin(GoldCoin *coin)
 {
     if (!coin)
@@ -1018,6 +1124,11 @@ void Level1::handleEnemyDefeated(Enemy *enemy)
     if (!enemy)
     {
         return;
+    }
+
+    if (enemy == mBoss)
+    {
+        mBossDefeated = true;
     }
 
     const float dropRoll = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
@@ -1043,6 +1154,208 @@ void Level1::handleEnemyDefeated(Enemy *enemy)
                              dropPos.x,
                              dropPos.y));
     }
+}
+
+void Level1::spawnBoss()
+{
+    if (!mTable || mBoss)
+    {
+        return;
+    }
+
+    Vector2 pos = mTable->getPosition();
+    // Spawn offscreen relative to player and let boss walk in.
+    if (mPlayer)
+    {
+        const Vector2 playerPos = mPlayer->getPosition();
+        const float angle = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f * 2.0f * PI;
+        const float distance = std::max(static_cast<float>(c::SCREEN_WIDTH), static_cast<float>(c::SCREEN_HEIGHT)) * 0.75f;
+        pos = {
+            playerPos.x + cosf(angle) * distance,
+            playerPos.y + sinf(angle) * distance
+        };
+    }
+
+    Dog* boss = new Dog(pos, DogConstants::STANDING_VARIANT, BOSS_HEIGHT);
+    boss->setNavMap(&mNavMap);
+    boss->setBaseMoveSpeed(DogConstants::CHASE_SPEED * 0.6f);
+    boss->setPatrolSpeed(DogConstants::PATROL_SPEED * 0.6f);
+    boss->setChaseSpeed(DogConstants::CHASE_SPEED * 0.75f);
+    boss->setBaseDetectionRadius(DogConstants::DETECTION_RADIUS * 1.2f);
+    boss->setTextureFacesLeft(false);
+    boss->setIsHorizontalFlipped(false);
+    boss->setMaxHealth(BOSS_HEALTH);
+    boss->setHealth(BOSS_HEALTH);
+
+    mBoss = boss;
+    mBossSpawned = true;
+    mBossDefeated = false;
+    mBossSummonTimer = BOSS_SUMMON_INTERVAL * 0.5f;
+    mBossRepathTimer = 0.1f;
+
+    mEnemies.push_back(boss);
+    mCollidableEntities.push_back(boss);
+
+    LOG_INFO(TextFormat("Boss spawned at (%.1f, %.1f)", pos.x, pos.y));
+}
+
+void Level1::spawnBossMinion()
+{
+    if (!mBoss || mBossDefeated)
+    {
+        return;
+    }
+
+    const float noise = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
+    const float angle = noise * 2.0f * PI;
+    Vector2 pos = {
+        mBoss->getPosition().x + cosf(angle) * BOSS_SUMMON_RADIUS,
+        mBoss->getPosition().y + sinf(angle) * BOSS_SUMMON_RADIUS
+    };
+
+    const int variantMax = std::max(0, DogConstants::VARIANT_COUNT - 1);
+    const int variant = (variantMax > 0) ? GetRandomValue(0, variantMax) : 0;
+
+    Dog* dog = new Dog(pos, variant, DogConstants::DEFAULT_HEIGHT);
+    dog->setNavMap(&mNavMap);
+    mBossMinions.push_back(dog);
+    mEnemies.push_back(dog);
+    mCollidableEntities.push_back(dog);
+
+    LOG_INFO(TextFormat("Boss summoned dog[%p] at (%.1f, %.1f)", dog, pos.x, pos.y));
+}
+
+void Level1::pruneEnemyList(Enemy *enemy)
+{
+    if (!enemy)
+    {
+        return;
+    }
+    auto it = std::remove(mEnemies.begin(), mEnemies.end(), enemy);
+    if (it != mEnemies.end())
+    {
+        mEnemies.erase(it, mEnemies.end());
+    }
+}
+
+void Level1::cleanupBossMinions()
+{
+    auto it = mBossMinions.begin();
+    while (it != mBossMinions.end())
+    {
+        Dog* dog = *it;
+        if (!dog || dog->isDead() || !dog->getIsActive())
+        {
+            if (dog)
+            {
+                removeCollidableEntity(mCollidableEntities, dog);
+                pruneEnemyList(dog);
+                delete dog;
+            }
+            it = mBossMinions.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void Level1::updateBossFight(float deltaTime)
+{
+    cleanupBossMinions();
+
+    if (!mBoss)
+    {
+        return;
+    }
+
+    if (mBoss->isDead() || !mBoss->getIsActive())
+    {
+        removeCollidableEntity(mCollidableEntities, mBoss);
+        pruneEnemyList(mBoss);
+        delete mBoss;
+        mBoss = nullptr;
+        mBossDefeated = true;
+        return;
+    }
+
+    mBossSummonTimer -= deltaTime;
+    mBossRepathTimer -= deltaTime;
+
+    if (mBossRepathTimer <= 0.0f && mPlayer)
+    {
+        if (Dog *bossDog = dynamic_cast<Dog*>(mBoss))
+        {
+            bossDog->setBaseDetectionRadius(5000.0f);
+            bossDog->setBaseMoveSpeed(DogConstants::CHASE_SPEED * 0.9f);
+            bossDog->setChaseSpeed(DogConstants::CHASE_SPEED * 1.05f);
+            Vector2 toPlayer = {
+                mPlayer->getPosition().x - bossDog->getPosition().x,
+                mPlayer->getPosition().y - bossDog->getPosition().y
+            };
+            const float dist = std::max(Vector2Length(toPlayer), 0.001f);
+            toPlayer.x /= dist;
+            toPlayer.y /= dist;
+            bossDog->setVelocity({toPlayer.x * bossDog->getChaseSpeedValue(),
+                                  toPlayer.y * bossDog->getChaseSpeedValue()});
+        }
+        mBossRepathTimer = 0.35f;
+    }
+
+    if (mBossSummonTimer <= 0.0f)
+    {
+        if (mBossMinions.size() < static_cast<size_t>(BOSS_MAX_MINIONS))
+        {
+            spawnBossMinion();
+        }
+        mBossSummonTimer = BOSS_SUMMON_INTERVAL;
+    }
+}
+
+void Level1::drawBossBar() const
+{
+    if (!mBoss || !mPlayer)
+    {
+        return;
+    }
+    if (!mBoss->getIsActive() || mBossDefeated)
+    {
+        return;
+    }
+
+    const float distance = Vector2Distance(mBoss->getPosition(), mPlayer->getPosition());
+    if (distance > BOSS_BAR_DISTANCE)
+    {
+        return;
+    }
+
+    const float maxHealth = std::max(mBoss->getMaxHealth(), 0.01f);
+    const float ratio = std::clamp(mBoss->getHealth() / maxHealth, 0.0f, 1.0f);
+
+    const float barWidth = static_cast<float>(c::SCREEN_WIDTH) * 0.6f;
+    const float barHeight = 18.0f;
+    Rectangle panel = {
+        (c::SCREEN_WIDTH - barWidth) * 0.5f,
+        12.0f,
+        barWidth,
+        barHeight
+    };
+    Rectangle fill = panel;
+    fill.width = panel.width * ratio;
+
+    DrawRectangleRounded(panel, 0.35f, 8, Fade(BLACK, 0.65f));
+    DrawRectangleRec(fill, Fade(RED, 0.85f));
+    DrawRectangleLinesEx(panel, 2.0f, Fade(RAYWHITE, 0.9f));
+
+    const char *label = "Alpha Dog (Boss)";
+    const int fontSize = 18;
+    const int labelWidth = MeasureText(label, fontSize);
+    DrawText(label,
+             static_cast<int>(panel.x + (panel.width - labelWidth) * 0.5f),
+             static_cast<int>(panel.y + panel.height + 6.0f),
+             fontSize,
+             RAYWHITE);
 }
 
 void Level1::updateMeleeTimer(float deltaTime)
@@ -1462,6 +1775,7 @@ void Level1::initialiseInventoryUI()
 
     syncBranchSlot();
     syncGoldSlot();
+    syncWeaponSlot();
 }
 
 void Level1::syncBranchSlot()
@@ -1482,19 +1796,22 @@ void Level1::syncBranchSlot()
     }
 
     InventorySlot slot = mInventory->getSlot(mBranchSlotIndex);
-    slot.id = "branches";
-    if (slot.label.empty())
+    slot.id = mRecoverableThrows ? "shuriken" : "branches";
+    std::string label = mRecoverableThrows ? "Shuriken" : "Branches";
+    if (mShurikenUpgradeCount > 0)
     {
-        slot.label = "Branches";
+        label += " +" + std::to_string(mShurikenUpgradeCount);
     }
-    slot.iconTint = DARKGREEN;
+    slot.label = label;
+    slot.iconTint = mRecoverableThrows ? ORANGE : DARKGREEN;
     slot.quantity = mBranchInventory;
 
     ResourceManager &rm = ResourceManager::instance();
     Texture2D *atlas = rm.getTexture(ResourceKeys::WORLD_ATLAS);
     if (atlas)
     {
-        Rectangle iconRect = rm.getSpriteRect(BRANCH_SLOT_ICON_TAG);
+        const char *tag = mRecoverableThrows ? tags::SHURIKEN : BRANCH_SLOT_ICON_TAG;
+        Rectangle iconRect = rm.getSpriteRect(tag);
         if (iconRect.width > 0.0f && iconRect.height > 0.0f)
         {
             slot.icon = atlas;
@@ -1566,6 +1883,49 @@ void Level1::syncGoldSlot()
     mInventory->setSlot(mGoldSlotIndex, slot);
 }
 
+void Level1::syncWeaponSlot()
+{
+    if (!mInventory)
+    {
+        return;
+    }
+
+    if (mInventory->getSlotCount() == 0)
+    {
+        return;
+    }
+
+    if (mAxeSlotIndex >= mInventory->getSlotCount())
+    {
+        mAxeSlotIndex = 0;
+    }
+
+    InventorySlot slot = mInventory->getSlot(mAxeSlotIndex);
+    slot.id = "sword";
+    std::string label = "Sword";
+    if (mSwordUpgradeCount > 0)
+    {
+        label += " +" + std::to_string(mSwordUpgradeCount);
+    }
+    slot.label = label;
+    slot.iconTint = Fade(WHITE, 0.9f);
+    slot.quantity = 1;
+
+    ResourceManager &rm = ResourceManager::instance();
+    Texture2D *atlas = rm.getTexture(ResourceKeys::WORLD_ATLAS);
+    if (atlas)
+    {
+        Rectangle iconRect = rm.getSpriteRect(tags::AXE);
+        if (iconRect.width > 0.0f && iconRect.height > 0.0f)
+        {
+            slot.icon = atlas;
+            slot.iconSource = iconRect;
+        }
+    }
+
+    mInventory->setSlot(mAxeSlotIndex, slot);
+}
+
 bool Level1::isBranchSelected() const
 {
     return mInventory && mInventory->getSelectedIndex() == mBranchSlotIndex;
@@ -1628,6 +1988,11 @@ int Level1::requiredGold() const
 void Level1::updateQuestState()
 {
     if (mQuestComplete || !mPlayer || !mTable)
+    {
+        return;
+    }
+
+    if ((mBoss && mBoss->getIsActive()) || (mBossSpawned && !mBossDefeated))
     {
         return;
     }
@@ -1733,6 +2098,240 @@ void Level1::drawQuestLog() const
              Fade(GRAY, 0.9f));
 }
 
+bool Level1::isPlayerNearTable(float radius) const
+{
+    if (!mPlayer || !mTable)
+    {
+        return false;
+    }
+    const float distance = Vector2Distance(mPlayer->getPosition(), mTable->getPosition());
+    return distance <= radius;
+}
+
+void Level1::ensureShopUI()
+{
+    if (!mShopButtons.empty())
+    {
+        return;
+    }
+
+    auto makeButton = []() -> std::unique_ptr<Button>
+    {
+        auto btn = std::make_unique<Button>();
+        btn->setScale({180.0f, 46.0f});
+        btn->setBackgroundColor(Fade(DARKBLUE, 0.78f));
+        btn->setBorderColor(Fade(RAYWHITE, 0.8f));
+        btn->setTextColor(RAYWHITE);
+        btn->setFontSize(18);
+        return btn;
+    };
+
+    mShopButtons.push_back(makeButton());
+    mShopButtons.push_back(makeButton());
+    mShopButtons.push_back(makeButton());
+    updateShopButtonsLayout();
+}
+
+void Level1::updateShopButtonsLayout()
+{
+    if (mShopButtons.size() < 3)
+    {
+        return;
+    }
+    const float centerX = c::SCREEN_WIDTH * 0.5f;
+    const float topY = 150.0f;
+    const float spacing = 200.0f;
+
+    mShopButtons[0]->setPosition({centerX - spacing, topY});
+    mShopButtons[1]->setPosition({centerX, topY});
+    mShopButtons[2]->setPosition({centerX + spacing, topY});
+}
+
+void Level1::handleShopClose()
+{
+    mShopOpen = false;
+    Button::updateGlobalCursor();
+}
+
+void Level1::updateShop(float deltaTime)
+{
+    (void)deltaTime;
+    const bool nearTable = isPlayerNearTable(SHOP_INTERACT_RADIUS);
+    if (!nearTable)
+    {
+        if (mShopOpen)
+        {
+            handleShopClose();
+        }
+        mShopSuppressed = false;
+        return;
+    }
+
+    if (!mBossSpawned)
+    {
+        spawnBoss();
+    }
+
+    if (mShopSuppressed)
+    {
+        return;
+    }
+
+    ensureShopUI();
+    updateShopButtonsLayout();
+
+    mShopOpen = true;
+
+    if (IsKeyPressed(KEY_Q))
+    {
+        handleShopClose();
+        mShopSuppressed = true;
+        return;
+    }
+
+    auto purchaseSword = [&]()
+    {
+        if (mGoldCount < SWORD_COST)
+        {
+            return;
+        }
+        mGoldCount -= SWORD_COST;
+        ++mSwordUpgradeCount;
+        mMeleeDamage = combat::MELEE_DAMAGE *
+                       (1.0f + static_cast<float>(mSwordUpgradeCount) * SWORD_DAMAGE_BONUS);
+        syncGoldSlot();
+        syncWeaponSlot();
+        LOG_INFO(TextFormat("Purchased Sword level %d, melee damage=%.1f",
+                            mSwordUpgradeCount,
+                            mMeleeDamage));
+    };
+
+    auto purchaseShuriken = [&]()
+    {
+        if (mGoldCount < SHURIKEN_COST)
+        {
+            return;
+        }
+        mGoldCount -= SHURIKEN_COST;
+        ++mShurikenUpgradeCount;
+        mRecoverableThrows = true;
+        mBranchCapacity = std::max(mBranchCapacity, 999);
+        mBranchDamage = branch::PROJECTILE_DAMAGE *
+                        (1.0f + static_cast<float>(mShurikenUpgradeCount) * SHURIKEN_DAMAGE_BONUS);
+        mBranchInventory = std::clamp(mBranchInventory + 1, 0, mBranchCapacity);
+        syncGoldSlot();
+        syncBranchSlot();
+        LOG_INFO(TextFormat("Purchased Shuriken level %d, throw damage=%.1f",
+                            mShurikenUpgradeCount,
+                            mBranchDamage));
+    };
+
+    if (IsKeyPressed(KEY_ONE))
+    {
+        purchaseSword();
+    }
+    if (IsKeyPressed(KEY_TWO))
+    {
+        purchaseShuriken();
+    }
+
+    if (mShopButtons.size() >= 3)
+    {
+        const std::string swordLabel = TextFormat("Sword +20%% [%dG]", SWORD_COST);
+        const std::string shurikenLabel = TextFormat("Shuriken +20%% [%dG]", SHURIKEN_COST);
+        mShopButtons[0]->setText(swordLabel);
+        mShopButtons[1]->setText(shurikenLabel);
+        mShopButtons[2]->setText("Close (Q)");
+
+        const Color affordSword = mGoldCount >= SWORD_COST ? Fade(DARKGREEN, 0.82f) : Fade(DARKGRAY, 0.82f);
+        const Color affordShuriken = mGoldCount >= SHURIKEN_COST ? Fade(DARKGREEN, 0.82f) : Fade(DARKGRAY, 0.82f);
+        mShopButtons[0]->setBackgroundColor(affordSword);
+        mShopButtons[1]->setBackgroundColor(affordShuriken);
+        mShopButtons[2]->setBackgroundColor(Fade(MAROON, 0.78f));
+
+        mShopButtons[0]->setOnClick(purchaseSword);
+        mShopButtons[1]->setOnClick(purchaseShuriken);
+        mShopButtons[2]->setOnClick([&]() { handleShopClose(); mShopSuppressed = true; });
+
+        for (auto &btn : mShopButtons)
+        {
+            if (btn)
+            {
+                btn->update(deltaTime);
+            }
+        }
+    }
+}
+
+void Level1::drawShopOverlay() const
+{
+    if (!mShopOpen)
+    {
+        return;
+    }
+
+    DrawRectangle(0, 0, c::SCREEN_WIDTH, c::SCREEN_HEIGHT, Fade(BLACK, 0.55f));
+
+    const float panelWidth = 680.0f;
+    const float panelHeight = 220.0f;
+    Rectangle panel = {
+        (c::SCREEN_WIDTH - panelWidth) * 0.5f,
+        40.0f,
+        panelWidth,
+        panelHeight
+    };
+    DrawRectangleRounded(panel, 0.2f, 6, Fade(BLACK, 0.6f));
+    DrawRectangleLinesEx(panel, 2.0f, Fade(WHITE, 0.5f));
+
+    const char *title = "Map Table Shop (Paused)";
+    const int titleSize = 22;
+    const int titleWidth = MeasureText(title, titleSize);
+    DrawText(title,
+             static_cast<int>(panel.x + (panel.width - titleWidth) * 0.5f),
+             static_cast<int>(panel.y + 10.0f),
+             titleSize,
+             RAYWHITE);
+
+    const std::string swordLine = TextFormat("Sword bonus: +%d%%   Melee: %.1f",
+                                             mSwordUpgradeCount * static_cast<int>(SWORD_DAMAGE_BONUS * 100.0f),
+                                             mMeleeDamage);
+    const std::string shurikenLine = TextFormat("Shuriken bonus: +%d%%   Throw: %.1f   Reclaimable",
+                                                mShurikenUpgradeCount * static_cast<int>(SHURIKEN_DAMAGE_BONUS * 100.0f),
+                                                mBranchDamage);
+    DrawText(swordLine.c_str(),
+             static_cast<int>(panel.x + 18.0f),
+             static_cast<int>(panel.y + 44.0f),
+             18,
+             LIGHTGRAY);
+    DrawText(shurikenLine.c_str(),
+             static_cast<int>(panel.x + 18.0f),
+             static_cast<int>(panel.y + 70.0f),
+             18,
+             LIGHTGRAY);
+
+    const std::string goldLine = TextFormat("Gold: %d", mGoldCount);
+    DrawText(goldLine.c_str(),
+             static_cast<int>(panel.x + panel.width - 160.0f),
+             static_cast<int>(panel.y + 44.0f),
+             18,
+             GOLD);
+
+    const char *hint = "Game frozen: click or press 1/2 to buy (stacks), press Q or Close to exit, reclaim throws by walking over them";
+    DrawText(hint,
+             static_cast<int>(panel.x + 18.0f),
+             static_cast<int>(panel.y + panel.height - 32.0f),
+             16,
+             Fade(RAYWHITE, 0.92f));
+
+    for (const auto &btn : mShopButtons)
+    {
+        if (btn)
+        {
+            btn->render();
+        }
+    }
+}
+
 void Level1::drawCompassIndicator()
 {
     if (!mCompassUI)
@@ -1836,6 +2435,33 @@ void Level1::resetPlayerForRetry()
     clearBranches();
     resetBranchInventory();
     clearGoldCoins(true);
+    if (mBoss)
+    {
+        removeCollidableEntity(mCollidableEntities, mBoss);
+        delete mBoss;
+        mBoss = nullptr;
+    }
+    for (Dog* minion : mBossMinions)
+    {
+        if (!minion)
+        {
+            continue;
+        }
+        removeCollidableEntity(mCollidableEntities, minion);
+        delete minion;
+    }
+    mBossMinions.clear();
+    mBossSpawned = false;
+    mBossDefeated = false;
+    mBossSummonTimer = 0.0f;
+    mSwordUpgradeCount = 0;
+    mShurikenUpgradeCount = 0;
+    mMeleeDamage = combat::MELEE_DAMAGE;
+    mBranchDamage = branch::PROJECTILE_DAMAGE;
+    mRecoverableThrows = false;
+    mShopOpen = false;
+    mShopSuppressed = false;
+    syncWeaponSlot();
 
     spawnQuestTarget();
     if (mCompassUI)
@@ -2351,6 +2977,34 @@ void Level1::generateEnemies()
         }
     }
 
+    std::vector<Dog*> aliveBossMinions;
+    for (Dog* dog : mBossMinions)
+    {
+        if (!dog || dog->isDead())
+        {
+            if (dog)
+            {
+                removeCollidableEntity(mCollidableEntities, dog);
+                delete dog;
+            }
+            continue;
+        }
+        dog->setIsActive(true);
+        dog->setCanCollide(true);
+        ensureInCollidables(dog);
+        mEnemies.push_back(dog);
+        aliveBossMinions.push_back(dog);
+    }
+    mBossMinions.swap(aliveBossMinions);
+
+    if (mBoss && !mBoss->isDead())
+    {
+        mBoss->setIsActive(true);
+        mBoss->setCanCollide(true);
+        ensureInCollidables(mBoss);
+        mEnemies.push_back(mBoss);
+    }
+
     if (mEnemies.empty() && !hasStoredEnemies && !(skipPlayerChunk && skippedPlayerChunk))
     {
         const float chunkWorldSize = static_cast<float>(mChunkSize) * mTileSize;
@@ -2384,6 +3038,13 @@ void Level1::generateEnemies()
                          static_cast<int>(mEnemies.size()),
                          span * span,
                          (tGenEnd - tGenStart) * 1000.0));
+
+    if (isDebugMode())
+    {
+        mGoldCount += 1000;
+        syncGoldSlot();
+        LOG_DEBUG("Debug mode: granted 1000 gold for shop testing");
+    }
 }
 
 void Level1::spawnEnemiesForChunk(const std::pair<int, int> &chunk,

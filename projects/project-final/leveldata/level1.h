@@ -6,6 +6,7 @@
 #include "../lib/mapgenerator.h"
 #include "../lib/Inventory.h"
 #include "../lib/ui/InventoryBar.h"
+#include "../lib/ui/Button.h"
 #include "../constants.h"
 #include "player.h"
 #include "DifficultyConfig.h"
@@ -105,6 +106,7 @@ private:
     void drawInventoryOverlay();
     void syncBranchSlot();
     void syncGoldSlot();
+    void syncWeaponSlot();
     void updateTreesForStream();
     void updateBoxesForStream();
     void spawnBoxesForChunk(const std::pair<int, int> &chunk,
@@ -126,6 +128,19 @@ private:
     void updateQuestState();
     void drawQuestLog() const;
     void drawCompassIndicator();
+    void updateShop(float deltaTime);
+    void drawShopOverlay() const;
+    bool isPlayerNearTable(float radius) const;
+    void spawnBoss();
+    void spawnBossMinion();
+    void updateBossFight(float deltaTime);
+    void drawBossBar() const;
+    void cleanupBossMinions();
+    void pruneEnemyList(Enemy *enemy);
+    void ensureShopUI();
+    void updateShopButtonsLayout();
+    void handleShopClose();
+    void updateBranchPickups();
     bool isBranchSelected() const;
     bool isCompassSelected() const;
     bool isAxeSelected() const;
@@ -203,6 +218,12 @@ private:
     float mMeleeCooldown = combat::MELEE_COOLDOWN;
     float mMeleeRange = combat::MELEE_RANGE;
     float mMeleeDamage = combat::MELEE_DAMAGE;
+    float mBranchDamage = branch::PROJECTILE_DAMAGE;
+    int mSwordUpgradeCount = 0;
+    int mShurikenUpgradeCount = 0;
+    bool mRecoverableThrows = false;
+    bool mShopOpen = false;
+    bool mShopSuppressed = false;
 
     std::unique_ptr<Inventory> mInventory;
     std::unique_ptr<InventoryBar> mInventoryBar;
@@ -214,6 +235,13 @@ private:
 
     std::string mQuestDescription = "Survive and find the table with map";
     bool mQuestComplete = false;
+    bool mBossSpawned = false;
+    bool mBossDefeated = false;
+    Enemy *mBoss = nullptr;
+    std::vector<Dog*> mBossMinions;
+    float mBossSummonTimer = 0.0f;
+    std::vector<std::unique_ptr<Button>> mShopButtons;
+    float mBossRepathTimer = 0.0f;
 
     bool mTutorialOverlayVisible = false;
     bool mTutorialOverlayDismissed = false;
