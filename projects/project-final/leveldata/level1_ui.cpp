@@ -248,3 +248,36 @@ void Level1::drawCompassIndicator()
         mCompassUI->render();
     }
 }
+
+void Level1::drawMapTableUI() const
+{
+    if (!mTable || !mPlayer || isPaused())
+    {
+        return;
+    }
+
+    const float hintRadius = level1_consts::SHOP_INTERACT_RADIUS * 1.1f;
+    const bool nearTable = isPlayerNearTable(hintRadius);
+    if (!nearTable && !mShopOpen)
+    {
+        return;
+    }
+
+    Vector2 tableScreen = GetWorldToScreen2D(mTable->getPosition(), mCamera);
+    const char *label = mShopOpen ? "Map Table Shop (Q to close)" : "Map Table - shop will open here";
+    const int fontSize = 18;
+    const int textWidth = MeasureText(label, fontSize);
+    Rectangle bg = {
+        tableScreen.x - textWidth * 0.6f,
+        tableScreen.y - 56.0f,
+        static_cast<float>(textWidth) * 1.2f + 16.0f,
+        32.0f
+    };
+    DrawRectangleRounded(bg, 0.25f, 6, Fade(BLACK, 0.55f));
+    DrawRectangleLinesEx(bg, 2.0f, Fade(WHITE, 0.5f));
+    DrawText(label,
+             static_cast<int>(tableScreen.x - textWidth * 0.5f),
+             static_cast<int>(bg.y + 6.0f),
+             fontSize,
+             Fade(RAYWHITE, 0.95f));
+}

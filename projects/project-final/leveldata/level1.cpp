@@ -164,6 +164,9 @@ void Level1::initialise()
     mBossSpawned = false;
     mBossDefeated = false;
     mBossSummonTimer = 0.0f;
+    mShooterPhaseActive = false;
+    mShootersRemaining = 0;
+    mShooterSpawnTimer = 0.0f;
     mQuestDescription = "Reach the map table, shop, and defeat the guardian";
     initialiseInventoryUI();
     spawnQuestTarget();
@@ -336,6 +339,7 @@ void Level1::update(float deltaTime)
     updateBossFight(deltaTime);
     updateBossSummonEffects(deltaTime);
     updateSpreadProjectiles(deltaTime);
+    updatePostBossShooters(deltaTime);
     updateHurtOverlay(deltaTime);
     if (profile) profiler.mark("combat", "combat");
 
@@ -458,8 +462,39 @@ void Level1::render()
         });
 
     // Render all entities in sorted order
+    auto applyObstructionFade = [this](Entity *entity)
+    {
+        if (!entity || !mPlayer)
+        {
+            return;
+        }
+        const bool isTree = dynamic_cast<Tree*>(entity) != nullptr;
+        const bool isRock = dynamic_cast<Rock*>(entity) != nullptr;
+        if (!isTree && !isRock)
+        {
+            return;
+        }
+
+        const Vector2 playerPos = mPlayer->getPosition();
+        const Vector2 entityPos = entity->getPosition();
+        const float dx = entityPos.x - playerPos.x;
+        const float dy = entityPos.y - playerPos.y;
+        const Vector2 playerCollider = mPlayer->getColliderDimensions();
+        const Vector2 entityCollider = entity->getColliderDimensions();
+        const Vector2 entityScale = entity->getScale();
+        const float playerRadius = std::max(playerCollider.x, playerCollider.y) * 0.5f;
+        const float colliderRadius = std::max(entityCollider.x, entityCollider.y) * 0.5f;
+        const float visualRadius = std::max(entityScale.x, entityScale.y) * (isTree ? 0.4f : 0.3f);
+        const float radius = playerRadius + std::max(colliderRadius, visualRadius);
+        const float distSq = dx * dx + dy * dy;
+        const bool obstructing = distSq <= radius * radius;
+        const float alpha = obstructing ? 0.2f : 1.0f;
+        entity->setTint(Fade(WHITE, alpha));
+    };
+
     for (Entity* entity : mCollidableEntities)
     {
+        applyObstructionFade(entity);
         entity->render();
     }
     drawMeleeEffects();
@@ -516,6 +551,7 @@ void Level1::render()
     drawBossBar();
     drawBossDirectionIndicator();
     drawShopOverlay();
+    drawMapTableUI();
     drawHurtOverlay();
     DrawFPS(0, 60);
 }
@@ -1225,25 +1261,76 @@ void Level1::handleBossDefeated()
         return;
     }
     mBossAdvanceRequested = true;
-    if (!gSceneController)
-    {
-        return;
-    }
-    std::unique_ptr<Scene> next = createNextSceneAfterBoss();
-    if (next)
-    {
-        gSceneController->requestSceneChange(std::move(next));
-    }
+    mShooterPhaseActive = true;
+    mShootersRemaining = 5;
+    mShooterSpawnTimer = 0.1f;
 }
 
 std::unique_ptr<Scene> Level1::createNextSceneAfterBoss()
 {
-    return std::make_unique<Level2>();
+    return nullptr;
 }
 
 float Level1::enemyGoldDropChance() const
 {
     return GOLD_DROP_CHANCE;
+}
+
+void Level1::updatePostBossShooters(float deltaTime)
+{
+    if (!mShooterPhaseActive || !mPlayer)
+    {
+        return;
+    }
+    mShooterSpawnTimer = std::max(0.0f, mShooterSpawnTimer - deltaTime);
+
+    int activeShooters = 0;
+    for (Enemy *enemy : mEnemies)
+    {
+        if (dynamic_cast<AttackEnemy*>(enemy) && enemy->getIsActive() && !enemy->isDead())
+        {
+            ++activeShooters;
+        }
+    }
+
+    if (mShootersRemaining <= 0 && activeShooters == 0)
+    {
+        mShooterPhaseActive = false;
+        return;
+    }
+
+    const int maxActive = 3;
+    if (mShootersRemaining > 0 && activeShooters < maxActive && mShooterSpawnTimer <= 0.0f)
+    {
+        spawnShooterEnemy();
+        --mShootersRemaining;
+        mShooterSpawnTimer = 1.75f;
+    }
+}
+
+void Level1::spawnShooterEnemy()
+{
+    if (!mPlayer)
+    {
+        return;
+    }
+
+    const float spawnRadius = std::max(static_cast<float>(c::SCREEN_WIDTH), static_cast<float>(c::SCREEN_HEIGHT)) * 0.35f;
+    const float angle = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f * 2.0f * PI;
+    const Vector2 playerPos = mPlayer->getPosition();
+    Vector2 pos = {
+        playerPos.x + cosf(angle) * spawnRadius,
+        playerPos.y + sinf(angle) * spawnRadius
+    };
+
+    const int variant = std::clamp(GetRandomValue(0, 2), 0, 2);
+    AttackEnemy *attacker = new AttackEnemy(pos,
+                                            variant,
+                                            &mSpreadProjectiles,
+                                            42.0f);
+    attacker->setNavMap(&mNavMap);
+    mEnemies.push_back(attacker);
+    mCollidableEntities.push_back(attacker);
 }
 
 void Level1::spawnBoss()
@@ -1282,6 +1369,9 @@ void Level1::spawnBoss()
     mBossDefeated = false;
     mBossSummonTimer = BOSS_SUMMON_INTERVAL * 0.5f;
     mBossRepathTimer = 0.1f;
+    mShooterPhaseActive = false;
+    mShootersRemaining = 0;
+    mShooterSpawnTimer = 0.0f;
 
     mEnemies.push_back(boss);
     mCollidableEntities.push_back(boss);
@@ -2305,6 +2395,9 @@ void Level1::resetPlayerForRetry()
     mShopOpen = false;
     mShopSuppressed = false;
     mBossAdvanceRequested = false;
+    mShooterPhaseActive = false;
+    mShootersRemaining = 0;
+    mShooterSpawnTimer = 0.0f;
     syncWeaponSlot();
 
     spawnQuestTarget();

@@ -35,6 +35,7 @@ private:
     Vector2 mScale;
     Vector2 mTextureOffset;
     Vector2 mColliderDimensions;
+    Color mTint{255, 255, 255, 255};
 
     Texture2D mTexture;
     bool mOwnsTexture = true;
@@ -148,6 +149,7 @@ public:
     void setTextureFacesLeft(bool facesLeft) { mTextureFacesLeft = facesLeft; }
     void setCustomSourceRect(const Rectangle &rect) { mCustomSourceRect = rect; mUseCustomSourceRect = true; }
     void clearCustomSourceRect() { mUseCustomSourceRect = false; mCustomSourceRect = {0, 0, 0, 0}; }
+    void setTint(Color tint) { mTint = tint; }
     void setSpeed(float speed) { mSpeed = speed; }
     void setAngle(float angle) { mAngle = angle; }
     void setIsCollidingTop(bool isCollidingTop) { mIsCollidingTop = isCollidingTop; }
@@ -187,6 +189,7 @@ public:
     bool getTextureFacesLeft() const { return mTextureFacesLeft; }
     bool usesCustomSourceRect() const { return mUseCustomSourceRect; }
     Rectangle getCustomSourceRect() const { return mCustomSourceRect; }
+    Color getTint() const { return mTint; }
 };
 
 #endif // ENTITY_H

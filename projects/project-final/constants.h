@@ -57,7 +57,7 @@ namespace lighting {
 }
 
 namespace pathfinding {
-    constexpr int REQUEST_BUDGET_PER_FRAME = 3;
+    constexpr int REQUEST_BUDGET_PER_FRAME = 12;
     constexpr float SOFT_RESERVATION_BASE_COST = 10.0f;
 }
 

@@ -106,6 +106,8 @@ void AttackEnemy::fireSpreadAt(const Vector2 &playerPos)
         proj.damage = level1_consts::SPREAD_BALL_DAMAGE;
         proj.radius = level1_consts::SPREAD_BALL_RADIUS;
         proj.lifetime = level1_consts::SPREAD_BALL_LIFETIME;
+        proj.frame = 0;
+        proj.frameTimer = 0.0f;
         const float angle = baseAngle + offset;
         proj.velocity = { cosf(angle), sinf(angle) };
         proj.angle = angle;

@@ -12,6 +12,8 @@ struct SpreadProjectile
     float radius = 12.0f;
     float damage = 1.5f;
     float angle = 0.0f;
+    int frame = 0;
+    float frameTimer = 0.0f;
 };
 
 #endif // SPREAD_PROJECTILE_H

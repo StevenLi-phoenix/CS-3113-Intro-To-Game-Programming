@@ -132,6 +132,7 @@ private:
     void updateQuestState();
     void drawQuestLog() const;
     void drawCompassIndicator();
+    void drawMapTableUI() const;
     void updateShop(float deltaTime);
     void drawShopOverlay() const;
     bool isPlayerNearTable(float radius) const;
@@ -162,6 +163,8 @@ private:
     bool isPotionSelected() const;
     void handleBossDefeated();
     virtual std::unique_ptr<Scene> createNextSceneAfterBoss();
+    void updatePostBossShooters(float deltaTime);
+    void spawnShooterEnemy();
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -267,6 +270,9 @@ private:
     bool mBossSpawned = false;
     bool mBossDefeated = false;
     bool mBossAdvanceRequested = false;
+    bool mShooterPhaseActive = false;
+    int mShootersRemaining = 0;
+    float mShooterSpawnTimer = 0.0f;
     Enemy *mBoss = nullptr;
     std::vector<Dog*> mBossMinions;
     float mBossSummonTimer = 0.0f;

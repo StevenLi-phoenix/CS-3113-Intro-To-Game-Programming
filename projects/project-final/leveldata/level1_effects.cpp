@@ -164,6 +164,13 @@ void Level1::updateSpreadProjectiles(float deltaTime)
     auto it = mSpreadProjectiles.begin();
     while (it != mSpreadProjectiles.end())
     {
+        it->frameTimer += deltaTime;
+        if (it->frameTimer >= level1_consts::SPREAD_BALL_FRAME_TIME)
+        {
+            it->frame = (it->frame + 1) % std::max(level1_consts::SPREAD_BALL_FRAMES, 1);
+            it->frameTimer = 0.0f;
+        }
+
         it->lifetime -= deltaTime;
         it->position.x += it->velocity.x * it->speed * deltaTime;
         it->position.y += it->velocity.y * it->speed * deltaTime;
@@ -211,15 +218,25 @@ void Level1::drawSpreadProjectiles() const
         return;
     }
 
+    const int frameCount = std::max(level1_consts::SPREAD_BALL_FRAMES, 1);
+    const float frameWidth = sprite.width / static_cast<float>(frameCount);
+
     for (const auto &proj : mSpreadProjectiles)
     {
+        const int frameIndex = std::clamp(proj.frame, 0, frameCount - 1);
+        Rectangle src = {
+            sprite.x + frameWidth * static_cast<float>(frameIndex),
+            sprite.y,
+            frameWidth,
+            sprite.height
+        };
         Rectangle dest = {
             proj.position.x,
             proj.position.y,
-            sprite.width,
+            frameWidth,
             sprite.height * 2.0f
         };
         Vector2 origin = { dest.width * 0.5f, dest.height * 0.5f };
-        DrawTexturePro(*atlas, sprite, dest, origin, proj.angle * RAD2DEG, WHITE);
+        DrawTexturePro(*atlas, src, dest, origin, proj.angle * RAD2DEG, WHITE);
     }
 }

@@ -18,10 +18,12 @@ namespace level1_consts
     constexpr float HURT_FLASH_PULSE = 16.0f;
     constexpr float MELEE_FX_DURATION = 0.32f;
     constexpr float MELEE_FX_FORWARD_OFFSET = 34.0f;
-    constexpr float SPREAD_BALL_SPEED = 320.0f;
-    constexpr float SPREAD_BALL_DAMAGE = 1.5f;
+    constexpr float SPREAD_BALL_SPEED = 260.0f;
+    constexpr float SPREAD_BALL_DAMAGE = 1.0f;
     constexpr float SPREAD_BALL_RADIUS = 12.0f;
     constexpr float SPREAD_BALL_LIFETIME = 3.0f;
+    constexpr int SPREAD_BALL_FRAMES = 6;
+    constexpr float SPREAD_BALL_FRAME_TIME = 0.08f;
 
     constexpr KeyboardKey TUTORIAL_REOPEN_KEY = KEY_F2;
     constexpr float TUTORIAL_REOPEN_HINT_SECONDS = 6.0f;

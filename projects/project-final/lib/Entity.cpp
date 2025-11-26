@@ -574,7 +574,7 @@ void Entity::render()
         static_cast<float>(mScale.y) / 2.0f
     };
 
-    DrawTexturePro(mTexture, sourceArea, destinationArea, textureOrigin, mAngle, WHITE);
+    DrawTexturePro(mTexture, sourceArea, destinationArea, textureOrigin, mAngle, mTint);
 }
 
 void Entity::logPushSummaryIfNeeded()

@@ -608,7 +608,42 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart,
         return {};
     }
 
-    if (!isWalkable(workingGrid, startX, startY) || !isWalkable(workingGrid, goalX, goalY))
+    auto findNearestWalkable = [&](int gx, int gy, int maxRadius, int &outX, int &outY) -> bool
+    {
+        if (isWalkable(workingGrid, gx, gy))
+        {
+            outX = gx;
+            outY = gy;
+            return true;
+        }
+
+        for (int radius = 1; radius <= maxRadius; ++radius)
+        {
+            for (int dy = -radius; dy <= radius; ++dy)
+            {
+                for (int dx = -radius; dx <= radius; ++dx)
+                {
+                    if (std::abs(dx) != radius && std::abs(dy) != radius)
+                    {
+                        continue;
+                    }
+                    const int nx = gx + dx;
+                    const int ny = gy + dy;
+                    if (isWalkable(workingGrid, nx, ny))
+                    {
+                        outX = nx;
+                        outY = ny;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    };
+
+    const int searchRadius = 6;
+    if (!findNearestWalkable(startX, startY, searchRadius, startX, startY) ||
+        !findNearestWalkable(goalX, goalY, searchRadius, goalX, goalY))
     {
         return {};
     }
