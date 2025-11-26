@@ -72,7 +72,9 @@ Dog::Dog(Vector2 position, int variant, float desiredHeightPixels)
     }
 }
 
-void Dog::updateBehaviour(float deltaTime, Entity *player)
+void Dog::updateBehaviour(float deltaTime,
+                          Entity *player,
+                          const std::vector<Entity*> &collidableEntities)
 {
     const bool playerValid = player && player->getIsActive();
     if (mAttackCooldownTimer > 0.0f)
@@ -95,13 +97,13 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
     if (shouldChase)
     {
         tickPathCooldown(deltaTime);
-        refreshPathTo(player->getPosition(), false);
+        refreshPathTo(player->getPosition(), collidableEntities, false);
 
         Vector2 targetPosition = resolvePathTarget(player->getPosition());
 
-        if (!mIsChasing)
+        if (!mIsChasing && isDebugMode())
         {
-            LOG_INFO(TextFormat("Dog[%p] started chase target=(%.1f,%.1f)", this, targetPosition.x, targetPosition.y));
+            LOG_DEBUG(TextFormat("Dog[%p] started chase target=(%.1f,%.1f)", this, targetPosition.x, targetPosition.y));
         }
         mIsChasing = true;
 
@@ -137,14 +139,14 @@ void Dog::updateBehaviour(float deltaTime, Entity *player)
         attemptAttack(player, playerDistance);
         if (detectPathStall(deltaTime, distance))
         {
-            refreshPathTo(player->getPosition(), true);
+            refreshPathTo(player->getPosition(), collidableEntities, true);
         }
     }
     else
     {
-        if (mIsChasing)
+        if (mIsChasing && isDebugMode())
         {
-            LOG_INFO(TextFormat("Dog[%p] lost target at pos=(%.1f,%.1f)", this, getPosition().x, getPosition().y));
+            LOG_DEBUG(TextFormat("Dog[%p] lost target at pos=(%.1f,%.1f)", this, getPosition().x, getPosition().y));
         }
         resetChaseState();
         updatePatrol(deltaTime);

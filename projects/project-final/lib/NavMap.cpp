@@ -1,10 +1,11 @@
 #include "NavMap.h"
+#include "Entity.h"
+#include "../constants.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <queue>
-#include <stack>
 
 namespace
 {
@@ -32,6 +33,95 @@ namespace
     }
 }
 
+int NavMap::sPathBudgetRemaining = 0;
+bool NavMap::sBudgetInitialised = false;
+namespace
+{
+    struct PathStats
+    {
+        int aStarSuccess = 0;
+        double aStarMs = 0.0;
+        int aStarFail = 0;
+        double aStarFailMs = 0.0;
+        int bfsSuccess = 0;
+        double bfsMs = 0.0;
+        int bfsFail = 0;
+        double bfsFailMs = 0.0;
+        double lastLog = 0.0;
+
+        void addAStar(bool success, double ms)
+        {
+            if (success)
+            {
+                ++aStarSuccess;
+                aStarMs += ms;
+            }
+            else
+            {
+                ++aStarFail;
+                aStarFailMs += ms;
+            }
+        }
+
+        void addBfs(bool success, double ms)
+        {
+            if (success)
+            {
+                ++bfsSuccess;
+                bfsMs += ms;
+            }
+            else
+            {
+                ++bfsFail;
+                bfsFailMs += ms;
+            }
+        }
+
+        void logIfNeeded()
+        {
+            const double now = GetTime();
+            if (lastLog <= 0.0)
+            {
+                lastLog = now;
+                return;
+            }
+            if ((now - lastLog) < 0.5)
+            {
+                return;
+            }
+            lastLog = now;
+            if (aStarSuccess == 0 && aStarFail == 0 && bfsSuccess == 0 && bfsFail == 0)
+            {
+                return;
+            }
+            LOG_DEBUG(TextFormat("Nav path summary: A* ok=%d time=%.2fms fail=%d time=%.2fms | BFS ok=%d time=%.2fms fail=%d time=%.2fms",
+                                 aStarSuccess,
+                                 aStarMs,
+                                 aStarFail,
+                                 aStarFailMs,
+                                 bfsSuccess,
+                                 bfsMs,
+                                 bfsFail,
+                                 bfsFailMs));
+            aStarSuccess = aStarFail = bfsSuccess = bfsFail = 0;
+            aStarMs = aStarFailMs = bfsMs = bfsFailMs = 0.0;
+        }
+    };
+
+    PathStats gNavPathStats;
+}
+
+void NavMap::beginFrame()
+{
+    beginFrame(pathfinding::REQUEST_BUDGET_PER_FRAME);
+}
+
+void NavMap::beginFrame(int budget)
+{
+    sPathBudgetRemaining = std::max(0, budget);
+    sBudgetInitialised = true;
+}
+
 void NavMap::build(const unsigned int *tiles,
                    int columns,
                    int rows,
@@ -44,6 +134,7 @@ void NavMap::build(const unsigned int *tiles,
         mWalkable.clear();
         mColumns = 0;
         mRows = 0;
+        mPaddedCache.clear();
         return;
     }
 
@@ -53,6 +144,7 @@ void NavMap::build(const unsigned int *tiles,
     mChunkStartX = chunkStartX;
     mChunkStartY = chunkStartY;
     mWalkable.assign(static_cast<size_t>(columns * rows), 1);
+    mPaddedCache.clear();
 
     for (int row = 0; row < rows; ++row)
     {
@@ -92,14 +184,19 @@ Vector2 NavMap::gridToWorld(int gridX, int gridY) const
     return {worldX, worldY};
 }
 
-bool NavMap::isWalkable(int gridX, int gridY) const
+bool NavMap::isWalkable(const std::vector<uint8_t> &grid, int gridX, int gridY) const
 {
     if (gridX < 0 || gridX >= mColumns || gridY < 0 || gridY >= mRows)
     {
         return false;
     }
 
-    return mWalkable[static_cast<size_t>(gridY * mColumns + gridX)] != 0;
+    const size_t index = static_cast<size_t>(gridY * mColumns + gridX);
+    if (index >= grid.size())
+    {
+        return false;
+    }
+    return grid[index] != 0;
 }
 
 int NavMap::toIndex(int gridX, int gridY) const
@@ -109,6 +206,142 @@ int NavMap::toIndex(int gridX, int gridY) const
         return -1;
     }
     return gridY * mColumns + gridX;
+}
+
+const std::vector<uint8_t>& NavMap::buildWalkableCopy(float clearanceRadius) const
+{
+    const int paddingTiles = static_cast<int>(std::ceil(std::max(clearanceRadius, 0.0f) / mTileSize));
+    const int cacheKey = std::max(0, paddingTiles);
+    auto it = mPaddedCache.find(cacheKey);
+    if (it != mPaddedCache.end())
+    {
+        return it->second;
+    }
+
+    std::vector<uint8_t> grid = mWalkable;
+    if (!grid.empty() && paddingTiles > 0)
+    {
+        applyBorderPadding(grid, paddingTiles);
+        applyPadding(grid, paddingTiles);
+    }
+    auto inserted = mPaddedCache.emplace(cacheKey, std::move(grid));
+    return inserted.first->second;
+}
+
+void NavMap::applyPadding(std::vector<uint8_t> &grid, int paddingTiles) const
+{
+    if (paddingTiles <= 0 || grid.empty())
+    {
+        return;
+    }
+
+    const int radiusSq = paddingTiles * paddingTiles;
+    for (int y = 0; y < mRows; ++y)
+    {
+        for (int x = 0; x < mColumns; ++x)
+        {
+            const int baseIndex = toIndex(x, y);
+            if (baseIndex < 0 || mWalkable[static_cast<size_t>(baseIndex)] != 0)
+            {
+                continue;
+            }
+
+            for (int ny = std::max(0, y - paddingTiles); ny <= std::min(mRows - 1, y + paddingTiles); ++ny)
+            {
+                for (int nx = std::max(0, x - paddingTiles); nx <= std::min(mColumns - 1, x + paddingTiles); ++nx)
+                {
+                    const int dx = x - nx;
+                    const int dy = y - ny;
+                    if (dx * dx + dy * dy > radiusSq)
+                    {
+                        continue;
+                    }
+                    const int nIndex = toIndex(nx, ny);
+                    if (nIndex >= 0 && static_cast<size_t>(nIndex) < grid.size())
+                    {
+                        grid[static_cast<size_t>(nIndex)] = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void NavMap::applyBorderPadding(std::vector<uint8_t> &grid, int paddingTiles) const
+{
+    if (paddingTiles <= 0 || grid.empty())
+    {
+        return;
+    }
+
+    for (int y = 0; y < mRows; ++y)
+    {
+        for (int x = 0; x < mColumns; ++x)
+        {
+            if (x < paddingTiles || y < paddingTiles ||
+                x >= mColumns - paddingTiles || y >= mRows - paddingTiles)
+            {
+                const int index = toIndex(x, y);
+                if (index >= 0 && static_cast<size_t>(index) < grid.size())
+                {
+                    grid[static_cast<size_t>(index)] = 0;
+                }
+            }
+        }
+    }
+}
+
+std::vector<float> NavMap::buildSoftCostMap(const std::vector<std::vector<Vector2>> &softReservations) const
+{
+    std::vector<float> costs(static_cast<size_t>(mColumns * mRows), 0.0f);
+    if (softReservations.empty())
+    {
+        return costs;
+    }
+
+    for (const auto &path : softReservations)
+    {
+        for (size_t i = 0; i < path.size(); ++i)
+        {
+            int gx = 0;
+            int gy = 0;
+            if (!worldToGrid(path[i], gx, gy))
+            {
+                continue;
+            }
+            const int idx = toIndex(gx, gy);
+            if (idx < 0)
+            {
+                continue;
+            }
+
+            const float weight = pathfinding::SOFT_RESERVATION_BASE_COST /
+                                 std::max(1.0f, std::log2(static_cast<float>(i) + 2.0f));
+            costs[static_cast<size_t>(idx)] += weight;
+        }
+    }
+    return costs;
+}
+
+bool NavMap::consumeBudget(bool *throttled) const
+{
+    if (!sBudgetInitialised)
+    {
+        sPathBudgetRemaining = pathfinding::REQUEST_BUDGET_PER_FRAME;
+        sBudgetInitialised = true;
+    }
+
+    if (sPathBudgetRemaining <= 0)
+    {
+        if (throttled)
+        {
+            *throttled = true;
+        }
+        return false;
+    }
+
+    --sPathBudgetRemaining;
+    return true;
 }
 
 std::vector<Vector2> NavMap::reconstructPath(const std::vector<int> &cameFrom, int currentIndex) const
@@ -132,7 +365,10 @@ std::vector<Vector2> NavMap::reconstructPath(const std::vector<int> &cameFrom, i
     return path;
 }
 
-std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
+std::vector<Vector2> NavMap::findPathAStar(const std::vector<uint8_t> &grid,
+                                           const std::vector<float> *softCosts,
+                                           int startIndex,
+                                           int goalIndex) const
 {
     const int totalNodes = mColumns * mRows;
     if (startIndex < 0 || goalIndex < 0 || totalNodes <= 0)
@@ -189,7 +425,7 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
             const int neighbourX = currentX + offset[0];
             const int neighbourY = currentY + offset[1];
             const int neighbourIndex = toIndex(neighbourX, neighbourY);
-            if (neighbourIndex < 0 || !isWalkable(neighbourX, neighbourY))
+            if (neighbourIndex < 0 || !isWalkable(grid, neighbourX, neighbourY))
             {
                 continue;
             }
@@ -200,15 +436,16 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
                 const int adjXIndex = toIndex(currentX + offset[0], currentY);
                 const int adjYIndex = toIndex(currentX, currentY + offset[1]);
                 if (adjXIndex < 0 || adjYIndex < 0 ||
-                    !isWalkable(currentX + offset[0], currentY) ||
-                    !isWalkable(currentX, currentY + offset[1]))
+                    !isWalkable(grid, currentX + offset[0], currentY) ||
+                    !isWalkable(grid, currentX, currentY + offset[1]))
                 {
                     continue;
                 }
             }
 
             const float stepCost = isDiagonalStep ? kDiagonalCost : kCardinalCost;
-            const float tentativeG = gScore[static_cast<size_t>(current.index)] + stepCost;
+            const float reservationCost = softCosts ? (*softCosts)[static_cast<size_t>(neighbourIndex)] : 0.0f;
+            const float tentativeG = gScore[static_cast<size_t>(current.index)] + stepCost + reservationCost;
             if (tentativeG >= gScore[static_cast<size_t>(neighbourIndex)])
             {
                 continue;
@@ -225,7 +462,9 @@ std::vector<Vector2> NavMap::findPathAStar(int startIndex, int goalIndex) const
     return {};
 }
 
-std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
+std::vector<Vector2> NavMap::findPathBFS(const std::vector<uint8_t> &grid,
+                                         int startIndex,
+                                         int goalIndex) const
 {
     const int totalNodes = mColumns * mRows;
     if (startIndex < 0 || goalIndex < 0 || totalNodes <= 0)
@@ -235,14 +474,14 @@ std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
 
     std::vector<int> cameFrom(static_cast<size_t>(totalNodes), -1);
     std::vector<uint8_t> visited(static_cast<size_t>(totalNodes), 0);
-    std::stack<int> stack;
-    stack.push(startIndex);
+    std::queue<int> frontier;
+    frontier.push(startIndex);
     visited[static_cast<size_t>(startIndex)] = 1;
 
-    while (!stack.empty())
+    while (!frontier.empty())
     {
-        const int current = stack.top();
-        stack.pop();
+        const int current = frontier.front();
+        frontier.pop();
 
         if (current == goalIndex)
         {
@@ -257,7 +496,7 @@ std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
             const int neighbourX = currentX + offset[0];
             const int neighbourY = currentY + offset[1];
             const int neighbourIndex = toIndex(neighbourX, neighbourY);
-            if (neighbourIndex < 0 || !isWalkable(neighbourX, neighbourY))
+            if (neighbourIndex < 0 || !isWalkable(grid, neighbourX, neighbourY))
             {
                 continue;
             }
@@ -269,16 +508,85 @@ std::vector<Vector2> NavMap::findPathDFS(int startIndex, int goalIndex) const
 
             visited[static_cast<size_t>(neighbourIndex)] = 1;
             cameFrom[static_cast<size_t>(neighbourIndex)] = current;
-            stack.push(neighbourIndex);
+            frontier.push(neighbourIndex);
         }
     }
 
     return {};
 }
 
+void NavMap::applyStaticObstacles(const std::vector<Entity*> &obstacles, float padding)
+{
+    if (!hasData() || mWalkable.empty())
+    {
+        return;
+    }
+
+    const float pad = std::max(0.0f, padding);
+    for (Entity *entity : obstacles)
+    {
+        if (!entity || !entity->getIsActive() || !entity->getCanCollide())
+        {
+            continue;
+        }
+
+        const Vector2 collider = entity->getColliderDimensions();
+        const Vector2 pos = entity->getPosition();
+        const float halfW = 0.5f * collider.x + pad;
+        const float halfH = 0.5f * collider.y + pad;
+        const float minX = pos.x - halfW;
+        const float maxX = pos.x + halfW;
+        const float minY = pos.y - halfH;
+        const float maxY = pos.y + halfH;
+
+        const int minGridX = static_cast<int>(std::floor(minX / mTileSize)) - mChunkStartX;
+        const int maxGridX = static_cast<int>(std::floor(maxX / mTileSize)) - mChunkStartX;
+        const int minGridY = static_cast<int>(std::floor(minY / mTileSize)) - mChunkStartY;
+        const int maxGridY = static_cast<int>(std::floor(maxY / mTileSize)) - mChunkStartY;
+
+        const int clampedMinX = std::max(0, minGridX);
+        const int clampedMaxX = std::min(mColumns - 1, maxGridX);
+        const int clampedMinY = std::max(0, minGridY);
+        const int clampedMaxY = std::min(mRows - 1, maxGridY);
+
+        for (int y = clampedMinY; y <= clampedMaxY; ++y)
+        {
+            for (int x = clampedMinX; x <= clampedMaxX; ++x)
+            {
+                const int index = toIndex(x, y);
+                if (index >= 0 && static_cast<size_t>(index) < mWalkable.size())
+                {
+                    mWalkable[static_cast<size_t>(index)] = 0;
+                }
+            }
+        }
+    }
+    mPaddedCache.clear();
+}
+
 std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &worldGoal) const
 {
+    static const std::vector<std::vector<Vector2>> kEmptyReservations;
+    return findPath(worldStart, worldGoal, 0.0f, kEmptyReservations, nullptr);
+}
+
+std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart,
+                                      const Vector2 &worldGoal,
+                                      float clearanceRadius,
+                                      const std::vector<std::vector<Vector2>> &softReservations,
+                                      bool *throttled) const
+{
+    if (throttled)
+    {
+        *throttled = false;
+    }
+
     if (!hasData())
+    {
+        return {};
+    }
+
+    if (!consumeBudget(throttled))
     {
         return {};
     }
@@ -294,7 +602,13 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
         return {};
     }
 
-    if (!isWalkable(startX, startY) || !isWalkable(goalX, goalY))
+    const std::vector<uint8_t> &workingGrid = buildWalkableCopy(clearanceRadius);
+    if (workingGrid.empty())
+    {
+        return {};
+    }
+
+    if (!isWalkable(workingGrid, startX, startY) || !isWalkable(workingGrid, goalX, goalY))
     {
         return {};
     }
@@ -302,39 +616,32 @@ std::vector<Vector2> NavMap::findPath(const Vector2 &worldStart, const Vector2 &
     const int startIndex = toIndex(startX, startY);
     const int goalIndex = toIndex(goalX, goalY);
 
+    const bool hasSoftCosts = !softReservations.empty();
+    const std::vector<float> softCosts = hasSoftCosts ? buildSoftCostMap(softReservations)
+                                                      : std::vector<float>();
+    const std::vector<float> *softPtr = hasSoftCosts ? &softCosts : nullptr;
+
     const double tStart = GetTime();
     bool usedAStar = true;
-    auto path = findPathAStar(startIndex, goalIndex);
+    auto path = findPathAStar(workingGrid, softPtr, startIndex, goalIndex);
     if (!path.empty())
     {
         if (isDebugMode())
         {
             const double elapsedMs = (GetTime() - tStart) * 1000.0;
-            LOG_DEBUG(TextFormat("NavMap path A* (%d,%d)->(%d,%d) nodes=%d took=%.2fms",
-                                 startX,
-                                 startY,
-                                 goalX,
-                                 goalY,
-                                 static_cast<int>(path.size()),
-                                 elapsedMs));
+            gNavPathStats.addAStar(true, elapsedMs);
+            gNavPathStats.logIfNeeded();
         }
         return path;
     }
 
     usedAStar = false;
-    path = findPathDFS(startIndex, goalIndex);
+    path = findPathBFS(workingGrid, startIndex, goalIndex);
     const double elapsedMs = (GetTime() - tStart) * 1000.0;
     if (isDebugMode())
     {
-        LOG_DEBUG(TextFormat("NavMap path %s (%d,%d)->(%d,%d) %s nodes=%d took=%.2fms",
-                             usedAStar ? "A*" : "DFS",
-                             startX,
-                             startY,
-                             goalX,
-                             goalY,
-                             path.empty() ? "failed" : "ok",
-                             static_cast<int>(path.size()),
-                             elapsedMs));
+        gNavPathStats.addBfs(!path.empty(), elapsedMs);
+        gNavPathStats.logIfNeeded();
         if (!path.empty())
         {
             cacheDebugPath(path, usedAStar ? RED : BLUE);
@@ -393,4 +700,3 @@ void NavMap::debugRender() const
     }
     mDebugPaths.clear();
 }
-

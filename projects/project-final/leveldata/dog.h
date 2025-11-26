@@ -17,7 +17,7 @@ namespace DogConstants
     constexpr float PATROL_RADIUS = 80.0f;
     constexpr float PATROL_RETARGET_TIME = 2.5f;
     constexpr float CHASE_EXIT_GRACE = 1.4f;
-    constexpr float ATTACK_RANGE = 1.0f;
+    constexpr float ATTACK_RANGE = 25.0f;
     constexpr float ATTACK_DAMAGE = 1.0f;
     constexpr float ATTACK_COOLDOWN = 1.0f;
     constexpr float VARIANT_CHASE_SPEEDS[VARIANT_COUNT] = {45.0f, 52.0f, 40.0f, 48.0f};
@@ -34,7 +34,9 @@ public:
         int variant = 0,
         float desiredHeightPixels = DogConstants::DEFAULT_HEIGHT);
 protected:
-    void updateBehaviour(float deltaTime, Entity *player) override;
+    void updateBehaviour(float deltaTime,
+                         Entity *player,
+                         const std::vector<Entity*> &collidableEntities) override;
 
 private:
     enum class MovementBias

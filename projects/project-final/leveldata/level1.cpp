@@ -7,6 +7,7 @@
 #include "../lib/ResourceManager.h"
 #include "../lib/Inventory.h"
 #include "../lib/ui/InventoryBar.h"
+#include "../lib/Profiler.h"
 #include "branch.h"
 #include "box.h"
 #include "compass.h"
@@ -55,7 +56,7 @@ namespace
 
     constexpr EnemySpawnSettings ENEMY_SPAWN_SETTINGS{
         0x5f3759d5u,
-        0.8f,
+        0.5f,
         4,
         DogConstants::MIN_HEIGHT,
         DogConstants::MAX_HEIGHT,
@@ -167,24 +168,138 @@ void Level1::initialise()
 
 void Level1::update(float deltaTime)
 {
+    const bool profile = isDebugMode();
+    FrameProfiler profiler(profile);
+
     advanceDayNightCycle(deltaTime);
+    if (profile) profiler.mark("dayNight", "world");
+
     updateChunkStream();
+    if (profile) profiler.mark("chunkStream", "world");
+
+    NavMap::beginFrame();
+    if (profile) profiler.mark("navBegin", "nav");
+
     ensureMusicNotes();
     updateMusicNoteBehaviour();
     handleMouseBranchInput();
+    if (profile) profiler.mark("input", "input");
 
-    for (Entity* entity : mCollidableEntities)
+    struct CellRange
     {
-        entity->update(deltaTime, mPlayer, mMap, mCollidableEntities);
+        int minX;
+        int maxX;
+        int minY;
+        int maxY;
+    };
+
+    const float invCellSize = 1.0f / physics::COLLISION_CELL_SIZE;
+
+    auto computeCellRange = [invCellSize](const Entity *entity, float padding) -> CellRange
+    {
+        const Vector2 pos = entity->getPosition();
+        const Vector2 dims = entity->getColliderDimensions();
+        const float halfW = (dims.x * 0.5f) + padding;
+        const float halfH = (dims.y * 0.5f) + padding;
+        return {
+            static_cast<int>(std::floor((pos.x - halfW) * invCellSize)),
+            static_cast<int>(std::floor((pos.x + halfW) * invCellSize)),
+            static_cast<int>(std::floor((pos.y - halfH) * invCellSize)),
+            static_cast<int>(std::floor((pos.y + halfH) * invCellSize))
+        };
+    };
+
+    // Broadphase: bucket nearby colliders into grid cells to trim pair checks.
+    std::unordered_map<std::pair<int, int>, std::vector<size_t>, ChunkKeyHash> collisionGrid;
+    collisionGrid.reserve(mCollidableEntities.size() * 2);
+
+    for (size_t i = 0; i < mCollidableEntities.size(); ++i)
+    {
+        Entity *entity = mCollidableEntities[i];
+        if (!entity || !entity->getIsActive() || !entity->getCanCollide())
+        {
+            continue;
+        }
+
+        const CellRange cells = computeCellRange(entity, 0.0f);
+        for (int cx = cells.minX; cx <= cells.maxX; ++cx)
+        {
+            for (int cy = cells.minY; cy <= cells.maxY; ++cy)
+            {
+                const std::pair<int, int> cell{cx, cy};
+                collisionGrid[cell].push_back(i);
+            }
+        }
     }
+
+    // Track which candidates were already added for the current entity.
+    std::vector<unsigned int> visited(mCollidableEntities.size(), 0u);
+    unsigned int visitToken = 1u;
+    std::vector<Entity*> nearby;
+    nearby.reserve(32);
+
+    for (size_t i = 0; i < mCollidableEntities.size(); ++i)
+    {
+        if (visitToken == 0u)
+        {
+            std::fill(visited.begin(), visited.end(), 0u);
+            visitToken = 1u;
+        }
+
+        Entity *entity = mCollidableEntities[i];
+        if (!entity)
+        {
+            continue;
+        }
+
+        nearby.clear();
+        const CellRange cells = computeCellRange(entity, physics::COLLISION_QUERY_MARGIN);
+        for (int cx = cells.minX; cx <= cells.maxX; ++cx)
+        {
+            for (int cy = cells.minY; cy <= cells.maxY; ++cy)
+            {
+                const std::pair<int, int> cell{cx, cy};
+                auto it = collisionGrid.find(cell);
+                if (it == collisionGrid.end())
+                {
+                    continue;
+                }
+
+                for (size_t candidateIdx : it->second)
+                {
+                    if (candidateIdx == i || visited[candidateIdx] == visitToken)
+                    {
+                        continue;
+                    }
+                    Entity *candidate = mCollidableEntities[candidateIdx];
+                    if (!candidate || !candidate->getIsActive() || !candidate->getCanCollide())
+                    {
+                        continue;
+                    }
+                    visited[candidateIdx] = visitToken;
+                    nearby.push_back(candidate);
+                }
+            }
+        }
+        ++visitToken;
+        entity->update(deltaTime, mPlayer, mMap, nearby);
+    }
+    if (profile) profiler.mark("entities", "entities");
 
     resolveBranchImpacts();
     cleanupBranches();
     cleanupInactiveTrees();
+    if (mNavStaticsDirty)
+    {
+        refreshNavMeshStatics();
+    }
+    if (profile) profiler.mark("cleanup", "world");
+
     updateBoxRewards();
     updateGoldCoins();
     updatePlayerAttack(deltaTime);
     updateMeleeTimer(deltaTime);
+    if (profile) profiler.mark("combat", "combat");
 
     updateCameraFromPlayer(deltaTime);
     updateGameOverState();
@@ -195,6 +310,9 @@ void Level1::update(float deltaTime)
         mCompassUI->update(deltaTime, mPlayer, mMap, mCollidableEntities);
     }
     updateQuestState();
+    if (profile) profiler.mark("uiQuest", "ui");
+
+    profiler.logSummary();
 }
 
 void Level1::spawnPlayer()
@@ -381,6 +499,7 @@ void Level1::shutdown()
 
 void Level1::clearTrees()
 {
+    mNavStaticsDirty = true;
     for (Tree* tree : mActiveTrees)
     {
         if (!tree)
@@ -409,6 +528,10 @@ void Level1::clearTrees()
 
 void Level1::clearRocks()
 {
+    if (!mRocks.empty())
+    {
+        mNavStaticsDirty = true;
+    }
     destroyOwnedEntities(mRocks, mCollidableEntities);
 }
 
@@ -438,6 +561,7 @@ void Level1::clearMusicNotes()
 
 void Level1::cleanupInactiveTrees()
 {
+    bool removed = false;
     auto it = mActiveTrees.begin();
     while (it != mActiveTrees.end())
     {
@@ -451,11 +575,17 @@ void Level1::cleanupInactiveTrees()
                 removeCollidableEntity(mCollidableEntities, tree);
             }
             it = mActiveTrees.erase(it);
+            removed = true;
         }
         else
         {
             ++it;
         }
+    }
+
+    if (removed)
+    {
+        mNavStaticsDirty = true;
     }
 }
 
@@ -1784,6 +1914,7 @@ void Level1::buildProceduralMap()
                   mTileSize,
                   getChunkStartX(),
                   getChunkStartY());
+    mNavStaticsDirty = false;
     const double tNavEnd = GetTime();
     if (isDebugMode())
     {
@@ -1857,6 +1988,47 @@ void Level1::rebuildMap(const Vector2 &origin)
     LOG_DEBUG(TextFormat("Map refresh (new map) chunkStart=(%d,%d) took=%.2fms",
                          getChunkStartX(), getChunkStartY(),
                          (tMapEnd - tMapStart) * 1000.0));
+}
+
+void Level1::refreshNavMeshStatics()
+{
+    mNavMap.build(mLevelData.data(),
+                  mMapColumns,
+                  mMapRows,
+                  mTileSize,
+                  getChunkStartX(),
+                  getChunkStartY());
+    bakeStaticNavObstacles();
+    mNavStaticsDirty = false;
+}
+
+void Level1::bakeStaticNavObstacles()
+{
+    std::vector<Entity*> statics;
+    statics.reserve(mActiveTrees.size() + mRocks.size() + 1);
+
+    for (Tree* tree : mActiveTrees)
+    {
+        if (tree && tree->getIsActive())
+        {
+            statics.push_back(tree);
+        }
+    }
+
+    for (Rock* rock : mRocks)
+    {
+        if (rock && rock->getIsActive())
+        {
+            statics.push_back(rock);
+        }
+    }
+
+    if (mTable && mTable->getIsActive())
+    {
+        statics.push_back(mTable.get());
+    }
+
+    mNavMap.applyStaticObstacles(statics);
 }
 
 void Level1::updateTreesForStream()
@@ -2397,6 +2569,8 @@ void Level1::updateChunkStream(bool forceRebuild)
         buildProceduralMap();
         updateTreesForStream();
         generateRocks();
+        bakeStaticNavObstacles();
+        mNavStaticsDirty = false;
         generateEnemies();
         updateBoxesForStream();
     }

@@ -38,6 +38,7 @@ Player::Player(Vector2 position, Vector2 scale)
     }
 
     setTextureFacesLeft(false);
+    setIsPushable(true);
 }
 
 Player::~Player()

@@ -78,20 +78,25 @@ protected:
     bool isPlayerWithinRange(Entity *player) const;
     void setPathSettings(const EnemyConstants::PathSettings &settings);
     void tickPathCooldown(float deltaTime);
-    bool refreshPathTo(const Vector2 &targetPosition, bool forceRebuild);
+    bool refreshPathTo(const Vector2 &targetPosition,
+                       const std::vector<Entity*> &neighbours,
+                       bool forceRebuild);
     Vector2 resolvePathTarget(const Vector2 &fallbackTarget);
     bool detectPathStall(float deltaTime, float distanceToTarget);
     bool hasReachedTarget(const Vector2 &target, float radius) const;
     void resetPathState();
     float getPathNodeReachedRadius() const { return mPathSettings.nodeReachedRadius; }
     void setPathCooldown(float cooldown) { mPathCooldown = std::max(0.0f, cooldown); }
+    float getColliderClearanceRadius() const;
 
     float getMoveSpeed() const { return mMoveSpeed; }
     void setMoveSpeed(float speed) { mMoveSpeed = speed; }
     float getDetectionRadius() const { return mDetectionRadius; }
     void setDetectionRadius(float radius) { mDetectionRadius = radius; }
 
-    virtual void updateBehaviour(float deltaTime, Entity *player) {}
+    virtual void updateBehaviour(float deltaTime,
+                                 Entity *player,
+                                 const std::vector<Entity*> &collidableEntities) {}
 
 private:
     float mMoveSpeed;

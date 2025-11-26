@@ -19,6 +19,7 @@ Enemy::Enemy(Vector2 position, float moveSpeed, float detectionRadius)
         setOwnsTexture(false);
     }
 
+    setIsPushable(true);
     setPosition(position);
     setIsActive(true);
     setCanCollide(true);
@@ -41,7 +42,7 @@ void Enemy::update(float deltaTime,
         return;
     }
 
-    updateBehaviour(deltaTime, player);
+    updateBehaviour(deltaTime, player, collidableEntities);
     Entity::update(deltaTime, player, map, collidableEntities);
 }
 
@@ -175,7 +176,9 @@ void Enemy::tickPathCooldown(float deltaTime)
     }
 }
 
-bool Enemy::refreshPathTo(const Vector2 &targetPosition, bool forceRebuild)
+bool Enemy::refreshPathTo(const Vector2 &targetPosition,
+                          const std::vector<Entity*> &neighbours,
+                          bool forceRebuild)
 {
     const NavMap *navMap = getNavMap();
     if (!navMap)
@@ -192,9 +195,66 @@ bool Enemy::refreshPathTo(const Vector2 &targetPosition, bool forceRebuild)
         }
     }
 
+    std::vector<std::vector<Vector2>> reservations;
+    reservations.reserve(neighbours.size());
+    for (Entity *entity : neighbours)
+    {
+        if (!entity || entity == this)
+        {
+            continue;
+        }
+        const Enemy *otherEnemy = dynamic_cast<Enemy*>(entity);
+        if (!otherEnemy || !otherEnemy->hasActivePath())
+        {
+            continue;
+        }
+        reservations.push_back(otherEnemy->activePathPoints());
+    }
+
+    bool throttled = false;
+    const float clearanceRadius = getColliderClearanceRadius();
     const double tRequestStart = GetTime();
-    const std::vector<Vector2> newPath = navMap->findPath(getPosition(), targetPosition);
+    const std::vector<Vector2> newPath = navMap->findPath(getPosition(),
+                                                          targetPosition,
+                                                          clearanceRadius,
+                                                          reservations,
+                                                          &throttled);
+    if (throttled)
+    {
+        return false;
+    }
     const double elapsedMs = (GetTime() - tRequestStart) * 1000.0;
+    static double sPathLogLast = 0.0;
+    static double sSuccessMs = 0.0;
+    static int sSuccessCount = 0;
+    static double sFailMs = 0.0;
+    static int sFailCount = 0;
+
+    auto flushSummary = [&]()
+    {
+        if (!isDebugMode())
+        {
+            return;
+        }
+        const double now = GetTime();
+        if (sPathLogLast <= 0.0)
+        {
+            sPathLogLast = now;
+            return;
+        }
+        if ((now - sPathLogLast) >= 0.5)
+        {
+            LOG_DEBUG(TextFormat("Enemy path summary: ok=%d time=%.2fms fail=%d time=%.2fms",
+                                 sSuccessCount,
+                                 sSuccessMs,
+                                 sFailCount,
+                                 sFailMs));
+            sSuccessCount = sFailCount = 0;
+            sSuccessMs = sFailMs = 0.0;
+            sPathLogLast = now;
+        }
+    };
+
     if (newPath.size() >= 2)
     {
         mCurrentPath = newPath;
@@ -203,30 +263,18 @@ bool Enemy::refreshPathTo(const Vector2 &targetPosition, bool forceRebuild)
         mPathCooldown = mPathSettings.refreshInterval;
         if (isDebugMode())
         {
-            LOG_INFO(TextFormat("Enemy[%p] path success nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
-                                this,
-                                mCurrentPath.size(),
-                                elapsedMs,
-                                forceRebuild ? "true" : "false",
-                                getPosition().x,
-                                getPosition().y,
-                                targetPosition.x,
-                                targetPosition.y));
+            sSuccessMs += elapsedMs;
+            ++sSuccessCount;
         }
+        flushSummary();
         return true;
     }
 
     if (isDebugMode())
     {
-        LOG_WARNING(TextFormat("Enemy[%p] path failed nodes=%zu time=%.2fms force=%s from=(%.1f,%.1f) to=(%.1f,%.1f)",
-                               this,
-                               newPath.size(),
-                               elapsedMs,
-                               forceRebuild ? "true" : "false",
-                               getPosition().x,
-                               getPosition().y,
-                               targetPosition.x,
-                               targetPosition.y));
+        sFailMs += elapsedMs;
+        ++sFailCount;
+        flushSummary();
     }
     resetPathState();
     mPathCooldown = mPathSettings.refreshInterval * mPathSettings.failureCooldownScale;
@@ -332,6 +380,12 @@ void Enemy::resetPathState()
 bool Enemy::hasActivePath() const
 {
     return mHasPath && mCurrentPathIndex < mCurrentPath.size();
+}
+
+float Enemy::getColliderClearanceRadius() const
+{
+    const Vector2 collider = getColliderDimensions();
+    return std::max(collider.x, collider.y) * 0.5f;
 }
 
 std::vector<Vector2> Enemy::activePathPoints() const

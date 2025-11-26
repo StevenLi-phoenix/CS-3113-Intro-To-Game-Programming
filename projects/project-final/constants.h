@@ -56,4 +56,16 @@ namespace lighting {
     constexpr float CURSOR_LIGHT_INTENSITY = 0.9f;
 }
 
+namespace pathfinding {
+    constexpr int REQUEST_BUDGET_PER_FRAME = 3;
+    constexpr float SOFT_RESERVATION_BASE_COST = 10.0f;
+}
+
+namespace physics {
+    constexpr float PUSH_RADIUS_SCALE = 1.08f;
+    constexpr float PUSH_IMPULSE = 65.0f;
+    constexpr float COLLISION_CELL_SIZE = 192.0f;
+    constexpr float COLLISION_QUERY_MARGIN = 16.0f;
+}
+
 #endif

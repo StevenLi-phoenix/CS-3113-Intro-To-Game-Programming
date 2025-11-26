@@ -79,9 +79,25 @@ private:
     void checkCollisionX(const std::vector<Entity*> &collidableEntities);
     void checkCollisionX(Map *map);
 
-    void applyPushForces(const std::vector<Entity*> &collidableEntities);
+    void applyPushForces(const std::vector<Entity*> &collidableEntities, double *outMs = nullptr, size_t *outPairs = nullptr);
     void animate(float deltaTime);
     virtual void AIupdate(float deltaTime);
+    void logPushSummaryIfNeeded();
+    static inline double sPushTimeMs = 0.0;
+    static inline size_t sPushPairs = 0;
+    struct PerfBuckets
+    {
+        double aiMs;
+        double moveMs;
+        double pushMs;
+        size_t pushPairs;
+        double collideEntityMs;
+        double collideMapMs;
+        double lastLog;
+
+        PerfBuckets();
+    };
+    static inline PerfBuckets sPerf;
 public:
     Entity();
     Entity(Vector2 position, Vector2 scale, const char *textureFilepath);

@@ -61,6 +61,7 @@ Tree::Tree(Vector2 position,
     setHealth(std::max(health, 1.0f));
     setCanCollide(true);
     setIsActive(true);
+    setIsPushable(false);
 }
 
 void Tree::update(float deltaTime,

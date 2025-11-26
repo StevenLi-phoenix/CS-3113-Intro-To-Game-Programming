@@ -48,6 +48,17 @@ Entity::Entity(Vector2 position, Vector2 scale, const char *textureFilepath, Ent
 {
 }
 
+Entity::PerfBuckets::PerfBuckets() :
+    aiMs {0.0},
+    moveMs {0.0},
+    pushMs {0.0},
+    pushPairs {0},
+    collideEntityMs {0.0},
+    collideMapMs {0.0},
+    lastLog {0.0}
+{
+}
+
 Entity::Entity(Entity&& other) noexcept :
     mParent {other.mParent},
     mPosition {other.mPosition},
@@ -333,14 +344,17 @@ void Entity::checkCollisionX(Map *map)
     }
 }
 
-void Entity::applyPushForces(const std::vector<Entity*> &collidableEntities)
+void Entity::applyPushForces(const std::vector<Entity*> &collidableEntities, double *outMs, size_t *outPairs)
 {
     if (!mIsPushable)
     {
         return;
     }
 
+    const double tPushStart = GetTime();
     const float selfRadius = 0.5f * std::max(mColliderDimensions.x, mColliderDimensions.y);
+    bool applied = false;
+    size_t pairsTested = 0;
 
     for (Entity *entity : collidableEntities)
     {
@@ -349,8 +363,7 @@ void Entity::applyPushForces(const std::vector<Entity*> &collidableEntities)
             continue;
         }
 
-        const bool shouldPush = entity->getIsPushable() || entity->getEnableControl();
-        if (!shouldPush)
+        if (!entity->getIsPushable())
         {
             continue;
         }
@@ -378,9 +391,37 @@ void Entity::applyPushForces(const std::vector<Entity*> &collidableEntities)
 
         delta.x /= dist;
         delta.y /= dist;
-        const float impulse = physics::PUSH_IMPULSE * (overlap / desired);
-        mVelocity.x += delta.x * impulse;
-        mVelocity.y += delta.y * impulse;
+        float displacement = physics::PUSH_IMPULSE * (overlap / desired);
+        const float maxDisplacement = desired * 0.5f;
+        if (displacement > maxDisplacement)
+        {
+            displacement = maxDisplacement;
+        }
+        mMovement.x += delta.x * displacement;
+        mMovement.y += delta.y * displacement;
+        applied = true;
+        ++pairsTested;
+    }
+
+    if (applied)
+    {
+        mVelocity.x *= 0.2f;
+        mVelocity.y *= 0.2f;
+    }
+
+    if (isDebugMode())
+    {
+        const double elapsedMs = (GetTime() - tPushStart) * 1000.0;
+        sPushPairs += pairsTested;
+        sPushTimeMs += elapsedMs;
+        if (outMs)
+        {
+            *outMs += elapsedMs;
+        }
+        if (outPairs)
+        {
+            *outPairs += pairsTested;
+        }
     }
 }
 
@@ -401,25 +442,81 @@ void Entity::update(float deltaTime, Entity *player, Map *map, const std::vector
 {
     if (!mIsActive) return;
 
+    double pushMs = 0.0;
+    size_t pushPairs = 0;
+    const double tStart = isDebugMode() ? GetTime() : 0.0;
+
     if (mAIActive) AIupdate(deltaTime);
+    const double tAfterAI = isDebugMode() ? GetTime() : 0.0;
 
     resetColliderFlags();
 
     if (mMass > 0.0f) {mAcceleration += mForce * deltaTime / mMass; mForce = {0.0f, 0.0f};}
     mVelocity += mAcceleration * deltaTime;
-    applyPushForces(collidableEntities);
+    applyPushForces(collidableEntities, &pushMs, &pushPairs);
     mPosition += mVelocity * deltaTime;
     mPosition += mMovement;
     mMovement = {0.0f, 0.0f};
 
     // resolve collisions
-    checkCollisionY(collidableEntities);
-    checkCollisionX(collidableEntities);
-    checkCollisionY(map);
-    checkCollisionX(map);
+    double collideEntityMs = 0.0;
+    double collideMapMs = 0.0;
+    if (isDebugMode())
+    {
+        const double t0 = GetTime();
+        checkCollisionY(collidableEntities);
+        checkCollisionX(collidableEntities);
+        collideEntityMs = (GetTime() - t0) * 1000.0;
+        const double t1 = GetTime();
+        checkCollisionY(map);
+        checkCollisionX(map);
+        collideMapMs = (GetTime() - t1) * 1000.0;
+    }
+    else
+    {
+        checkCollisionY(collidableEntities);
+        checkCollisionX(collidableEntities);
+        checkCollisionY(map);
+        checkCollisionX(map);
+    }
+    const double tAfterMove = isDebugMode() ? GetTime() : 0.0;
 
     if (mIsTextureAtlas && !mAnimationIndices.empty() && mFrameSpeed > 0) animate(deltaTime);
 
+    logPushSummaryIfNeeded();
+
+    if (isDebugMode())
+    {
+        const double aiMs = (tAfterAI - tStart) * 1000.0;
+        const double moveMs = (tAfterMove - tAfterAI) * 1000.0;
+
+        sPerf.aiMs += aiMs;
+        sPerf.moveMs += moveMs;
+        sPerf.pushMs += pushMs;
+        sPerf.pushPairs += pushPairs;
+        sPerf.collideEntityMs += collideEntityMs;
+        sPerf.collideMapMs += collideMapMs;
+
+        const double now = GetTime();
+        if (sPerf.lastLog <= 0.0)
+        {
+            sPerf.lastLog = now;
+        }
+        if ((now - sPerf.lastLog) >= 0.5)
+        {
+            LOG_DEBUG(TextFormat("Entity perf: AI=%.2fms move=%.2fms push=%.2fms pairs=%zu collideEntities=%.2fms collideMap=%.2fms",
+                                 sPerf.aiMs,
+                                 sPerf.moveMs,
+                                 sPerf.pushMs,
+                                 sPerf.pushPairs,
+                                 sPerf.collideEntityMs,
+                                 sPerf.collideMapMs));
+            sPerf.aiMs = sPerf.moveMs = sPerf.pushMs = 0.0;
+            sPerf.pushPairs = 0;
+            sPerf.collideEntityMs = sPerf.collideMapMs = 0.0;
+            sPerf.lastLog = now;
+        }
+    }
 }
 
 void Entity::render()
@@ -478,6 +575,39 @@ void Entity::render()
     };
 
     DrawTexturePro(mTexture, sourceArea, destinationArea, textureOrigin, mAngle, WHITE);
+}
+
+void Entity::logPushSummaryIfNeeded()
+{
+    if (!isDebugMode())
+    {
+        return;
+    }
+
+    static double sLastLogTime = 0.0;
+    const double now = GetTime();
+    if (sLastLogTime <= 0.0)
+    {
+        sLastLogTime = now;
+        return;
+    }
+    if ((now - sLastLogTime) < 0.5)
+    {
+        return;
+    }
+    sLastLogTime = now;
+
+    if (sPushPairs == 0)
+    {
+        sPushTimeMs = 0.0;
+        return;
+    }
+
+    LOG_DEBUG(TextFormat("Push summary: totalPairs=%zu totalMs=%.3f",
+                         sPushPairs,
+                         sPushTimeMs));
+    sPushTimeMs = 0.0;
+    sPushPairs = 0;
 }
 
 void Entity::shutdown()

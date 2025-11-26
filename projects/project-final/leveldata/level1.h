@@ -54,6 +54,8 @@ private:
     void generateRocks();
     void generateEnemies();
     void updateChunkStream(bool forceRebuild = false);
+    void bakeStaticNavObstacles();
+    void refreshNavMeshStatics();
     void drawChunkDebug();
     void ensureTileTexture();
     void ensureTreeAtlas();
@@ -159,6 +161,7 @@ private:
     MapGenerator mMapGenerator;
     std::vector<unsigned int> mLevelData;
     NavMap mNavMap;
+    bool mNavStaticsDirty = false;
     std::unordered_map<std::pair<int, int>, std::vector<Box*>, ChunkKeyHash> mChunkBoxes;
 
     const int mChunkSize = 64;
