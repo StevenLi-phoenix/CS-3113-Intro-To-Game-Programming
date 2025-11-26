@@ -1,6 +1,32 @@
 #include "player.h"
 #include "../lib/ResourceManager.h"
+#include "../lib/Music.h"
 #include <algorithm>
+
+namespace
+{
+    constexpr const char *SFX_PLAYER_HURT[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/11_human_damage_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/11_human_damage_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/11_human_damage_3.wav"
+    };
+    constexpr size_t SFX_PLAYER_HURT_COUNT = sizeof(SFX_PLAYER_HURT) / sizeof(SFX_PLAYER_HURT[0]);
+
+    constexpr const char *SFX_PLAYER_DEATH[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/14_human_death_spin.wav"
+    };
+    constexpr size_t SFX_PLAYER_DEATH_COUNT = sizeof(SFX_PLAYER_DEATH) / sizeof(SFX_PLAYER_DEATH[0]);
+
+    void playRandomSFX(const char* const* options, size_t count)
+    {
+        if (!options || count == 0)
+        {
+            return;
+        }
+        const int index = GetRandomValue(0, static_cast<int>(count) - 1);
+        AudioManager::playSFX(options[index]);
+    }
+}
 
 Player::Player(Vector2 position, Vector2 scale)
     : Entity(),
@@ -105,6 +131,7 @@ bool Player::applyDamage(float amount)
         return false;
     }
 
+    const float previousHealth = mHealth;
     mHealth = std::max(0.0f, mHealth - amount);
     mDamageCooldownTimer = PlayerConstants::DAMAGE_COOLDOWN_SECONDS;
 
@@ -113,6 +140,11 @@ bool Player::applyDamage(float amount)
         setIsActive(false);
         setCanCollide(false);
         LOG_INFO("Player defeated");
+        playRandomSFX(SFX_PLAYER_DEATH, SFX_PLAYER_DEATH_COUNT);
+    }
+    else if (mHealth < previousHealth)
+    {
+        playRandomSFX(SFX_PLAYER_HURT, SFX_PLAYER_HURT_COUNT);
     }
 
     return true;

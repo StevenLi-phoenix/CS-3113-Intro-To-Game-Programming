@@ -49,6 +49,7 @@ void Level1::updateInventoryUI(float deltaTime)
     {
         mInventoryBar->update(deltaTime);
     }
+    updateToolHint(deltaTime);
 }
 
 void Level1::updateTutorialOverlay(float deltaTime)
@@ -247,6 +248,83 @@ void Level1::drawCompassIndicator()
     {
         mCompassUI->render();
     }
+}
+
+static std::string toolHintForSlot(size_t index,
+                                   size_t axeSlot,
+                                   size_t compassSlot,
+                                   size_t branchSlot,
+                                   size_t potionSlot)
+{
+    if (index == axeSlot)
+    {
+        return "Sword: press Z to slash nearby foes or chop trees.";
+    }
+    if (index == compassSlot)
+    {
+        return "Compass: keep selected to see the map-table direction marker.";
+    }
+    if (index == branchSlot)
+    {
+        return "Branches: left-click or press Z to throw toward the cursor.";
+    }
+    if (index == potionSlot)
+    {
+        return "Potions: press Z while selected to heal if injured.";
+    }
+    return "";
+}
+
+void Level1::updateToolHint(float deltaTime)
+{
+    if (!mInventory)
+    {
+        return;
+    }
+
+    const int selected = static_cast<int>(mInventory->getSelectedIndex());
+    if (selected != mLastSelectedSlot)
+    {
+        mLastSelectedSlot = selected;
+        mToolHintText = toolHintForSlot(static_cast<size_t>(selected),
+                                        mAxeSlotIndex,
+                                        mCompassSlotIndex,
+                                        mBranchSlotIndex,
+                                        mPotionSlotIndex);
+        mToolHintTimer = mToolHintText.empty() ? 0.0f : 3.5f;
+    }
+
+    if (mToolHintTimer > 0.0f)
+    {
+        mToolHintTimer = std::max(0.0f, mToolHintTimer - deltaTime);
+    }
+}
+
+void Level1::drawToolHint() const
+{
+    if (mToolHintTimer <= 0.0f || mToolHintText.empty())
+    {
+        return;
+    }
+
+    const float t = mToolHintTimer / 3.5f;
+    const float alpha = std::clamp(t, 0.0f, 1.0f);
+
+    const int fontSize = 20;
+    const int textWidth = MeasureText(mToolHintText.c_str(), fontSize);
+    Rectangle panel = {
+        (c::SCREEN_WIDTH - textWidth) * 0.5f - 16.0f,
+        static_cast<float>(c::SCREEN_HEIGHT) - 130.0f,
+        static_cast<float>(textWidth) + 32.0f,
+        34.0f
+    };
+    DrawRectangleRounded(panel, 0.25f, 6, Fade(BLACK, 0.55f * alpha));
+    DrawRectangleLinesEx(panel, 2.0f, Fade(RAYWHITE, 0.5f * alpha));
+    DrawText(mToolHintText.c_str(),
+             static_cast<int>(panel.x + 16.0f),
+             static_cast<int>(panel.y + 8.0f),
+             fontSize,
+             Fade(RAYWHITE, alpha));
 }
 
 void Level1::drawMapTableUI() const

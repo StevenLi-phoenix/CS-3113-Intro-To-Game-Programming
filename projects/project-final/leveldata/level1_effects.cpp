@@ -1,8 +1,69 @@
 #include "level1.h"
 #include "level1_consts.h"
 #include "../lib/ResourceManager.h"
+#include "../lib/Music.h"
 
 using namespace level1_consts;
+
+namespace
+{
+    constexpr const char *SFX_MELEE_SWING[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/07_human_atk_sword_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/07_human_atk_sword_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/07_human_atk_sword_3.wav"
+    };
+    constexpr size_t SFX_MELEE_SWING_COUNT = sizeof(SFX_MELEE_SWING) / sizeof(SFX_MELEE_SWING[0]);
+
+    constexpr const char *SFX_MELEE_HIT[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/26_sword_hit_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/26_sword_hit_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/26_sword_hit_3.wav"
+    };
+    constexpr size_t SFX_MELEE_HIT_COUNT = sizeof(SFX_MELEE_HIT) / sizeof(SFX_MELEE_HIT[0]);
+
+    constexpr const char *SFX_THROW[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/27_sword_miss_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/27_sword_miss_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/27_sword_miss_3.wav"
+    };
+    constexpr size_t SFX_THROW_COUNT = sizeof(SFX_THROW) / sizeof(SFX_THROW[0]);
+
+    constexpr const char *SFX_GOLD_PICKUP[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/04_sack_open_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/04_sack_open_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/04_sack_open_3.wav"
+    };
+    constexpr size_t SFX_GOLD_PICKUP_COUNT = sizeof(SFX_GOLD_PICKUP) / sizeof(SFX_GOLD_PICKUP[0]);
+
+    constexpr const char *SFX_POTION[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/08_human_charge_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/08_human_charge_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/10_human_special_atk_1.wav"
+    };
+    constexpr size_t SFX_POTION_COUNT = sizeof(SFX_POTION) / sizeof(SFX_POTION[0]);
+
+    constexpr const char *SFX_PURCHASE_SUCCESS[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/02_chest_close_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/02_chest_close_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/02_chest_close_3.wav"
+    };
+    constexpr size_t SFX_PURCHASE_SUCCESS_COUNT = sizeof(SFX_PURCHASE_SUCCESS) / sizeof(SFX_PURCHASE_SUCCESS[0]);
+
+    constexpr const char *SFX_ENEMY_DEATH[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/24_orc_death_spin.wav"
+    };
+    constexpr size_t SFX_ENEMY_DEATH_COUNT = sizeof(SFX_ENEMY_DEATH) / sizeof(SFX_ENEMY_DEATH[0]);
+
+    void playRandomSFX(const char* const* options, size_t count)
+    {
+        if (!options || count == 0)
+        {
+            return;
+        }
+        const int index = GetRandomValue(0, static_cast<int>(count) - 1);
+        AudioManager::playSFX(options[index]);
+    }
+}
 
 void Level1::ensureHurtShader()
 {
@@ -239,4 +300,43 @@ void Level1::drawSpreadProjectiles() const
         Vector2 origin = { dest.width * 0.5f, dest.height * 0.5f };
         DrawTexturePro(*atlas, src, dest, origin, proj.angle * RAD2DEG, WHITE);
     }
+}
+
+void Level1::playSwingSFX() const
+{
+    playRandomSFX(SFX_MELEE_SWING, SFX_MELEE_SWING_COUNT);
+}
+
+void Level1::playMeleeHitSFX() const
+{
+    playRandomSFX(SFX_MELEE_HIT, SFX_MELEE_HIT_COUNT);
+}
+
+void Level1::playThrowSFX() const
+{
+    playRandomSFX(SFX_THROW, SFX_THROW_COUNT);
+}
+
+void Level1::playGoldPickupSFX() const
+{
+    playRandomSFX(SFX_GOLD_PICKUP, SFX_GOLD_PICKUP_COUNT);
+}
+
+void Level1::playPotionSFX() const
+{
+    playRandomSFX(SFX_POTION, SFX_POTION_COUNT);
+}
+
+void Level1::playPurchaseSFX(bool success) const
+{
+    if (!success)
+    {
+        return;
+    }
+    playRandomSFX(SFX_PURCHASE_SUCCESS, SFX_PURCHASE_SUCCESS_COUNT);
+}
+
+void Level1::playEnemyDeathSFX() const
+{
+    playRandomSFX(SFX_ENEMY_DEATH, SFX_ENEMY_DEATH_COUNT);
 }

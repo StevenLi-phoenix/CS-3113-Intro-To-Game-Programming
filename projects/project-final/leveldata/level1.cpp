@@ -21,6 +21,7 @@
 #include "level1_consts.h"
 #include "attack_enemy.h"
 #include "../lib/SceneController.h"
+#include "../lib/Music.h"
 
 extern SceneController* gSceneController;
 using namespace level1_consts;
@@ -105,6 +106,27 @@ namespace
         2.5f
     };
 
+    struct ShooterSpawnSettings
+    {
+        unsigned int salt = 0u;
+        float spawnThreshold = 0.0f;
+        int spacing = 1;
+        float minHeightPx = 0.0f;
+        float maxHeightPx = 0.0f;
+        float maxDistanceScale = 1.0f;
+        float shooterChance = 0.35f;
+    };
+
+    constexpr ShooterSpawnSettings SHOOTER_SPAWN_SETTINGS{
+        0x9e3779b9u,
+        0.9f,
+        4,
+        44.0f,
+        68.0f,
+        0.9f,
+        0.35f
+    };
+
     constexpr const char *ROCK_SPRITE_TAGS[] = {
         "SMALLROCK",
         "SMALLROCK2",
@@ -134,6 +156,15 @@ namespace
     constexpr float SUMMON_EFFECT_END_RADIUS = 190.0f;
     constexpr Color SUMMON_EFFECT_COLOR = {255, 170, 64, 255};
 
+    constexpr const char *BGM_EXPLORE = "assets/Minifantasy_Dungeon_Music/Music/Goblins_Den_(Regular).wav";
+    constexpr const char *BGM_BATTLE = "assets/Minifantasy_Dungeon_Music/Music/Goblins_Dance_(Battle).wav";
+    constexpr const char *SFX_CHEST_OPEN[] = {
+        "assets/Minifantasy_Dungeon_Music/SFX/01_chest_open_1.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/01_chest_open_2.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/01_chest_open_3.wav",
+        "assets/Minifantasy_Dungeon_Music/SFX/01_chest_open_4.wav"
+    };
+    constexpr size_t SFX_CHEST_OPEN_COUNT = sizeof(SFX_CHEST_OPEN) / sizeof(SFX_CHEST_OPEN[0]);
 }
 
 void Level1::initialise()
@@ -164,9 +195,14 @@ void Level1::initialise()
     mBossSpawned = false;
     mBossDefeated = false;
     mBossSummonTimer = 0.0f;
+    mAttackersUnlocked = false;
     mShooterPhaseActive = false;
     mShootersRemaining = 0;
     mShooterSpawnTimer = 0.0f;
+    mLastSelectedSlot = -1;
+    mToolHintTimer = 0.0f;
+    mToolHintText.clear();
+    mActiveMusicPath.clear();
     mQuestDescription = "Reach the map table, shop, and defeat the guardian";
     initialiseInventoryUI();
     spawnQuestTarget();
@@ -182,6 +218,9 @@ void Level1::initialise()
                                    TABLE_DISTANCE_MAX_TILES);
     mSkipPlayerChunkForNextEnemySpawn = true;
     mBossAdvanceRequested = false;
+    mLastSelectedSlot = -1;
+    mToolHintTimer = 0.0f;
+    mToolHintText.clear();
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
     // initialiseLightingShader();
@@ -191,6 +230,7 @@ void Level1::initialise()
     mTutorialOverlayDisplayTimer = 0.0f;
     mTutorialOverlayFadeTimer = 0.0f;
     mTutorialReopenHintTimer = 0.0f;
+    playExplorationMusic();
 }
 
 void Level1::update(float deltaTime)
@@ -341,6 +381,7 @@ void Level1::update(float deltaTime)
     updateSpreadProjectiles(deltaTime);
     updatePostBossShooters(deltaTime);
     updateHurtOverlay(deltaTime);
+    updateMinimapTexture();
     if (profile) profiler.mark("combat", "combat");
 
     updateCameraFromPlayer(deltaTime);
@@ -544,6 +585,7 @@ void Level1::render()
 
     drawPlayerHUD();
     drawInventoryOverlay();
+    drawToolHint();
     drawCompassIndicator();
     drawQuestLog();
     drawTutorialOverlay();
@@ -552,6 +594,7 @@ void Level1::render()
     drawBossDirectionIndicator();
     drawShopOverlay();
     drawMapTableUI();
+    drawMinimap();
     drawHurtOverlay();
     DrawFPS(0, 60);
 }
@@ -578,6 +621,17 @@ void Level1::shutdown()
     mTutorialReopenHintTimer = 0.0f;
     mCollidableEntities.clear();
     mBossAdvanceRequested = false;
+    mAttackersUnlocked = false;
+    mLastSelectedSlot = -1;
+    mToolHintTimer = 0.0f;
+    mToolHintText.clear();
+    mActiveMusicPath.clear();
+    AudioManager::stopBGM();
+    if (mMinimapReady)
+    {
+        UnloadRenderTexture(mMinimap);
+        mMinimapReady = false;
+    }
 
     delete mPlayer;
     mPlayer = nullptr;
@@ -970,6 +1024,7 @@ bool Level1::tryThrowBranchAt(const Vector2 &worldTarget)
     projectile->setUseShuriken(mRecoverableThrows);
     mBranches.push_back(projectile);
     mCollidableEntities.push_back(projectile);
+    playThrowSFX();
     return true;
 }
 
@@ -1011,6 +1066,7 @@ void Level1::resolveBranchImpacts()
                 {
                     handleEnemyDefeated(enemy);
                 }
+                playMeleeHitSFX();
                 projectile->markSpent();
                 break;
             }
@@ -1113,6 +1169,7 @@ bool Level1::usePotion()
     mPlayer->heal(POTION_HEAL_AMOUNT);
     syncPotionSlot();
     syncGoldSlot();
+    playPotionSFX();
     LOG_INFO(TextFormat("Potion used: +%.1f HP (potions left=%d)", POTION_HEAL_AMOUNT, mPotionCount));
     return true;
 }
@@ -1189,6 +1246,7 @@ void Level1::updateBranchPickups()
                 removeCollidableEntity(mCollidableEntities, branch);
                 mBranchInventory = std::clamp(mBranchInventory + 1, 0, mBranchCapacity);
                 syncBranchSlot();
+                playGoldPickupSFX();
             }
             ++it;
             continue;
@@ -1207,6 +1265,7 @@ void Level1::collectGoldCoin(GoldCoin *coin)
     coin->setIsActive(false);
     removeCollidableEntity(mCollidableEntities, coin);
     delete coin;
+    playGoldPickupSFX();
     ++mGoldCount;
     syncGoldSlot();
 }
@@ -1222,6 +1281,8 @@ void Level1::handleEnemyDefeated(Enemy *enemy)
     {
         mBossDefeated = true;
     }
+
+    playEnemyDeathSFX();
 
     const float dropRoll = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
     const float dropChance = std::clamp(enemyGoldDropChance(), 0.0f, 1.0f);
@@ -1261,9 +1322,11 @@ void Level1::handleBossDefeated()
         return;
     }
     mBossAdvanceRequested = true;
+    mAttackersUnlocked = true;
     mShooterPhaseActive = true;
     mShootersRemaining = 5;
     mShooterSpawnTimer = 0.1f;
+    playBattleMusic();
 }
 
 std::unique_ptr<Scene> Level1::createNextSceneAfterBoss()
@@ -1296,6 +1359,7 @@ void Level1::updatePostBossShooters(float deltaTime)
     if (mShootersRemaining <= 0 && activeShooters == 0)
     {
         mShooterPhaseActive = false;
+        playExplorationMusic();
         return;
     }
 
@@ -1333,6 +1397,190 @@ void Level1::spawnShooterEnemy()
     mCollidableEntities.push_back(attacker);
 }
 
+void Level1::ensureMinimap()
+{
+    const int width = mMapColumns;
+    const int height = mMapRows;
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    if (mMinimapReady)
+    {
+        if (mMinimap.texture.width != width || mMinimap.texture.height != height)
+        {
+            UnloadRenderTexture(mMinimap);
+            mMinimapReady = false;
+        }
+    }
+
+    if (!mMinimapReady)
+    {
+        mMinimap = LoadRenderTexture(width, height);
+        mMinimapReady = mMinimap.id != 0;
+    }
+}
+
+void Level1::playExplorationMusic()
+{
+    if (mActiveMusicPath == BGM_EXPLORE)
+    {
+        return;
+    }
+    AudioManager::playBGM(BGM_EXPLORE, true);
+    mActiveMusicPath = BGM_EXPLORE;
+}
+
+void Level1::playBattleMusic()
+{
+    if (mActiveMusicPath == BGM_BATTLE)
+    {
+        return;
+    }
+    AudioManager::playBGM(BGM_BATTLE, true);
+    mActiveMusicPath = BGM_BATTLE;
+}
+
+void Level1::updateMinimapTexture()
+{
+    if (mLevelData.empty() || mMapColumns <= 0 || mMapRows <= 0)
+    {
+        return;
+    }
+
+    ensureMinimap();
+    if (!mMinimapReady)
+    {
+        return;
+    }
+
+    BeginTextureMode(mMinimap);
+    ClearBackground({12, 18, 12, 220});
+
+    // Base tiles
+    for (int y = 0; y < mMapRows; ++y)
+    {
+        for (int x = 0; x < mMapColumns; ++x)
+        {
+            const size_t idx = static_cast<size_t>(y * mMapColumns + x);
+            const unsigned int tile = (idx < mLevelData.size()) ? mLevelData[idx] : 0u;
+            const Color color = tile == 0 ? Color{20, 40, 24, 230} : Color{38, 92, 46, 230};
+            DrawPixel(x, y, color);
+        }
+    }
+
+    auto plot = [this](const Vector2 &worldPos, Color color, int size = 1)
+    {
+        const int gx = static_cast<int>(std::floor(worldPos.x / mTileSize)) - getChunkStartX();
+        const int gy = static_cast<int>(std::floor(worldPos.y / mTileSize)) - getChunkStartY();
+        if (gx < 0 || gx >= mMapColumns || gy < 0 || gy >= mMapRows)
+        {
+            return;
+        }
+        const int half = std::max(0, size / 2);
+        for (int dy = -half; dy <= half; ++dy)
+        {
+            for (int dx = -half; dx <= half; ++dx)
+            {
+                const int px = gx + dx;
+                const int py = gy + dy;
+                if (px >= 0 && px < mMapColumns && py >= 0 && py < mMapRows)
+                {
+                    DrawPixel(px, py, color);
+                }
+            }
+        }
+    };
+
+    // Collidable entities
+    for (Entity *entity : mCollidableEntities)
+    {
+        if (!entity || !entity->getIsActive())
+        {
+            continue;
+        }
+        const int markerSize = 2;
+        plot(entity->getPosition(), Color{120, 120, 120, 255}, markerSize);
+    }
+
+    // Enemies
+    for (Enemy *enemy : mEnemies)
+    {
+        if (!enemy || !enemy->getIsActive() || enemy->isDead())
+        {
+            continue;
+        }
+        plot(enemy->getPosition(), RED, 3);
+    }
+
+    // Player
+    if (mPlayer && mPlayer->getIsActive())
+    {
+        plot(mPlayer->getPosition(), SKYBLUE, 4);
+    }
+
+    // POI: map table, boss
+    if (mTable && mTable->getIsActive())
+    {
+        plot(mTable->getPosition(), PURPLE, 3);
+    }
+    if (mBoss && mBoss->getIsActive())
+    {
+        plot(mBoss->getPosition(), Color{200, 40, 200, 255}, 4);
+    }
+
+    EndTextureMode();
+}
+
+void Level1::drawMinimap() const
+{
+    if (!mMinimapReady)
+    {
+        return;
+    }
+
+    const float maxSize = 220.0f;
+    const float viewTilesX = std::min(static_cast<float>(mChunkSize * 2), static_cast<float>(mMapColumns));
+    const float viewTilesY = std::min(static_cast<float>(mChunkSize * 2), static_cast<float>(mMapRows));
+    const float pixelsPerTile = maxSize / std::max(std::max(viewTilesX, viewTilesY), 1.0f);
+    const float destW = viewTilesX * pixelsPerTile;
+    const float destH = viewTilesY * pixelsPerTile;
+
+    const float margin = 12.0f;
+    const Rectangle dest = {
+        static_cast<float>(c::SCREEN_WIDTH) - destW - margin,
+        margin,
+        destW,
+        destH
+    };
+
+    // Center view around player (fallback to camera target).
+    const Vector2 focusWorld = mPlayer ? mPlayer->getPosition() : mCamera.target;
+    const int focusTileX = static_cast<int>(std::floor(focusWorld.x / mTileSize)) - getChunkStartX();
+    const int focusTileY = static_cast<int>(std::floor(focusWorld.y / mTileSize)) - getChunkStartY();
+    const float halfViewX = viewTilesX * 0.5f;
+    const float halfViewY = viewTilesY * 0.5f;
+    const float srcW = viewTilesX;
+    const float srcH = viewTilesY;
+    const float maxSrcX = std::max(0.0f, static_cast<float>(mMapColumns) - srcW);
+    const float maxSrcY = std::max(0.0f, static_cast<float>(mMapRows) - srcH);
+    const float srcX = std::clamp(focusTileX - halfViewX, 0.0f, maxSrcX);
+    const float srcY = std::clamp(focusTileY - halfViewY, 0.0f, maxSrcY);
+    // Render textures are stored Y-flipped in Raylib; anchor from the top by offsetting from texture height and flip height.
+    const float texH = std::fabs(static_cast<float>(mMinimap.texture.height));
+    Rectangle src = {
+        srcX,
+        texH + 60 - srcY, // why 60? I have no idea, but it just make the player center, and I have no f*** why.
+        srcW,
+        -srcH
+    };
+
+    DrawRectangleRec({dest.x - 4.0f, dest.y - 4.0f, dest.width + 8.0f, dest.height + 8.0f},
+                     Fade(BLACK, 0.6f));
+    DrawTexturePro(mMinimap.texture, src, dest, {0.0f, 0.0f}, 0.0f, WHITE);
+    DrawRectangleLinesEx(dest, 2.0f, Fade(RAYWHITE, 0.8f));
+}
 void Level1::spawnBoss()
 {
     if (!mTable || mBoss)
@@ -1370,8 +1618,13 @@ void Level1::spawnBoss()
     mBossSummonTimer = BOSS_SUMMON_INTERVAL * 0.5f;
     mBossRepathTimer = 0.1f;
     mShooterPhaseActive = false;
+    if (!mBossAdvanceRequested)
+    {
+        mAttackersUnlocked = false;
+    }
     mShootersRemaining = 0;
     mShooterSpawnTimer = 0.0f;
+    playBattleMusic();
 
     mEnemies.push_back(boss);
     mCollidableEntities.push_back(boss);
@@ -1680,6 +1933,7 @@ void Level1::tryMeleeAttack()
         return;
     }
 
+    playSwingSFX();
     applyMeleeDamage(target);
     mMeleeTimer = std::max(mMeleeCooldown, 0.05f);
     spawnMeleeEffect();
@@ -1748,6 +2002,8 @@ void Level1::applyMeleeDamage(Enemy *target)
             handleEnemyDefeated(target);
         }
     }
+
+    playMeleeHitSFX();
 }
 
 void Level1::updateBoxRewards()
@@ -1795,6 +2051,11 @@ void Level1::collectBox(Box *box)
     box->markCollected();
     removeCollidableEntity(mCollidableEntities, box);
     addBranches(mBoxBranchReward);
+    if (SFX_CHEST_OPEN_COUNT > 0)
+    {
+        const int sfxIndex = GetRandomValue(0, static_cast<int>(SFX_CHEST_OPEN_COUNT) - 1);
+        AudioManager::playSFX(SFX_CHEST_OPEN[sfxIndex]);
+    }
 
     if (isDebugMode())
     {
@@ -2396,8 +2657,19 @@ void Level1::resetPlayerForRetry()
     mShopSuppressed = false;
     mBossAdvanceRequested = false;
     mShooterPhaseActive = false;
+    mAttackersUnlocked = false;
     mShootersRemaining = 0;
     mShooterSpawnTimer = 0.0f;
+    mLastSelectedSlot = -1;
+    mToolHintTimer = 0.0f;
+    mToolHintText.clear();
+    mActiveMusicPath.clear();
+    if (mMinimapReady)
+    {
+        UnloadRenderTexture(mMinimap);
+        mMinimapReady = false;
+    }
+    playExplorationMusic();
     syncWeaponSlot();
 
     spawnQuestTarget();
@@ -2491,6 +2763,7 @@ void Level1::buildProceduralMap()
 
     const Vector2 mapOrigin = computeMapOrigin();
     rebuildMap(mapOrigin);
+    mMinimapReady = false;
 }
 
 MapGenerator::GenerationSettings Level1::buildGeneratorSettings() const
@@ -2995,6 +3268,7 @@ void Level1::spawnEnemiesForChunk(const std::pair<int, int> &chunk,
     const float maxSpawnDistance = chunkWorldSize * ENEMY_SPAWN_SETTINGS.maxDistanceScale;
     const float maxSpawnDistanceSq = maxSpawnDistance * maxSpawnDistance;
 
+    const bool shootersUnlocked = mAttackersUnlocked;
     int spawnedCount = 0;
     for (int row = 0; row < mChunkSize; row += spacing)
     {
@@ -3011,6 +3285,7 @@ void Level1::spawnEnemiesForChunk(const std::pair<int, int> &chunk,
 
             const float variantNoise = mMapGenerator.whiteNoise(worldX, worldY, ENEMY_SPAWN_SETTINGS.salt + 1u);
             const float heightNoise = mMapGenerator.whiteNoise(worldX, worldY, ENEMY_SPAWN_SETTINGS.salt + 2u);
+            const float typeNoise = mMapGenerator.whiteNoise(worldX, worldY, SHOOTER_SPAWN_SETTINGS.salt + 3u);
 
             int variant = static_cast<int>(variantNoise * static_cast<float>(DogConstants::VARIANT_COUNT));
             variant = std::clamp(variant, 0, DogConstants::VARIANT_COUNT - 1);
@@ -3028,22 +3303,45 @@ void Level1::spawnEnemiesForChunk(const std::pair<int, int> &chunk,
                 continue;
             }
 
-            Dog* dog = new Dog({worldPosX, worldPosY}, variant, dogHeight);
-            dog->setNavMap(&mNavMap);
-            bucket.push_back(dog);
-            spawnedCount++;
+            const bool spawnShooter = shootersUnlocked && typeNoise >= (1.0f - SHOOTER_SPAWN_SETTINGS.shooterChance);
+            int shooterVariant = 0;
+            float shooterHeight = dogHeight;
+            if (spawnShooter)
+            {
+                const float heightNoiseShooter = mMapGenerator.whiteNoise(worldX, worldY, SHOOTER_SPAWN_SETTINGS.salt + 4u);
+                shooterHeight = SHOOTER_SPAWN_SETTINGS.minHeightPx +
+                                heightNoiseShooter * (SHOOTER_SPAWN_SETTINGS.maxHeightPx - SHOOTER_SPAWN_SETTINGS.minHeightPx);
+                shooterVariant = std::clamp(GetRandomValue(0, 2), 0, 2);
+                AttackEnemy *attacker = new AttackEnemy({worldPosX, worldPosY},
+                                                        shooterVariant,
+                                                        &mSpreadProjectiles,
+                                                        shooterHeight);
+                attacker->setNavMap(&mNavMap);
+                bucket.push_back(attacker);
+                spawnedCount++;
+            }
+            else
+            {
+                Dog* dog = new Dog({worldPosX, worldPosY}, variant, dogHeight);
+                dog->setNavMap(&mNavMap);
+                bucket.push_back(dog);
+                spawnedCount++;
+            }
 
             if (isDebugMode())
             {
                 const float dist = sqrtf((dx * dx) + (dy * dy));
-                LOG_DEBUG(TextFormat("Enemy spawn[%p] chunk=(%d,%d) variant=%d pos=(%.1f,%.1f) height=%.1f dist=%.1f",
-                                     dog,
+                const int logVariant = spawnShooter ? shooterVariant : variant;
+                const float logHeight = spawnShooter ? shooterHeight : dogHeight;
+                LOG_DEBUG(TextFormat("Enemy spawn[%p] chunk=(%d,%d) type=%s variant=%d pos=(%.1f,%.1f) height=%.1f dist=%.1f",
+                                     bucket.back(),
                                      chunk.first,
                                      chunk.second,
-                                     variant,
+                                     spawnShooter ? "shooter" : "dog",
+                                     logVariant,
                                      worldPosX,
                                      worldPosY,
-                                     dogHeight,
+                                     logHeight,
                                      dist));
             }
         }

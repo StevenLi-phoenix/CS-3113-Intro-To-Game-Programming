@@ -133,6 +133,13 @@ private:
     void drawQuestLog() const;
     void drawCompassIndicator();
     void drawMapTableUI() const;
+    void drawToolHint() const;
+    void updateToolHint(float deltaTime);
+    void playExplorationMusic();
+    void playBattleMusic();
+    void updateMinimapTexture();
+    void drawMinimap() const;
+    void ensureMinimap();
     void updateShop(float deltaTime);
     void drawShopOverlay() const;
     bool isPlayerNearTable(float radius) const;
@@ -150,6 +157,13 @@ private:
     void spawnMeleeEffect();
     void updateSpreadProjectiles(float deltaTime);
     void drawSpreadProjectiles() const;
+    void playSwingSFX() const;
+    void playMeleeHitSFX() const;
+    void playThrowSFX() const;
+    void playGoldPickupSFX() const;
+    void playPotionSFX() const;
+    void playPurchaseSFX(bool success) const;
+    void playEnemyDeathSFX() const;
     void ensureHurtShader();
     void cleanupBossMinions();
     void pruneEnemyList(Enemy *enemy);
@@ -264,6 +278,12 @@ private:
     size_t mGoldSlotIndex = 3;
     size_t mPotionSlotIndex = 4;
     int mGoldCount = 0;
+    int mLastSelectedSlot = -1;
+    float mToolHintTimer = 0.0f;
+    std::string mToolHintText;
+    std::string mActiveMusicPath;
+    RenderTexture2D mMinimap = {};
+    bool mMinimapReady = false;
 
     std::string mQuestDescription = "Survive and find the table with map";
     bool mQuestComplete = false;
@@ -271,6 +291,7 @@ private:
     bool mBossDefeated = false;
     bool mBossAdvanceRequested = false;
     bool mShooterPhaseActive = false;
+    bool mAttackersUnlocked = false;
     int mShootersRemaining = 0;
     float mShooterSpawnTimer = 0.0f;
     Enemy *mBoss = nullptr;

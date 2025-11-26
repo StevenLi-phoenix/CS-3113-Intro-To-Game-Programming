@@ -134,16 +134,17 @@ void MainMenuScene::render()
              subtitleSize,
              Fade(LIGHTGRAY, 0.9f));
 
-#if DEBUG_BUILD
-    const char *debugLabel = "DEBUG BUILD - instrumentation enabled";
-    int debugSize = 18;
-    int debugWidth = MeasureText(debugLabel, debugSize);
-    DrawText(debugLabel,
-             c::SCREEN_WIDTH / 2 - debugWidth / 2,
-             220,
-             debugSize,
-             Fade(ORANGE, 0.95f));
-#endif
+    if (isDebugMode())
+    {
+        const char *debugLabel = "DEBUG BUILD - instrumentation enabled";
+        int debugSize = 18;
+        int debugWidth = MeasureText(debugLabel, debugSize);
+        DrawText(debugLabel,
+                 c::SCREEN_WIDTH / 2 - debugWidth / 2,
+                 220,
+                 debugSize,
+                 Fade(ORANGE, 0.95f));
+    }
 
     for (auto &button : mButtons)
     {

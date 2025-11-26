@@ -4,6 +4,29 @@
 
 using namespace level1_consts;
 
+namespace
+{
+    constexpr float SHOP_PANEL_WIDTH = 860.0f;
+    constexpr float SHOP_PANEL_HEIGHT = 360.0f;
+    constexpr float SHOP_PANEL_MARGIN_TOP = 30.0f;
+    constexpr float SHOP_BUTTON_WIDTH = 240.0f;
+    constexpr float SHOP_BUTTON_HEIGHT = 72.0f;
+    constexpr float SHOP_BUTTON_ROW_SPACING = 110.0f;
+    constexpr float SHOP_BUTTON_COL_SPACING = 260.0f;
+    constexpr float SHOP_BUTTON_TOP_OFFSET = 160.0f;
+    constexpr float SHOP_ICON_SIZE = 56.0f;
+
+    Rectangle shopPanelRect()
+    {
+        return {
+            (c::SCREEN_WIDTH - SHOP_PANEL_WIDTH) * 0.5f,
+            SHOP_PANEL_MARGIN_TOP + (c::SCREEN_HEIGHT - SHOP_PANEL_HEIGHT) * 0.5f - SHOP_PANEL_MARGIN_TOP * 0.5f,
+            SHOP_PANEL_WIDTH,
+            SHOP_PANEL_HEIGHT
+        };
+    }
+}
+
 void Level1::ensureShopUI()
 {
     if (!mShopButtons.empty())
@@ -14,11 +37,11 @@ void Level1::ensureShopUI()
     auto makeButton = []() -> std::unique_ptr<Button>
     {
         auto btn = std::make_unique<Button>();
-        btn->setScale({180.0f, 46.0f});
+        btn->setScale({SHOP_BUTTON_WIDTH, SHOP_BUTTON_HEIGHT});
         btn->setBackgroundColor(Fade(DARKBLUE, 0.78f));
         btn->setBorderColor(Fade(RAYWHITE, 0.8f));
         btn->setTextColor(RAYWHITE);
-        btn->setFontSize(18);
+        btn->setFontSize(22);
         return btn;
     };
 
@@ -35,15 +58,14 @@ void Level1::updateShopButtonsLayout()
     {
         return;
     }
-    const float centerX = c::SCREEN_WIDTH * 0.5f;
-    const float topY = 150.0f;
-    const float rowSpacing = 86.0f;
-    const float colSpacing = 200.0f;
+    const Rectangle panel = shopPanelRect();
+    const float centerX = panel.x + panel.width * 0.5f;
+    const float topY = panel.y + SHOP_BUTTON_TOP_OFFSET;
 
-    mShopButtons[0]->setPosition({centerX - colSpacing, topY});
-    mShopButtons[1]->setPosition({centerX + colSpacing, topY});
-    mShopButtons[2]->setPosition({centerX - colSpacing * 0.5f, topY + rowSpacing});
-    mShopButtons[3]->setPosition({centerX + colSpacing * 0.5f, topY + rowSpacing});
+    mShopButtons[0]->setPosition({centerX - SHOP_BUTTON_COL_SPACING, topY});
+    mShopButtons[1]->setPosition({centerX + SHOP_BUTTON_COL_SPACING, topY});
+    mShopButtons[2]->setPosition({centerX - SHOP_BUTTON_COL_SPACING * 0.5f, topY + SHOP_BUTTON_ROW_SPACING});
+    mShopButtons[3]->setPosition({centerX + SHOP_BUTTON_COL_SPACING * 0.5f, topY + SHOP_BUTTON_ROW_SPACING});
 }
 
 void Level1::handleShopClose()
@@ -100,6 +122,7 @@ void Level1::updateShop(float deltaTime)
                        (1.0f + static_cast<float>(mSwordUpgradeCount) * SWORD_DAMAGE_BONUS);
         syncGoldSlot();
         syncWeaponSlot();
+        playPurchaseSFX(true);
         LOG_INFO(TextFormat("Purchased Sword level %d, melee damage=%.1f",
                             mSwordUpgradeCount,
                             mMeleeDamage));
@@ -120,6 +143,7 @@ void Level1::updateShop(float deltaTime)
         mBranchInventory = std::clamp(mBranchInventory + 1, 0, mBranchCapacity);
         syncGoldSlot();
         syncBranchSlot();
+        playPurchaseSFX(true);
         LOG_INFO(TextFormat("Purchased Shuriken level %d, throw damage=%.1f",
                             mShurikenUpgradeCount,
                             mBranchDamage));
@@ -138,6 +162,7 @@ void Level1::updateShop(float deltaTime)
         mGoldCount -= POTION_COST;
         addPotions(1);
         syncGoldSlot();
+        playPurchaseSFX(true);
         LOG_INFO(TextFormat("Purchased potion (%d/%d)", mPotionCount, mPotionCapacity));
     };
 
@@ -182,15 +207,15 @@ void Level1::updateShop(float deltaTime)
 
         if (atlas && swordRect.width > 0.0f && swordRect.height > 0.0f)
         {
-            mShopButtons[0]->setIcon(atlas, swordRect, {44.0f, 44.0f});
+            mShopButtons[0]->setIcon(atlas, swordRect, {SHOP_ICON_SIZE, SHOP_ICON_SIZE});
         }
         if (atlas && shurikenRect.width > 0.0f && shurikenRect.height > 0.0f)
         {
-            mShopButtons[1]->setIcon(atlas, shurikenRect, {40.0f, 40.0f});
+            mShopButtons[1]->setIcon(atlas, shurikenRect, {SHOP_ICON_SIZE, SHOP_ICON_SIZE});
         }
         if (atlas && potionRect.width > 0.0f && potionRect.height > 0.0f)
         {
-            mShopButtons[2]->setIcon(atlas, potionRect, {40.0f, 40.0f});
+            mShopButtons[2]->setIcon(atlas, potionRect, {SHOP_ICON_SIZE, SHOP_ICON_SIZE});
         }
         mShopButtons[3]->setIcon(nullptr, {0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f});
 
@@ -218,14 +243,7 @@ void Level1::drawShopOverlay() const
 
     DrawRectangle(0, 0, c::SCREEN_WIDTH, c::SCREEN_HEIGHT, Fade(BLACK, 0.55f));
 
-    const float panelWidth = 680.0f;
-    const float panelHeight = 260.0f;
-    Rectangle panel = {
-        (c::SCREEN_WIDTH - panelWidth) * 0.5f,
-        40.0f,
-        panelWidth,
-        panelHeight
-    };
+    Rectangle panel = shopPanelRect();
     DrawRectangleRounded(panel, 0.2f, 6, Fade(BLACK, 0.6f));
     DrawRectangleLinesEx(panel, 2.0f, Fade(WHITE, 0.5f));
 
@@ -250,32 +268,32 @@ void Level1::drawShopOverlay() const
                                               POTION_HEAL_AMOUNT);
     DrawText(swordLine.c_str(),
              static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + 44.0f),
-             18,
+             static_cast<int>(panel.y + 60.0f),
+             20,
              LIGHTGRAY);
     DrawText(shurikenLine.c_str(),
              static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + 70.0f),
-             18,
+             static_cast<int>(panel.y + 90.0f),
+             20,
              LIGHTGRAY);
     DrawText(potionLine.c_str(),
              static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + 96.0f),
-             18,
+             static_cast<int>(panel.y + 120.0f),
+             20,
              LIGHTGRAY);
 
     const std::string goldLine = TextFormat("Gold: %d", mGoldCount);
     DrawText(goldLine.c_str(),
-             static_cast<int>(panel.x + panel.width - 160.0f),
-             static_cast<int>(panel.y + 44.0f),
-             18,
+             static_cast<int>(panel.x + panel.width - 200.0f),
+             static_cast<int>(panel.y + 62.0f),
+             20,
              GOLD);
 
     const char *hint = "Game frozen: click icons or press 1/2/3 to buy (stacks), press Q or Close to exit, reclaim throws by walking over them";
     DrawText(hint,
              static_cast<int>(panel.x + 18.0f),
-             static_cast<int>(panel.y + panel.height - 32.0f),
-             16,
+             static_cast<int>(panel.y + panel.height - 38.0f),
+             17,
              Fade(RAYWHITE, 0.92f));
 
     for (const auto &btn : mShopButtons)
