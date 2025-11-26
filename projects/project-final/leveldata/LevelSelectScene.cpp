@@ -1,5 +1,6 @@
 #include "LevelSelectScene.h"
 #include "level1.h"
+#include "level2.h"
 #include "MainMenuScene.h"
 #include <memory>
 #include "../lib/SceneController.h"
@@ -33,6 +34,16 @@ void LevelSelectScene::buildButtons()
                        if (gSceneController)
                        {
                            gSceneController->requestSceneChange(std::make_unique<Level1>());
+                       }
+                   });
+
+    addLevelButton("Level 2: Spreadshot Frontier",
+                   "ATTACK1-3 shooters wield spreadballs and drop more gold.",
+                   startY + kButtonSpacing,
+                   []() {
+                       if (gSceneController)
+                       {
+                           gSceneController->requestSceneChange(std::make_unique<Level2>());
                        }
                    });
 
@@ -172,4 +183,3 @@ void LevelSelectScene::shutdown()
 {
     clearButtons();
 }
-

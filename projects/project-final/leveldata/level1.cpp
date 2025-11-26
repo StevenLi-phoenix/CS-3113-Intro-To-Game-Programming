@@ -16,6 +16,7 @@
 #include "rock.h"
 #include "table_with_map.h"
 #include "LevelSelectScene.h"
+#include "level2.h"
 #include "ResourceTags.h"
 #include "level1_consts.h"
 #include "attack_enemy.h"
@@ -177,6 +178,7 @@ void Level1::initialise()
                                    TABLE_DISTANCE_MIN_TILES,
                                    TABLE_DISTANCE_MAX_TILES);
     mSkipPlayerChunkForNextEnemySpawn = true;
+    mBossAdvanceRequested = false;
     updateChunkStream(true);
     // Lighting shader temporarily disabled; keep call commented for future restoration.
     // initialiseLightingShader();
@@ -539,6 +541,7 @@ void Level1::shutdown()
     mHurtOverlayTimer = 0.0f;
     mTutorialReopenHintTimer = 0.0f;
     mCollidableEntities.clear();
+    mBossAdvanceRequested = false;
 
     delete mPlayer;
     mPlayer = nullptr;
@@ -1185,7 +1188,8 @@ void Level1::handleEnemyDefeated(Enemy *enemy)
     }
 
     const float dropRoll = static_cast<float>(GetRandomValue(0, 1000)) / 1000.0f;
-    if (dropRoll > GOLD_DROP_CHANCE)
+    const float dropChance = std::clamp(enemyGoldDropChance(), 0.0f, 1.0f);
+    if (dropRoll > dropChance)
     {
         return;
     }
@@ -1207,6 +1211,39 @@ void Level1::handleEnemyDefeated(Enemy *enemy)
                              dropPos.x,
                              dropPos.y));
     }
+
+    if (enemy == mBoss)
+    {
+        handleBossDefeated();
+    }
+}
+
+void Level1::handleBossDefeated()
+{
+    if (mBossAdvanceRequested)
+    {
+        return;
+    }
+    mBossAdvanceRequested = true;
+    if (!gSceneController)
+    {
+        return;
+    }
+    std::unique_ptr<Scene> next = createNextSceneAfterBoss();
+    if (next)
+    {
+        gSceneController->requestSceneChange(std::move(next));
+    }
+}
+
+std::unique_ptr<Scene> Level1::createNextSceneAfterBoss()
+{
+    return std::make_unique<Level2>();
+}
+
+float Level1::enemyGoldDropChance() const
+{
+    return GOLD_DROP_CHANCE;
 }
 
 void Level1::spawnBoss()
@@ -1344,6 +1381,7 @@ void Level1::updateBossFight(float deltaTime)
         delete mBoss;
         mBoss = nullptr;
         mBossDefeated = true;
+        handleBossDefeated();
         return;
     }
 
@@ -2266,6 +2304,7 @@ void Level1::resetPlayerForRetry()
     mRecoverableThrows = false;
     mShopOpen = false;
     mShopSuppressed = false;
+    mBossAdvanceRequested = false;
     syncWeaponSlot();
 
     spawnQuestTarget();

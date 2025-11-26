@@ -1,4 +1,5 @@
 #include "attack_enemy.h"
+#include "level1_consts.h"
 #include "../lib/ResourceManager.h"
 #include "../lib/Helper.h"
 
@@ -101,6 +102,10 @@ void AttackEnemy::fireSpreadAt(const Vector2 &playerPos)
     {
         SpreadProjectile proj;
         proj.position = getPosition();
+        proj.speed = level1_consts::SPREAD_BALL_SPEED;
+        proj.damage = level1_consts::SPREAD_BALL_DAMAGE;
+        proj.radius = level1_consts::SPREAD_BALL_RADIUS;
+        proj.lifetime = level1_consts::SPREAD_BALL_LIFETIME;
         const float angle = baseAngle + offset;
         proj.velocity = { cosf(angle), sinf(angle) };
         proj.angle = angle;

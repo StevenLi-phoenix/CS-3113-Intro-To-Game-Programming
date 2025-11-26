@@ -32,7 +32,7 @@ class Rock;
 class GoldCoin;
 
 // Simple test level scene. Add real game logic later.
-class Level1 final : public Scene
+class Level1 : public Scene
 {
 public:
     Level1() = default;
@@ -160,6 +160,8 @@ private:
     bool isCompassSelected() const;
     bool isAxeSelected() const;
     bool isPotionSelected() const;
+    void handleBossDefeated();
+    virtual std::unique_ptr<Scene> createNextSceneAfterBoss();
     struct ChunkKeyHash
     {
         size_t operator()(const std::pair<int, int> &key) const
@@ -169,10 +171,18 @@ private:
                    (static_cast<size_t>(key.second) * 19349663u);
         }
     };
-    void spawnEnemiesForChunk(const std::pair<int, int> &chunk,
-                              std::vector<Enemy*> &bucket,
-                              const Vector2 &playerPos);
+    virtual void spawnEnemiesForChunk(const std::pair<int, int> &chunk,
+                                      std::vector<Enemy*> &bucket,
+                                      const Vector2 &playerPos);
 
+protected:
+    virtual float enemyGoldDropChance() const;
+    const MapGenerator& getMapGenerator() const { return mMapGenerator; }
+    float getTileSize() const { return mTileSize; }
+    const NavMap* getNavMap() const { return &mNavMap; }
+    std::vector<SpreadProjectile>& getSpreadProjectiles() { return mSpreadProjectiles; }
+
+private:
     std::unordered_map<std::pair<int, int>, std::vector<Enemy*>, ChunkKeyHash> mChunkEnemies;
     Player* mPlayer = nullptr;
     Map* mMap = nullptr;
@@ -256,6 +266,7 @@ private:
     bool mQuestComplete = false;
     bool mBossSpawned = false;
     bool mBossDefeated = false;
+    bool mBossAdvanceRequested = false;
     Enemy *mBoss = nullptr;
     std::vector<Dog*> mBossMinions;
     float mBossSummonTimer = 0.0f;
