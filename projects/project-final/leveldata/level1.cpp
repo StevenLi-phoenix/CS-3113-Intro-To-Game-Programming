@@ -594,7 +594,7 @@ void Level1::render()
     drawBossDirectionIndicator();
     drawShopOverlay();
     drawMapTableUI();
-    drawMinimap();
+    // drawMinimap();
     drawHurtOverlay();
     DrawFPS(0, 60);
 }
@@ -1459,6 +1459,7 @@ void Level1::updateMinimapTexture()
     ClearBackground({12, 18, 12, 220});
 
     // Base tiles
+    // TODO: this should moved to shader instead
     for (int y = 0; y < mMapRows; ++y)
     {
         for (int x = 0; x < mMapColumns; ++x)
@@ -1784,7 +1785,7 @@ void Level1::drawBossSummonEffects()
     {
         return;
     }
-
+    // TODO: move to shader
     for (const SummonEffect &fx : mBossSummonEffects)
     {
         const float progress = std::clamp(fx.elapsed / std::max(fx.duration, 0.0001f), 0.0f, 1.0f);

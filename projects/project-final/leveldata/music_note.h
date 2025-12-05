@@ -1,5 +1,6 @@
 #ifndef MUSIC_NOTE_H
 #define MUSIC_NOTE_H
+// this is planned for boss flight, currently not invokes anywhere
 
 #include "../lib/Entity.h"
 #include "../lib/ResourceManager.h"

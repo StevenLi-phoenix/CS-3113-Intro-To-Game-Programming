@@ -1,5 +1,6 @@
 #ifndef PROFILER_H
 #define PROFILER_H
+// helper for debugging
 
 #include "Helper.h"
 #include <string>

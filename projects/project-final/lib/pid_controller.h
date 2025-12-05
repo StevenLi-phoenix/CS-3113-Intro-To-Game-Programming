@@ -1,5 +1,6 @@
 #ifndef PID_CONTROLLER_H
 #define PID_CONTROLLER_H
+// which actually is never used anywhere in codebase
 
 class PIDController
 {
