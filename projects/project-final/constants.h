@@ -4,7 +4,7 @@
 #include "lib/Helper.h"
 
 namespace c {
-    constexpr const char *TITLE = "Project Final";
+    constexpr const char *TITLE = "In the woods";
     constexpr static int SCREEN_WIDTH = 800 * 1.5f;
     constexpr static int SCREEN_HEIGHT = 450 * 1.5f;
     constexpr static int FPS = 60;

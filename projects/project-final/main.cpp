@@ -1,6 +1,6 @@
 /**
 * Author: Steven Li
-* Assignment: Project Final
+* Assignment: In the woods
 * Date due: 2025-12-05, 11:59pm
 * I pledge that I have completed this assignment without
 * collaborating with anyone else, in conformance with the
