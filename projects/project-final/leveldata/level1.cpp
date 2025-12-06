@@ -449,7 +449,7 @@ void Level1::render()
     //     Vector2 focusScreen = { screenResolution.x * 0.5f, screenResolution.y * 0.5f };
     //     if (mPlayer)
     //     {
-    //         focusScreen = GetWorldToScreen2D(mPlayer->getPosition(), mCamera);
+    //         focusScreen = WorldToScreen(mPlayer->getPosition(), mCamera);
     //     }
     //     Vector2 focusNormalized = {
     //         std::clamp(focusScreen.x / screenResolution.x, 0.0f, 1.0f),
@@ -1852,7 +1852,7 @@ void Level1::drawBossDirectionIndicator() const
         return;
     }
 
-    Vector2 bossScreen = GetWorldToScreen2D(mBoss->getPosition(), mCamera);
+    Vector2 bossScreen = WorldToScreen(mBoss->getPosition(), mCamera);
     const float minX = BOSS_INDICATOR_MARGIN;
     const float maxX = static_cast<float>(c::SCREEN_WIDTH) - BOSS_INDICATOR_MARGIN;
     const float minY = BOSS_INDICATOR_MARGIN;

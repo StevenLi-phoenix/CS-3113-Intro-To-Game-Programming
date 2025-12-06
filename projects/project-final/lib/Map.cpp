@@ -27,34 +27,17 @@ Map::Map(int mapColumns, int mapRows, unsigned int *levelData,
 
     if (sharedTexture)
     {
-        if (mUseAtlasRegion)
-        {
-            Image atlasImage = LoadImageFromTexture(*sharedTexture);
-            Rectangle region = clampRegion(mAtlasRegion, atlasImage.width, atlasImage.height);
-            Image slice = ImageFromImage(atlasImage, region);
-            mTextureAtlas = LoadTextureFromImage(slice);
-            UnloadImage(slice);
-            UnloadImage(atlasImage);
-            mOwnsTexture = true;
-        }
-        else
-        {
-            mTextureAtlas = *sharedTexture;
-            mOwnsTexture = false;
-        }
-    }
-    else if (mUseAtlasRegion)
-    {
-        Image fullImage = LoadImage(textureFilePath);
-        Rectangle region = clampRegion(mAtlasRegion, fullImage.width, fullImage.height);
-        Image slice = ImageFromImage(fullImage, region);
-        mTextureAtlas = LoadTextureFromImage(slice);
-        UnloadImage(slice);
-        UnloadImage(fullImage);
+        mTextureAtlas = *sharedTexture;
+        mOwnsTexture = false;
     }
     else
     {
         mTextureAtlas = LoadTexture(textureFilePath);
+    }
+
+    if (mUseAtlasRegion)
+    {
+        mAtlasRegion = clampRegion(mAtlasRegion, mTextureAtlas.width, mTextureAtlas.height);
     }
 
     build();
@@ -80,15 +63,22 @@ void Map::build()
     mBottomBoundary = mOrigin.y + (mMapRows * mTileSize) / 2.0f;
 
     // Precompute texture areas for each tile
+    const float atlasWidth = mUseAtlasRegion ? mAtlasRegion.width
+                                             : static_cast<float>(mTextureAtlas.width);
+    const float atlasHeight = mUseAtlasRegion ? mAtlasRegion.height
+                                              : static_cast<float>(mTextureAtlas.height);
+    const float atlasOffsetX = mUseAtlasRegion ? mAtlasRegion.x : 0.0f;
+    const float atlasOffsetY = mUseAtlasRegion ? mAtlasRegion.y : 0.0f;
+
     for (int row = 0; row < mTextureRows; row++)
     {
         for (int col = 0; col < mTextureColumns; col++)
         {
             Rectangle textureArea = {
-                (float) col * (mTextureAtlas.width / mTextureColumns),
-                (float) row * (mTextureAtlas.height / mTextureRows),
-                (float) mTextureAtlas.width / mTextureColumns,
-                (float) mTextureAtlas.height / mTextureRows
+                atlasOffsetX + (static_cast<float>(col) * (atlasWidth / mTextureColumns)),
+                atlasOffsetY + (static_cast<float>(row) * (atlasHeight / mTextureRows)),
+                atlasWidth / mTextureColumns,
+                atlasHeight / mTextureRows
             };
 
             mTextureAreas.push_back(textureArea);

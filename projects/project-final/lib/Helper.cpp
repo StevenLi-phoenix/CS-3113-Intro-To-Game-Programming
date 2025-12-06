@@ -67,6 +67,30 @@ void Normalise(Vector2 *vector)
     vector->y /= magnitude;
 }
 
+Vector2 WorldToScreen(const Vector2 &worldPos, const Camera2D &camera)
+{
+    const float rotation = camera.rotation * DEG2RAD;
+    const float cosRot = cosf(rotation);
+    const float sinRot = sinf(rotation);
+
+    Vector2 relative = {
+        worldPos.x - camera.target.x,
+        worldPos.y - camera.target.y
+    };
+
+    Vector2 rotated = {
+        relative.x * cosRot - relative.y * sinRot,
+        relative.x * sinRot + relative.y * cosRot
+    };
+
+    const float zoom = (camera.zoom == 0.0f) ? 1.0f : camera.zoom;
+
+    return {
+        rotated.x * zoom + camera.offset.x,
+        rotated.y * zoom + camera.offset.y
+    };
+}
+
 /**
  * @brief Calculates and returns the UV coordinates and dimensions of a 
  * rectangle slice from a texture based on the given index, number of rows, and

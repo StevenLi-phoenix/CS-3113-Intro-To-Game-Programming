@@ -39,6 +39,7 @@ Color AdjustColorBrightness(Color color, float factor);
 // Vector Helper Functions
 void Normalise(Vector2 *vector);
 float GetLength(const Vector2 vector);
+Vector2 WorldToScreen(const Vector2 &worldPos, const Camera2D &camera);
 
 // angle helper functions
 float normaliseAngle(float angle);

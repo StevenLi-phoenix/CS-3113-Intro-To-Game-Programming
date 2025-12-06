@@ -71,7 +71,7 @@ void Compass::render()
     const char *distanceSuffix = cappedHigh ? "+" : (cappedLow ? "-" : "");
     const char *distanceText = TextFormat("Map: %d tiles%s", displayDistance, distanceSuffix);
 
-    Vector2 playerScreen = GetWorldToScreen2D(playerPos, *mCamera);
+    Vector2 playerScreen = WorldToScreen(playerPos, *mCamera);
     const Vector2 arrowTip = {
         playerScreen.x + direction.x * mArrowRadius,
         playerScreen.y + direction.y * mArrowRadius

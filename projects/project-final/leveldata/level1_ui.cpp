@@ -13,7 +13,7 @@ void Level1::drawPlayerHUD() const
 
     const float maxHealth = std::max(mPlayer->getMaxHealth(), 0.001f);
     const float healthRatio = std::clamp(mPlayer->getHealth() / maxHealth, 0.0f, 1.0f);
-    const Vector2 playerScreenPos = GetWorldToScreen2D(mPlayer->getPosition(), mCamera);
+    const Vector2 playerScreenPos = WorldToScreen(mPlayer->getPosition(), mCamera);
 
     const Vector2 playerScale = mPlayer->getScale();
     const float barWidth = std::max(playerScale.x * 0.9f, 60.0f);
@@ -341,7 +341,7 @@ void Level1::drawMapTableUI() const
         return;
     }
 
-    Vector2 tableScreen = GetWorldToScreen2D(mTable->getPosition(), mCamera);
+    Vector2 tableScreen = WorldToScreen(mTable->getPosition(), mCamera);
     const char *label = mShopOpen ? "Map Table Shop (Q to close)" : "Map Table - shop will open here";
     const int fontSize = 18;
     const int textWidth = MeasureText(label, fontSize);
